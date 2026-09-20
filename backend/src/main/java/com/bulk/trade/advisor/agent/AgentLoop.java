@@ -68,13 +68,19 @@ public class AgentLoop {
      *                responsible for trimming it to the caller's budget
      */
     public AgentResult run(String userMessage,
-                           List<MessageParam> history,
+                           List<ConversationTurn> history,
                            AdvisorContext context) {
 
         AnthropicClient client = clientFactory.get();
         AdvisorProperties properties = clientFactory.properties();
 
-        List<MessageParam> messages = new ArrayList<>(history);
+        List<MessageParam> messages = new ArrayList<>(history.size() + 1);
+        for (ConversationTurn turn : history) {
+            messages.add(MessageParam.builder()
+                    .role(toSdkRole(turn.role()))
+                    .content(turn.content())
+                    .build());
+        }
         messages.add(MessageParam.builder()
                 .role(MessageParam.Role.USER)
                 .content(userMessage)
@@ -165,6 +171,12 @@ public class AgentLoop {
                 TextBlockParam.builder()
                         .text(promptBuilder.callerSection(context))
                         .build());
+    }
+
+    private MessageParam.Role toSdkRole(String role) {
+        return ConversationTurn.ROLE_USER.equals(role)
+                ? MessageParam.Role.USER
+                : MessageParam.Role.ASSISTANT;
     }
 
     private String extractText(Message response) {
