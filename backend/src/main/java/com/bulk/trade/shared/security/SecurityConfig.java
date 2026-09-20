@@ -51,23 +51,29 @@ public class SecurityConfig {
      * The shop window: reads a visitor may make before identifying.
      *
      * <p><b>Scoped to GET, and that is the point.</b> Authenticated writes sit
-     * one segment away from these paths — {@code /api/listings/mine} beside
-     * {@code /api/listings/market}, {@code POST /api/knowledge/embed-pending}
-     * under a prefix that is otherwise readable. Permitting the prefix instead
-     * of the read would open both.
+     * one segment away from these paths: {@code /api/listings/mine} is beside
+     * {@code /api/listings/market}, and {@code POST /api/listings} is the same
+     * prefix again. Permitting the prefix rather than the read would open all
+     * three.
      *
      * <p>What is here is what a commodity venue publishes to the street: what
-     * is on offer, what it last traded at, what the rules are. What is absent —
-     * inventory, orders, contracts, funds, the advisor — is everything scoped
-     * to one enterprise, and a visitor has no enterprise to scope it to.
+     * is on offer and what it last traded at. What is absent — inventory,
+     * orders, contracts, funds, the advisor — is everything scoped to one
+     * enterprise, and a visitor has no enterprise to scope it to.
+     *
+     * <p>The rulebook used to be here on the grounds that a venue's rules are
+     * published. That is true of the rules and was never true of the retrieval
+     * corpus: those endpoints also served the operator's view of the knowledge
+     * base, which is a maintenance surface rather than a public one. It moved
+     * to the console, and its entries left this list in the same change —
+     * hiding a page while leaving its API open is not a smaller version of the
+     * change, it is a different and worse one.
      */
     private static final String[] PUBLIC_READS = {
             "/api/public/**",
             "/api/listings/market",
             "/api/categories/**",
-            "/api/market/**",
-            "/api/knowledge/search",
-            "/api/knowledge/stats"
+            "/api/market/**"
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;

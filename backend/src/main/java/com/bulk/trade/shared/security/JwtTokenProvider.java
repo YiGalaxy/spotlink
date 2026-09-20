@@ -98,6 +98,11 @@ public class JwtTokenProvider {
                 .username(claims.get(CLAIM_USERNAME, String.class))
                 .enterpriseId(enterpriseId)
                 .userType(userType)
+                // Placeholder, replaced by the filter with the account's real
+                // status. It used to be a hard-coded 1 and never replaced,
+                // which meant isEnabled() was always true: an account disabled
+                // after signing in kept working until its token expired, which
+                // is the opposite of what disabling it was for.
                 .status(1)
                 .build();
     }

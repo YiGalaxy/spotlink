@@ -75,9 +75,15 @@ public class GlobalExceptionHandler {
      * genuine authorisation failure rather than a 200 with an error code.
      */
     @ExceptionHandler(AccessDeniedException.class)
-    public ApiResponse<Void> handleAccessDenied(AccessDeniedException e) {
+    public void handleAccessDenied(AccessDeniedException e) {
         log.warn("Access denied: {}", e.getMessage());
-        return ApiResponse.failure(ResultCode.FORBIDDEN);
+        // Rethrown, not converted. Returning the envelope here would make a
+        // refused request indistinguishable from a successful one at the HTTP
+        // level — 200 with an error code inside — and the client's 403 branch
+        // would never run. Bucket permissions and the security filter chain
+        // should fail the same way, and this way is the one that carries the
+        // status.
+        throw e;
     }
 
     /** Last resort. Logs the full trace and hides internals from the caller. */

@@ -34,6 +34,28 @@ public class LoginUser implements UserDetails {
         return enterpriseId == null;
     }
 
+    /**
+     * The same identity, with what it may do filled in.
+     *
+     * <p>Identity comes from the token and authority comes from the database,
+     * and they are joined here rather than at either end. The token is the only
+     * thing that can say who the caller is; the database is the only thing that
+     * can say what they may currently do, because a token cannot be un-issued
+     * when a permission is taken away.
+     */
+    public LoginUser withAuthority(UserAuthority authority) {
+        return LoginUser.builder()
+                .userId(userId)
+                .username(username)
+                .password(password)
+                .enterpriseId(enterpriseId)
+                .enterpriseName(enterpriseName)
+                .userType(userType)
+                .status(authority.status())
+                .permissions(authority.permissions())
+                .build();
+    }
+
     public boolean hasPermission(String code) {
         return permissions != null && permissions.contains(code);
     }

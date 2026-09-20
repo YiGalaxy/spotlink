@@ -10,6 +10,10 @@ import com.bulk.trade.identity.mapper.UserMapper;
 import com.bulk.trade.identity.service.AuthService;
 import com.bulk.trade.shared.exception.BusinessException;
 import com.bulk.trade.shared.security.JwtTokenProvider;
+import com.bulk.trade.shared.security.UserAuthority;
+import com.bulk.trade.shared.security.UserAuthorityProvider;
+import java.util.List;
+import java.util.Set;
 import com.bulk.trade.shared.security.LoginUser;
 import com.bulk.trade.shared.security.SecurityUtils;
 import com.bulk.trade.shared.web.ResultCode;
@@ -31,6 +35,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final EnterpriseMapper enterpriseMapper;
     private final PasswordEncoder passwordEncoder;
+    private final UserAuthorityProvider authorityProvider;
     private final JwtTokenProvider tokenProvider;
 
     @Value("${bulk.security.jwt.access-token-ttl}")
@@ -59,19 +64,26 @@ public class AuthServiceImpl implements AuthService {
 
         Enterprise enterprise = loadAndValidateEnterprise(user);
 
+        // Authority is loaded here as well as per request, so the login
+        // response can carry it and the console can render its menu without a
+        // second call. It is loaded again on every request afterwards, because
+        // this copy goes stale the moment a role changes.
+        UserAuthority authority = authorityProvider.load(user.getId());
+
         LoginUser loginUser = LoginUser.builder()
                 .userId(user.getId())
                 .username(user.getUsername())
                 .enterpriseId(user.getEnterpriseId())
                 .userType(user.getUserType())
                 .status(user.getStatus())
+                .permissions(authority == null ? Set.of() : authority.permissions())
                 .build();
 
         LoginResponse response = new LoginResponse(
                 tokenProvider.createAccessToken(loginUser),
                 tokenProvider.createRefreshToken(loginUser),
                 accessTokenTtl.toSeconds(),
-                toProfile(user, enterprise));
+                toProfile(user, enterprise, authority));
 
         recordLogin(user.getId(), clientIp);
         log.info("User '{}' logged in, enterpriseId={}", user.getUsername(), user.getEnterpriseId());
@@ -87,7 +99,7 @@ public class AuthServiceImpl implements AuthService {
             throw BusinessException.of(ResultCode.UNAUTHORIZED);
         }
         Enterprise enterprise = loadAndValidateEnterprise(user);
-        return toProfile(user, enterprise);
+        return toProfile(user, enterprise, authorityProvider.load(user.getId()));
     }
 
     /**
@@ -122,7 +134,14 @@ public class AuthServiceImpl implements AuthService {
         userMapper.updateById(update);
     }
 
-    private LoginResponse.UserProfile toProfile(User user, Enterprise enterprise) {
+    /**
+     * @param authority the caller's live permissions, or null when the account
+     *                  could not be resolved — in which case the profile still
+     *                  renders, holding no authority at all. Failing here would
+     *                  make an optional field able to break a login.
+     */
+    private LoginResponse.UserProfile toProfile(User user, Enterprise enterprise,
+                                               UserAuthority authority) {
         return new LoginResponse.UserProfile(
                 user.getId(),
                 user.getUsername(),
@@ -131,6 +150,8 @@ public class AuthServiceImpl implements AuthService {
                 enterprise == null ? null : enterprise.getName(),
                 enterprise == null ? null : enterprise.getTraderCode(),
                 user.getUserType(),
-                user.getEnterpriseId() == null);
+                user.getEnterpriseId() == null,
+                authority == null ? List.of() : List.copyOf(authority.permissions()),
+                List.copyOf(authorityProvider.rolesOf(user.getId())));
     }
 }

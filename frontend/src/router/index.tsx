@@ -9,14 +9,16 @@ import EnterprisePage from '@/pages/EnterprisePage'
 import InventoryPage from '@/pages/InventoryPage'
 import MarketPage from '@/pages/MarketPage'
 import TradingPage from '@/pages/TradingPage'
-import KnowledgePage from '@/pages/KnowledgePage'
 
 /**
  * Routing, split by who can read what.
  *
  * <p><b>The split follows what a page would show, not a wish to protect it.</b>
- * A marketplace, a price chart and a rulebook describe the venue, so a visitor
- * reads them and gets a complete answer. Inventory, orders, contracts and the
+ * A marketplace and a price chart describe the venue, so a visitor reads them
+ * and gets a complete answer. The rulebook is no longer here: it is the
+ * operator's own corpus, it moves to the console, and the endpoint behind it
+ * was removed from the public list at the same time — hiding a page while
+ * leaving its API open is not a smaller change, it is an inconsistent one. Inventory, orders, contracts and the
  * advisor describe one enterprise — rendered for someone with no enterprise
  * they are not guarded pages, they are empty ones, and an empty page is a worse
  * answer than a login prompt.
@@ -39,7 +41,6 @@ export const router = createBrowserRouter([
       { index: true, element: <LandingPage /> },
       { path: 'market', element: <MarketPage /> },
       { path: 'trading', element: <TradingPage /> },
-      { path: 'knowledge', element: <KnowledgePage /> },
 
       {
         path: 'dashboard',

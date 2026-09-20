@@ -52,6 +52,18 @@ public class Enterprise {
     private OffsetDateTime registeredAt;
     private OffsetDateTime approvedAt;
     private Long approvedBy;
+    /**
+     * Why an application was refused.
+     *
+     * <p><b>{@code updateStrategy = ALWAYS} is load-bearing.</b> Approving an
+     * enterprise that was previously rejected has to clear this, and
+     * MyBatis-Plus omits null fields from generated updates by default — so the
+     * old reason would survive an approval and the console would show an
+     * approved enterprise carrying a rejection. This bit the project once
+     * already, on the order's confirm deadline.
+     */
+    @com.baomidou.mybatisplus.annotation.TableField(
+            updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.ALWAYS)
     private String rejectReason;
     private String remark;
 

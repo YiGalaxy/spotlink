@@ -4,6 +4,15 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.bulk.trade.identity.entity.Enterprise;
 import com.bulk.trade.identity.entity.User;
 import com.bulk.trade.identity.mapper.EnterpriseMapper;
+import com.bulk.trade.identity.entity.Permission;
+import com.bulk.trade.identity.entity.Role;
+import com.bulk.trade.identity.entity.RolePermission;
+import com.bulk.trade.identity.entity.UserRole;
+import com.bulk.trade.identity.mapper.PermissionMapper;
+import com.bulk.trade.identity.mapper.RoleMapper;
+import com.bulk.trade.identity.mapper.RolePermissionMapper;
+import com.bulk.trade.identity.mapper.UserRoleMapper;
+import java.util.List;
 import com.bulk.trade.identity.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +49,10 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
 
     private final UserMapper userMapper;
     private final EnterpriseMapper enterpriseMapper;
+    private final RoleMapper roleMapper;
+    private final UserRoleMapper userRoleMapper;
+    private final RolePermissionMapper rolePermissionMapper;
+    private final PermissionMapper permissionMapper;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -47,8 +60,18 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         OffsetDateTime now = OffsetDateTime.now();
 
         // ---- platform operator: no tenant scope ----
-        createUserIfAbsent(null, "admin", "平台管理员",
+        //
+        // Two of them, holding different roles. A single all-powerful operator
+        // account would demonstrate that permissions exist without ever showing
+        // them doing anything — and the difference is the whole point, so it
+        // should be visible from the login screen.
+        User admin = createUserIfAbsent(null, "admin", "平台管理员",
                 User.Type.PLATFORM_OPERATOR, now);
+        grantRole(admin, "PLATFORM_ADMIN");
+
+        User auditor = createUserIfAbsent(null, "auditor01", "审计员",
+                User.Type.PLATFORM_OPERATOR, now);
+        grantRole(auditor, "PLATFORM_AUDITOR");
 
         // ---- approved seller ----
         Enterprise seller = createEnterpriseIfAbsent(
@@ -73,6 +96,61 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
                 Enterprise.Status.PENDING, now);
         createUserIfAbsent(pending.getId(), "pending01", "赵主管",
                 User.Type.ENTERPRISE, now);
+    }
+
+    /**
+     * Gives an account a platform role, if it does not already hold it.
+     *
+     * <p>Idempotent on the natural key of the grant rather than on the account,
+     * so adding a role here takes effect on the next boot of an existing
+     * database — which is how a development machine picks up a role added after
+     * it was first seeded.
+     *
+     * <p>Also tops the system roles back up to the full set of `admin:*` codes.
+     * Without that, a later migration adding a permission would lock every
+     * existing operator out of the new screen until someone wrote SQL by hand.
+     */
+    private void grantRole(User user, String roleCode) {
+        if (user == null) {
+            return;
+        }
+        Role role = roleMapper.selectOne(Wrappers.<Role>lambdaQuery()
+                .eq(Role::getCode, roleCode)
+                .isNull(Role::getEnterpriseId));
+        if (role == null) {
+            log.warn("Role {} is not seeded; skipping the grant to {}", roleCode, user.getUsername());
+            return;
+        }
+
+        boolean held = userRoleMapper.selectCount(Wrappers.<UserRole>lambdaQuery()
+                .eq(UserRole::getUserId, user.getId())
+                .eq(UserRole::getRoleId, role.getId())) > 0;
+        if (!held) {
+            UserRole grant = new UserRole();
+            grant.setUserId(user.getId());
+            grant.setRoleId(role.getId());
+            userRoleMapper.insert(grant);
+            log.info("Granted role {} to {}", roleCode, user.getUsername());
+        }
+
+        if (!"PLATFORM_ADMIN".equals(roleCode)) {
+            return;
+        }
+        // Every admin:* code, including ones added by later migrations.
+        List<Permission> all = permissionMapper.selectList(Wrappers.<Permission>lambdaQuery()
+                .likeRight(Permission::getCode, "admin:"));
+        for (Permission permission : all) {
+            boolean granted = rolePermissionMapper.selectCount(Wrappers.<RolePermission>lambdaQuery()
+                    .eq(RolePermission::getRoleId, role.getId())
+                    .eq(RolePermission::getPermissionId, permission.getId())) > 0;
+            if (!granted) {
+                RolePermission grant = new RolePermission();
+                grant.setRoleId(role.getId());
+                grant.setPermissionId(permission.getId());
+                rolePermissionMapper.insert(grant);
+                log.info("Added newly declared permission {} to {}", permission.getCode(), roleCode);
+            }
+        }
     }
 
     private Enterprise createEnterpriseIfAbsent(String code, String name, String shortName,
@@ -107,12 +185,19 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         return enterprise;
     }
 
-    private void createUserIfAbsent(Long enterpriseId, String username, String realName,
+    /**
+     * Creates the account if it is missing, and returns it either way.
+     *
+     * <p>Returning the existing row matters here: roles are granted by the
+     * caller, and a grant that only happened on the run that created the
+     * account would never reach a database seeded before the roles existed.
+     */
+    private User createUserIfAbsent(Long enterpriseId, String username, String realName,
                                     int userType, OffsetDateTime now) {
-        boolean exists = userMapper.exists(Wrappers.<User>lambdaQuery()
+        User existing = userMapper.selectOne(Wrappers.<User>lambdaQuery()
                 .eq(User::getUsername, username));
-        if (exists) {
-            return;
+        if (existing != null) {
+            return existing;
         }
 
         User user = new User();
@@ -124,5 +209,6 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         user.setStatus(User.Status.ACTIVE);
         userMapper.insert(user);
         log.info("Seeded user '{}' ({}), enterpriseId={}", username, realName, enterpriseId);
+        return user;
     }
 }

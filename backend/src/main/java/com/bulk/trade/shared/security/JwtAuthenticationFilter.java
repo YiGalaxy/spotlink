@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,6 +25,7 @@ import java.util.List;
  * the context empty and lets the authorization rules reject the request later.
  * That keeps a single place responsible for "is this request allowed".
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -32,6 +34,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String PREFIX = "Bearer ";
 
     private final JwtTokenProvider tokenProvider;
+    private final UserAuthorityProvider authorityProvider;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -43,14 +46,58 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             Claims claims = tokenProvider.parse(token);
             if (claims != null) {
-                LoginUser loginUser = tokenProvider.toLoginUser(claims);
-                var authentication = new UsernamePasswordAuthenticationToken(
-                        loginUser, null, loginUser.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                LoginUser identity = tokenProvider.toLoginUser(claims);
+                // Who the caller is comes from the token; what they may do comes
+                // from the database, because a token cannot be un-issued when a
+                // permission is withdrawn.
+                if (identity != null) {
+                    authenticate(identity, request);
+                }
             }
         }
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Populates the security context, or declines to.
+     *
+     * <p><b>A token is a claim about identity, not about authority.</b> Two
+     * things can have changed since it was signed, and neither is knowable from
+     * the token: the account may have been disabled, and its permissions may
+     * have been changed. Both are read now, per request.
+     *
+     * <p>When either says stop, the context is left empty — the request is not
+     * "logged in but forbidden", it is not logged in, and the caller gets 401
+     * and a fresh login. For a disabled account that distinction is the whole
+     * point: it should stop working now, not in two hours.
+     *
+     * @return whether the context was populated
+     */
+    private boolean authenticate(LoginUser identity, HttpServletRequest request) {
+        UserAuthority authority;
+        try {
+            authority = authorityProvider.load(identity.getUserId());
+        } catch (RuntimeException e) {
+            // Reading authority must not be able to fail a request into an
+            // unauthenticated state. If it throws, the safer reading is "no
+            // session", which is what the caller gets — a 401 they can act on,
+            // rather than a 500 they cannot.
+            log.error("Could not resolve authority for user {}", identity.getUserId(), e);
+            return false;
+        }
+        if (authority == null || !authority.isActive()) {
+            log.debug("Token for user {} declined: {}",
+                    identity.getUserId(),
+                    authority == null ? "account no longer exists" : "account not active");
+            return false;
+        }
+
+        LoginUser loginUser = identity.withAuthority(authority);
+        var authentication = new UsernamePasswordAuthenticationToken(
+                loginUser, null, loginUser.getAuthorities());
+        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        return true;
     }
 
     /**

@@ -1,7 +1,6 @@
 import { Avatar, Badge, Button, Divider, Dropdown, Layout, Menu, Space, Tag, Typography } from 'antd'
 import {
   BankOutlined,
-  BookOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   HomeOutlined,
@@ -38,8 +37,13 @@ const PUBLIC_MENU = [
   { key: '/', icon: <HomeOutlined />, label: '首页' },
   { key: '/market', icon: <LineChartOutlined />, label: '行情' },
   { key: '/trading', icon: <SwapOutlined />, label: '挂牌交易' },
-  { key: '/knowledge', icon: <BookOutlined />, label: '知识库' },
 ]
+
+// 知识库 is not here on purpose. It is the platform's own rulebook — the corpus
+// the assistant retrieves from, and something the operator maintains. A member
+// browsing rules is a reasonable thing to want, but maintaining them is not,
+// and the page as it stands does both. It moves to the operator console, where
+// the people who write the rules can see what the assistant is answering from.
 
 /**
  * What signing in adds.
@@ -76,11 +80,10 @@ export default function MainLayout() {
   })
   const pendingCount = tasks.length
 
-  // Member entries are inserted before 知识库 rather than appended, so signing
-  // in does not reshuffle the items a visitor has just learned the positions
-  // of.
+  // Member entries are appended, so signing in does not reshuffle the items a
+  // visitor has just learned the positions of.
   const menuItems = signedIn
-    ? [PUBLIC_MENU[0], PUBLIC_MENU[1], PUBLIC_MENU[2], ...MEMBER_MENU, PUBLIC_MENU[3]]
+    ? [...PUBLIC_MENU, ...MEMBER_MENU]
     : PUBLIC_MENU
 
   // The count rides on 挂牌交易 even though the tasks span orders, contracts

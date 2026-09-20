@@ -84,7 +84,20 @@ public enum ResultCode {
     ADVISOR_TOOL_NOT_PERMITTED(80003, "AI 顾问无权调用该工具"),
     ADVISOR_ITERATION_LIMIT(80004, "AI 顾问处理步骤超出上限，请简化问题后重试"),
     ADVISOR_UNAVAILABLE(80005, "AI 服务暂时不可用，请稍后重试"),
-    CONVERSATION_NOT_FOUND(80006, "会话不存在");
+    CONVERSATION_NOT_FOUND(80006, "会话不存在"),
+
+    // ------------------------------------------------------------------
+    // 9xxxx — operator console
+    // ------------------------------------------------------------------
+    ADMIN_ENTERPRISE_NOT_FOUND(90000, "企业不存在"),
+    ADMIN_ENTERPRISE_ALREADY_REVIEWED(90001, "该企业已审核过，无需重复处理"),
+    ADMIN_REJECT_REASON_REQUIRED(90002, "驳回必须填写原因"),
+    ADMIN_ENTERPRISE_NOT_APPROVED(90003, "只有已通过审核的企业才能冻结"),
+    ADMIN_USER_NOT_FOUND(90004, "账号不存在"),
+    ADMIN_SELF_OPERATION(90005, "不能对自己的账号执行此操作"),
+    ADMIN_LAST_ADMIN(90006, "系统必须保留至少一个可分配角色的管理员"),
+    ADMIN_ROLE_NOT_FOUND(90007, "角色不存在"),
+    ADMIN_SYSTEM_ROLE_READONLY(90008, "系统内置角色不能修改或删除");
 
     private final int code;
     private final String message;
