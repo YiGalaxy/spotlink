@@ -3,9 +3,12 @@ package com.bulk.trade.advisor.agent;
 import com.bulk.trade.advisor.prompt.SystemPromptBuilder;
 import com.bulk.trade.advisor.tool.AdvisorTools;
 import com.bulk.trade.advisor.tool.ContractAdvisorTools;
+import com.bulk.trade.advisor.tool.FundAdvisorTools;
 import com.bulk.trade.advisor.tool.InventoryAdvisorTools;
 import com.bulk.trade.advisor.tool.KnowledgeAdvisorTools;
 import com.bulk.trade.advisor.tool.MarketAdvisorTools;
+import com.bulk.trade.advisor.tool.OrderAdvisorTools;
+import com.bulk.trade.advisor.tool.TaskAdvisorTools;
 import com.bulk.trade.advisor.tool.ToolCallRecorder;
 import com.bulk.trade.shared.exception.BusinessException;
 import com.bulk.trade.shared.security.LoginUser;
@@ -48,7 +51,30 @@ public class AdvisorAgent {
     private final KnowledgeAdvisorTools knowledgeAdvisorTools;
     private final ContractAdvisorTools contractAdvisorTools;
     private final MarketAdvisorTools marketAdvisorTools;
+    private final OrderAdvisorTools orderAdvisorTools;
+    private final TaskAdvisorTools taskAdvisorTools;
+    private final FundAdvisorTools fundAdvisorTools;
     private final SystemPromptBuilder promptBuilder;
+
+    /**
+     * The beans whose {@code @Tool} methods are handed to the model.
+     *
+     * <p><b>One list, two readers.</b> The prompt specification that makes the
+     * tools callable and the readiness endpoint that reports what is callable
+     * both read this. Keeping two lists is what let that endpoint advertise
+     * nine tools while thirteen were registered — drift that stays invisible
+     * precisely because the report is what people trust instead of checking.
+     *
+     * <p>Adding a tool class is now a one-line change in a single place, and
+     * forgetting it is no longer possible: a tool that is not in this list is
+     * not callable either, so the failure is a missing feature rather than a
+     * confident wrong answer about what exists.
+     */
+    public List<Object> toolBeans() {
+        return List.of(advisorTools, inventoryAdvisorTools, knowledgeAdvisorTools,
+                contractAdvisorTools, marketAdvisorTools,
+                orderAdvisorTools, taskAdvisorTools, fundAdvisorTools);
+    }
 
     public AgentResult run(String userMessage, List<ConversationTurn> history, LoginUser user) {
         List<Message> messages = new ArrayList<>(history.size() + 1);
@@ -74,8 +100,7 @@ public class AdvisorAgent {
                             .text(promptBuilder.callerSection(user)))
                     .messages(messages)
                     // Every @Tool method on these beans becomes callable.
-                    .tools(advisorTools, inventoryAdvisorTools, knowledgeAdvisorTools,
-                            contractAdvisorTools, marketAdvisorTools)
+                    .tools(toolBeans().toArray())
                     .call()
                     .chatResponse();
 

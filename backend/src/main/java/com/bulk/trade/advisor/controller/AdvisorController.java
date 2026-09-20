@@ -1,16 +1,12 @@
 package com.bulk.trade.advisor.controller;
 
+import com.bulk.trade.advisor.agent.AdvisorAgent;
 import com.bulk.trade.advisor.dto.ConversationDetail;
 import com.bulk.trade.advisor.dto.ConversationSummary;
 import com.bulk.trade.advisor.dto.CreateConversationRequest;
 import com.bulk.trade.advisor.dto.MessageView;
 import com.bulk.trade.advisor.dto.SendMessageRequest;
 import com.bulk.trade.advisor.service.ConversationService;
-import com.bulk.trade.advisor.tool.AdvisorTools;
-import com.bulk.trade.advisor.tool.ContractAdvisorTools;
-import com.bulk.trade.advisor.tool.InventoryAdvisorTools;
-import com.bulk.trade.advisor.tool.KnowledgeAdvisorTools;
-import com.bulk.trade.advisor.tool.MarketAdvisorTools;
 import com.bulk.trade.shared.security.LoginUser;
 import com.bulk.trade.shared.security.SecurityUtils;
 import com.bulk.trade.shared.web.ApiResponse;
@@ -19,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,7 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 @Tag(name = "AI 顾问", description = "基于 Spring AI 的工具调用型交易顾问")
 @RestController
@@ -43,6 +39,7 @@ public class AdvisorController {
     private static final String UNCONFIGURED_KEY = "not-configured";
 
     private final ConversationService conversationService;
+    private final AdvisorAgent advisorAgent;
 
     @Value("${spring.ai.anthropic.api-key:}")
     private String apiKey;
@@ -126,15 +123,20 @@ public class AdvisorController {
     /**
      * Names the tools the model can currently call.
      *
-     * <p>Read from the annotations rather than a hard-coded list, so this can
-     * never drift from what is actually registered.
+     * <p>Scanned from the very beans the agent hands to Spring AI, not from a
+     * list kept here. An earlier version of this method named the classes by
+     * hand under a comment claiming it could never drift — and it drifted the
+     * first time a tool class was added, reporting nine tools while thirteen
+     * were live. A report that is trusted instead of checked is the worst place
+     * to have a second source of truth.
      */
     private List<String> registeredToolNames() {
-        // Every class whose @Tool methods are handed to the agent. Kept in one
-        // place so this list cannot drift from what is actually registered.
-        return Stream.of(AdvisorTools.class, InventoryAdvisorTools.class,
-                        KnowledgeAdvisorTools.class, ContractAdvisorTools.class,
-                        MarketAdvisorTools.class)
+        return advisorAgent.toolBeans().stream()
+                // The beans are CGLIB proxies: @ToolRecordingAspect matches on
+                // the annotation, so Spring wraps them. getClass() would return
+                // the proxy, whose declared methods do not include the
+                // inherited ones — and the list would come back empty.
+                .map(AopUtils::getTargetClass)
                 .flatMap(type -> Arrays.stream(type.getDeclaredMethods()))
                 .filter(method -> method.isAnnotationPresent(Tool.class))
                 .map(method -> {

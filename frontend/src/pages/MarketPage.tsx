@@ -252,7 +252,7 @@ export default function MarketPage() {
             行情
           </Typography.Title>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            现货市场成交稀疏，展示的是成交均价与成交量，不是 K 线
+            成交均价与成交量，每个点标出背后的成交笔数
           </Typography.Text>
         </div>
         <Space>
@@ -264,16 +264,6 @@ export default function MarketPage() {
           )}
         </Space>
       </div>
-
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        message="为什么不是 K 线"
-        description="期货每分钟都有成交，K 线密集且有意义。现货一单一议，冷门品种一天可能只有两三笔，
-          画成蜡烛图会得到一张几乎全空的格子。这里用均价线加成交量柱，并能看到每天的成交笔数——
-          一个由 1 笔成交算出的均价和一个由 40 笔算出的均价，在图上必须能区分开。"
-      />
 
       <Card size="small" title="品种行情" style={{ marginBottom: 16 }}>
         <Table

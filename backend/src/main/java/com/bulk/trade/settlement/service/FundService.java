@@ -42,12 +42,25 @@ public class FundService {
     private final FundFlowMapper flowMapper;
 
     public FundAccount requireAccount(Long enterpriseId) {
-        FundAccount account = accountMapper.selectOne(Wrappers.<FundAccount>lambdaQuery()
-                .eq(FundAccount::getEnterpriseId, enterpriseId));
+        FundAccount account = findAccount(enterpriseId);
         if (account == null) {
             throw BusinessException.of(ResultCode.ACCOUNT_NOT_FOUND);
         }
         return account;
+    }
+
+    /**
+     * The account, or null.
+     *
+     * <p>For callers that have something sensible to say when there is none.
+     * The advisor is why this exists: a tool that throws reaches the model as
+     * an opaque failure, and "我账上还有多少钱" deserves a sentence rather than
+     * an exception. Nothing that moves money should use this — those want
+     * {@link #requireAccount} and its refusal.
+     */
+    public FundAccount findAccount(Long enterpriseId) {
+        return accountMapper.selectOne(Wrappers.<FundAccount>lambdaQuery()
+                .eq(FundAccount::getEnterpriseId, enterpriseId));
     }
 
     public List<FundFlow> flows(Long enterpriseId, int limit) {

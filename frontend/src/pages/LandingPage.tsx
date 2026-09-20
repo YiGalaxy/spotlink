@@ -295,7 +295,7 @@ export default function LandingPage() {
             {
               icon: <LineChartOutlined style={{ fontSize: 22, color: PRIMARY }} />,
               title: '行情走势',
-              body: '平台内成交均价、成交量、挂牌量与在库量。现货成交稀疏，因此用均价线而非 K 线，并标出每日成交笔数。',
+              body: '平台内成交均价、成交量、挂牌量与在库量，每个点标出背后的成交笔数。',
               action: () => navigate('/market'),
               actionText: '查看行情',
             },

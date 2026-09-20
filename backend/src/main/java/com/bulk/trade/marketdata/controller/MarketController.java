@@ -39,8 +39,7 @@ public class MarketController {
 
     @Operation(summary = "价格曲线",
             description = "type 取值 TRADE_PRICE / TRADE_VOLUME / LISTING_VOLUME / INVENTORY。"
-                    + "返回的是均价线与成交量，不是 K 线——现货一天可能只有几笔成交，"
-                    + "画成蜡烛图会得到一张几乎全空的格子。")
+                    + "每个点附带 tradeCount，即该点背后的成交笔数。")
     @GetMapping("/series")
     public ApiResponse<SeriesData> series(
             @RequestParam(defaultValue = "TRADE_PRICE") String type,
