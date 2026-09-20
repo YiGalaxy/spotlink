@@ -100,13 +100,36 @@ public class TradingViewAssembler {
                         order,
                         viewerEnterpriseId,
                         viewerEnterpriseId != null
-                                && viewerEnterpriseId.equals(listerOf.get(order.getListingId())),
-                        OrderProgress.of(order, contracts.get(order.getContractId()), viewerEnterpriseId),
-                        enterprises.getOrDefault(order.getBuyerId(), "—"),
-                        enterprises.getOrDefault(order.getSellerId(), "—"),
-                        categories.getOrDefault(order.getCategoryId(), "—"),
-                        warehouses.getOrDefault(order.getWarehouseId(), "—")))
+                                && viewerEnterpriseId.equals(lookup(listerOf, order.getListingId(), null)),
+                        OrderProgress.of(order, lookup(contracts, order.getContractId(), null), viewerEnterpriseId),
+                        lookup(enterprises, order.getBuyerId(), "—"),
+                        lookup(enterprises, order.getSellerId(), "—"),
+                        lookup(categories, order.getCategoryId(), "—"),
+                        lookup(warehouses, order.getWarehouseId(), "—")))
                 .toList();
+    }
+
+    /**
+     * Reads a display value for a key that is allowed to be absent.
+     *
+     * <p><b>This exists because the immutable empty map throws on a null
+     * key.</b> The batch lookups return {@code Map.of()} when no row in the
+     * batch has the relation, and {@code Map.of()} rejects a null key — both
+     * from {@code get} and from {@code getOrDefault}, which is the part that
+     * made this hard to see. A {@code HashMap} tolerates it. So the same call
+     * behaved differently depending on whether <em>any</em> row in the batch
+     * happened to carry the relation, and the failure appeared only in the case
+     * where none did: an order with no warehouse, rendered alongside other
+     * orders that also had none.
+     *
+     * <p>Every lookup in this class goes through here rather than through a map
+     * method directly. The fix is not to swap the empty map for a {@code
+     * HashMap} — that would work today and be quietly reverted to {@code
+     * Map.of()} by the next person tidying up. Not passing a null key is a
+     * property of the call site, and it survives refactoring.
+     */
+    private static <K, V> V lookup(Map<K, V> map, K key, V fallback) {
+        return key == null ? fallback : map.getOrDefault(key, fallback);
     }
 
     /** Contract id to the contract, for the orders that have one. */
