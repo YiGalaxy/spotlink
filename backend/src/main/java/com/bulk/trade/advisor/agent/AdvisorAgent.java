@@ -3,7 +3,6 @@ package com.bulk.trade.advisor.agent;
 import com.bulk.trade.advisor.prompt.SystemPromptBuilder;
 import com.bulk.trade.advisor.tool.AdvisorTools;
 import com.bulk.trade.advisor.tool.ContractAdvisorTools;
-import com.bulk.trade.advisor.tool.FundAdvisorTools;
 import com.bulk.trade.advisor.tool.InventoryAdvisorTools;
 import com.bulk.trade.advisor.tool.KnowledgeAdvisorTools;
 import com.bulk.trade.advisor.tool.MarketAdvisorTools;
@@ -53,7 +52,6 @@ public class AdvisorAgent {
     private final MarketAdvisorTools marketAdvisorTools;
     private final OrderAdvisorTools orderAdvisorTools;
     private final TaskAdvisorTools taskAdvisorTools;
-    private final FundAdvisorTools fundAdvisorTools;
     private final SystemPromptBuilder promptBuilder;
 
     /**
@@ -73,7 +71,7 @@ public class AdvisorAgent {
     public List<Object> toolBeans() {
         return List.of(advisorTools, inventoryAdvisorTools, knowledgeAdvisorTools,
                 contractAdvisorTools, marketAdvisorTools,
-                orderAdvisorTools, taskAdvisorTools, fundAdvisorTools);
+                orderAdvisorTools, taskAdvisorTools);
     }
 
     public AgentResult run(String userMessage, List<ConversationTurn> history, LoginUser user) {

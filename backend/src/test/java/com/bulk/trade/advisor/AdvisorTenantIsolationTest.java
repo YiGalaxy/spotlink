@@ -1,6 +1,6 @@
 package com.bulk.trade.advisor;
 
-import com.bulk.trade.advisor.tool.FundAdvisorTools;
+import com.bulk.trade.advisor.agent.AdvisorAgent;
 import com.bulk.trade.advisor.tool.OrderAdvisorTools;
 import com.bulk.trade.advisor.tool.TaskAdvisorTools;
 import com.bulk.trade.settlement.service.FundService;
@@ -12,6 +12,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.support.AopUtils;
+import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -19,6 +21,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,13 +56,13 @@ class AdvisorTenantIsolationTest {
     private static final Long OTHER_PARTY = 999_000_103L;
 
     @Autowired
+    private AdvisorAgent advisorAgent;
+
+    @Autowired
     private OrderAdvisorTools orderTools;
 
     @Autowired
     private TaskAdvisorTools taskTools;
-
-    @Autowired
-    private FundAdvisorTools fundTools;
 
     @Autowired
     private OrderMapper orderMapper;
@@ -184,20 +188,29 @@ class AdvisorTenantIsolationTest {
     }
 
     @Test
-    @DisplayName("资金工具同样按租户隔离，且没有账户时回答而不是抛异常")
-    void fundsAreScoped() {
-        authenticateAs(TENANT_A);
-        String answer = fundTools.queryMyFunds(5);
+    @DisplayName("顾问没有资金工具，余额根本不在它的能力范围内")
+    void theAdvisorHasNoFundTool() {
+        // The balance is the most sensitive figure on the platform and the
+        // advisor has no use for it: nothing it does — rule questions, contract
+        // review, market reading — needs to know how much cash a company holds.
+        //
+        // Every tool result goes into the prompt, which means it goes to an
+        // external model API. That is a data-egress decision, and the right
+        // answer for a capability nothing requires is not to grant it and then
+        // guard it. Asserted rather than left to a comment, because the way
+        // this regresses is someone adding it back for convenience.
+        List<String> toolNames = new ArrayList<>();
+        for (Object bean : advisorAgent.toolBeans()) {
+            for (var method : AopUtils.getTargetClass(bean).getDeclaredMethods()) {
+                Tool tool = method.getAnnotation(Tool.class);
+                if (tool != null) {
+                    toolNames.add(tool.name().isBlank() ? method.getName() : tool.name());
+                }
+            }
+        }
 
-        // No account exists for the test tenants. The tool must say so in a
-        // sentence — throwing would reach the model as an opaque failure — and
-        // it must certainly not reach for some other enterprise's figures.
-        assertThat(answer).contains("没有资金账户");
-        assertThat(answer).doesNotContain("隔离测试");
-
-        // The account in the assertion above belongs to a different tenant, so
-        // this is the whole isolation claim in one line.
-        assertThat(fundService.findAccount(TENANT_A)).isNull();
+        assertThat(toolNames).doesNotContain("query_my_funds");
+        assertThat(toolNames).noneMatch(name -> name.contains("fund") || name.contains("balance"));
     }
 
     // ------------------------------------------------------------------
