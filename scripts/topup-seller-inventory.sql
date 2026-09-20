@@ -23,7 +23,12 @@ INSERT INTO t_inventory_note (
     production_date, status, version, remark
 )
 SELECT v.id, v.note_no,
-       2101630344279535617,          -- 华东金属材料有限公司 (seller01)
+       -- Resolved by code, never hard-coded. An earlier version carried a
+       -- literal id, which worked until the database was rebuilt: snowflake ids
+       -- are time-based, so a fresh schema issues a different one, and the rows
+       -- landed on an enterprise that no longer existed — stock that nobody
+       -- could see, with nothing failing to say so.
+       e.id,
        v.category_id, v.warehouse_id,
        v.commodity_name, v.brand, v.origin, '{}',
        v.qty, v.qty, 0, '吨',
@@ -38,6 +43,9 @@ SELECT v.id, v.note_no,
         ROW(9000000000000000104, 'IN20260901000004', 1006, 2002,
             '电池级碳酸锂', '赣锋', '江西', 120.000)
        ) AS v(id, note_no, category_id, warehouse_id, commodity_name, brand, origin, qty)
+  JOIN t_enterprise e
+    ON e.enterprise_code = 'ENT20260920001'   -- 华东金属材料有限公司 (seller01)
+   AND e.deleted = 0
  WHERE NOT EXISTS (
      SELECT 1 FROM t_inventory_note n WHERE n.note_no = v.note_no
  );
