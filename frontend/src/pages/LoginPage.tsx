@@ -57,7 +57,7 @@ export default function LoginPage() {
     >
       <Card style={{ width: 400 }} styles={{ body: { padding: 32 } }}>
         <Typography.Title level={3} style={{ marginBottom: 4 }}>
-          大宗商品现货交易平台
+          现货通 SpotLink
         </Typography.Title>
         <Typography.Text type="secondary">
           挂牌 · 摘牌 · 协议交易

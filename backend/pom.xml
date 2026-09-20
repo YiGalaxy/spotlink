@@ -12,9 +12,9 @@
     </parent>
 
     <groupId>com.bulk</groupId>
-    <artifactId>bulk-trade-backend</artifactId>
+    <artifactId>spotlink-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>bulk-trade-backend</name>
+    <name>spotlink-backend</name>
     <description>Bulk commodity spot trading platform - backend</description>
 
     <properties>

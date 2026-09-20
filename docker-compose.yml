@@ -1,4 +1,4 @@
-name: bulk-trade
+name: spotlink
 
 # Infrastructure for the bulk commodity spot trading platform.
 # Ports are intentionally non-default to avoid clashing with a local
@@ -13,7 +13,7 @@ services:
     # image is the upstream PG build plus that one extension, so the data
     # directory is compatible with the plain image either way.
     image: pgvector/pgvector:pg16
-    container_name: bulk-trade-postgres
+    container_name: spotlink-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: bulk_trade
@@ -39,7 +39,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: bulk-trade-redis
+    container_name: spotlink-redis
     restart: unless-stopped
     command:
       - "redis-server"
@@ -57,6 +57,10 @@ services:
       timeout: 3s
       retries: 12
 
+# Volume names keep their original prefix on purpose. Renaming them would make
+# Docker create empty volumes and the existing data would appear to vanish - the
+# name is the volume's identity, not a label. Rename only alongside a
+# dump-and-restore.
 volumes:
   pgdata:
     name: bulk-trade-pgdata

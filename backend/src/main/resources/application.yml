@@ -7,7 +7,7 @@ server:
 
 spring:
   application:
-    name: bulk-trade
+    name: spotlink
 
   # Defaults to the local profile for developer machines; any other
   # environment must set SPRING_PROFILES_ACTIVE explicitly.

@@ -45,7 +45,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: () => Boolean(get().accessToken),
     }),
     {
-      name: 'bulk-trade-auth',
+      name: 'spotlink-auth',
       partialize: (state) => ({
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,

@@ -58,7 +58,7 @@ export default function MainLayout() {
             borderBottom: '1px solid #eceef2',
           }}
         >
-          大宗现货交易平台
+          现货通 SpotLink
         </div>
         <Menu
           mode="inline"
