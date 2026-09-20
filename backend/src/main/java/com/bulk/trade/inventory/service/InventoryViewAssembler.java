@@ -73,6 +73,7 @@ public class InventoryViewAssembler {
                         note.getUnit(),
                         note.getStatus(),
                         statusText(note),
+                        note.getRemark(),
                         note.getCreatedAt()))
                 .toList();
     }

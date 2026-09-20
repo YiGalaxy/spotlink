@@ -41,6 +41,16 @@ public class FreezeService {
     private final InventoryNoteMapper inventoryNoteMapper;
     private final FreezeRecordMapper freezeRecordMapper;
 
+    /**
+     * Reads a live freeze without touching it.
+     *
+     * <p>Callers need it to find which note a listing's goods actually sit on:
+     * a freeze stores the note id, and a listing does not.
+     */
+    public FreezeRecord findFrozen(Long enterpriseId, Long freezeId) {
+        return loadFrozen(enterpriseId, freezeId);
+    }
+
     // ------------------------------------------------------------------
     // Goods
     // ------------------------------------------------------------------
@@ -151,6 +161,73 @@ public class FreezeService {
                 record.getQuantity().toPlainString(), note.getUnit());
     }
 
+    /**
+     * Spends part of a freeze.
+     *
+     * <p>Needed because a listing reserves a whole batch while trades take it in
+     * parts: a seller lists 100 tonnes, a buyer takes 30, and 70 must stay
+     * reserved for the next buyer.
+     *
+     * <p><b>Implemented by closing the original record and opening a new one for
+     * the remainder</b>, rather than by editing the quantity in place. A freeze
+     * row is a statement that a specific amount was reserved at a specific
+     * moment; rewriting its amount would erase what was reserved when, which is
+     * exactly the question asked when two parties disagree later. Two rows cost
+     * nothing and keep the trail honest.
+     *
+     * @param quantity must be positive and no greater than the frozen amount
+     */
+    @Transactional
+    public void consumeInventoryPartial(Long enterpriseId, Long freezeId, BigDecimal quantity) {
+        FreezeRecord record = loadFrozen(enterpriseId, freezeId);
+
+        if (quantity == null || quantity.signum() <= 0) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "消耗数量必须大于 0");
+        }
+        if (record.getQuantity().compareTo(quantity) < 0) {
+            throw BusinessException.of(ResultCode.CONFLICT,
+                    "冻结数量 %s 少于要消耗的 %s".formatted(
+                            record.getQuantity().stripTrailingZeros().toPlainString(),
+                            quantity.stripTrailingZeros().toPlainString()));
+        }
+
+        InventoryNote note = inventoryNoteMapper.selectById(record.getEntityId());
+        if (note == null) {
+            throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_FOUND);
+        }
+
+        // The goods leave: total drops, frozen drops by the same amount.
+        note.setTotalQuantity(note.getTotalQuantity().subtract(quantity));
+        applyQuantityChange(note, BigDecimal.ZERO, quantity.negate());
+
+        BigDecimal remainder = record.getQuantity().subtract(quantity);
+        markConsumed(record);
+
+        if (remainder.signum() > 0) {
+            FreezeRecord next = new FreezeRecord();
+            next.setFreezeNo(nextNo("FZ"));
+            next.setEnterpriseId(record.getEnterpriseId());
+            next.setEntityType(record.getEntityType());
+            next.setEntityId(record.getEntityId());
+            next.setQuantity(remainder);
+            next.setBizType(record.getBizType());
+            next.setBizId(record.getBizId());
+            next.setStatus(FreezeRecord.Status.FROZEN);
+            next.setReason("部分消耗后剩余");
+            freezeRecordMapper.insert(next);
+        }
+
+        if (note.getTotalQuantity().signum() == 0) {
+            note.setStatus(InventoryNote.Status.DELIVERED);
+            if (inventoryNoteMapper.updateById(note) == 0) {
+                throw concurrentModification();
+            }
+        }
+
+        log.info("Consumed {} of freeze {}; remainder {}",
+                quantity.toPlainString(), freezeId, remainder.toPlainString());
+    }
+
     // ------------------------------------------------------------------
     // Internals
     // ------------------------------------------------------------------
@@ -208,6 +285,12 @@ public class FreezeService {
             throw BusinessException.of(ResultCode.FREEZE_ALREADY_RELEASED);
         }
         return record;
+    }
+
+    private void markConsumed(FreezeRecord record) {
+        record.setStatus(FreezeRecord.Status.CONSUMED);
+        record.setReleasedAt(java.time.OffsetDateTime.now());
+        freezeRecordMapper.updateById(record);
     }
 
     private void markReleased(FreezeRecord record) {

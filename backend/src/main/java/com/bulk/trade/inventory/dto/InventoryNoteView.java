@@ -40,6 +40,7 @@ public record InventoryNoteView(
         Integer status,
         String statusText,
 
+        String remark,
         OffsetDateTime createdAt
 ) {
 }
