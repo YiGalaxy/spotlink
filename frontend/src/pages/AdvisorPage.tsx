@@ -24,7 +24,7 @@ import {
   sendMessage,
 } from '@/api/advisor'
 import MarkdownText from '@/components/MarkdownText'
-import type { MessageView } from '@/types/api'
+import type { EntityId, MessageView } from '@/types/api'
 
 const SAMPLE_QUESTIONS = [
   '我们公司叫什么名字？交易席位号是多少？审核通过了吗？',
@@ -46,7 +46,7 @@ function localTurn(role: 'user' | 'assistant', content: string): MessageView {
 }
 
 export default function AdvisorPage() {
-  const [activeId, setActiveId] = useState<number | null>(null)
+  const [activeId, setActiveId] = useState<EntityId | null>(null)
   const [messages, setMessages] = useState<MessageView[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -73,7 +73,7 @@ export default function AdvisorPage() {
 
   const refreshList = () => queryClient.invalidateQueries({ queryKey: ['conversations'] })
 
-  const openConversation = async (id: number) => {
+  const openConversation = async (id: EntityId) => {
     setActiveId(id)
     setLoadingHistory(true)
     try {
@@ -86,15 +86,18 @@ export default function AdvisorPage() {
     }
   }
 
-  const handleNewConversation = async () => {
-    const detail = await createConversation()
-    await refreshList()
-    setActiveId(detail.id)
+  /**
+   * Clears the view instead of creating a row. The conversation is created on
+   * the first question, so clicking here and then changing your mind leaves
+   * nothing behind in the list.
+   */
+  const handleNewConversation = () => {
+    setActiveId(null)
     setMessages([])
     setInput('')
   }
 
-  const handleDeleteConversation = async (id: number) => {
+  const handleDeleteConversation = async (id: EntityId) => {
     await deleteConversation(id)
     await refreshList()
     if (activeId === id) {

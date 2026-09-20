@@ -6,12 +6,22 @@ export interface ApiResponse<T> {
   timestamp: number
 }
 
+/**
+ * Entity ids are strings, not numbers.
+ *
+ * A snowflake id is 19 digits; JavaScript numbers are only exact to 16. Parsing
+ * `2101635756223557634` as a number yields `2101635756223557600`, so an id the
+ * client echoes back would not match the row it came from. The backend
+ * serialises every id as a string and the type system keeps it that way.
+ */
+export type EntityId = string
+
 /** Mirrors LoginResponse in the identity module. */
 export interface UserProfile {
-  userId: number
+  userId: EntityId
   username: string
   realName: string | null
-  enterpriseId: number | null
+  enterpriseId: EntityId | null
   enterpriseName: string | null
   traderCode: string | null
   userType: number
@@ -41,7 +51,7 @@ export interface TokenUsage {
 }
 
 export interface MessageView {
-  id: number | null
+  id: EntityId | null
   role: 'user' | 'assistant'
   content: string
   toolCalls: ToolCallView[]
@@ -51,7 +61,7 @@ export interface MessageView {
 }
 
 export interface ConversationSummary {
-  id: number
+  id: EntityId
   title: string
   messageCount: number
   lastMessageAt: string | null
@@ -59,7 +69,7 @@ export interface ConversationSummary {
 }
 
 export interface ConversationDetail {
-  id: number
+  id: EntityId
   title: string
   messages: MessageView[]
 }
