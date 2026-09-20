@@ -23,6 +23,14 @@ services:
     environment:
       MYSQL_DATABASE: bulk_trade
       MYSQL_USER: bulk
+      # Local development only. These are reachable from the host on a
+      # non-default port and nowhere else, and they are committed on purpose:
+      # a clone has to come up with one command, and a password that is
+      # generated per machine is a step somebody has to document.
+      #
+      # Anything reachable from outside this machine needs these from the
+      # environment instead — the JDBC URL in application.yml already reads
+      # its own from BULK_* variables, and these should follow it.
       MYSQL_PASSWORD: bulk_trade_2026
       MYSQL_ROOT_PASSWORD: bulk_root_2026
       TZ: Asia/Shanghai

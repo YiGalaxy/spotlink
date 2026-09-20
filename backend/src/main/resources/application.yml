@@ -24,9 +24,14 @@ spring:
     # pins the JDBC session so a DATETIME written as OffsetDateTime comes back
     # the same instant it went in. MySQL has no timezone-aware type, so this
     # setting is what carries the meaning PostgreSQL kept in TIMESTAMPTZ.
-    url: jdbc:mysql://localhost:13306/bulk_trade?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&connectionTimeZone=Asia/Shanghai&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true
-    username: bulk
-    password: bulk_trade_2026
+    url: ${BULK_DB_URL:jdbc:mysql://localhost:13306/bulk_trade?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&connectionTimeZone=Asia/Shanghai&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true}
+    username: ${BULK_DB_USER:bulk}
+    # The default matches the container in docker-compose.yml and is for local
+    # development. Any deployment reachable from outside this machine must set
+    # it: a committed password is a published password, and the whole point of
+    # reading it here is that changing it is configuration rather than an edit
+    # to a file that is already in the repository.
+    password: ${BULK_DB_PASSWORD:bulk_trade_2026}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 20
@@ -42,9 +47,10 @@ spring:
 
   data:
     redis:
-      host: localhost
-      port: 16379
-      password: bulk_trade_2026
+      host: ${BULK_REDIS_HOST:localhost}
+      port: ${BULK_REDIS_PORT:16379}
+      # Same reasoning as the database password above.
+      password: ${BULK_REDIS_PASSWORD:bulk_trade_2026}
       database: 0
       timeout: 3000ms
       lettuce:
