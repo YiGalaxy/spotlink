@@ -1,0 +1,18 @@
+# Store LF in the repository and check out LF in the working tree.
+# Java and SQL tooling on Windows handles LF fine; the alternative (CRLF
+# everywhere) breaks shell scripts and produces noisy diffs on every commit.
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF or cmd.exe misparses them.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets must never go through line-ending conversion.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.jar  binary
+*.woff binary
+*.woff2 binary
