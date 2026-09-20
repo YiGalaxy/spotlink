@@ -268,7 +268,15 @@ demo_gen: BEGIN
         VALUES (v_seq, CONCAT('LS2026DEMO', LPAD(v_seq % 100000, 5, '0')),
                 v_seller, 'SELL', v_cat, v_cat_name, '国产', '浙江', '{}',
                 v_qty, v_qty, '吨',
-                68000 + (v_seq % 400), 'FIXED', 2001, 'SELF_PICKUP', 'MARGIN_THEN_BALANCE',
+                -- Priced by grade off the same ratio the orders use. This used
+                -- to be a flat 68000 plus the row number, which put aluminium
+                -- and zinc on copper's price level — the market page showed a
+                -- metal at nearly three times what it is worth, and an asking
+                -- price that absurd makes the whole dataset look fabricated.
+                ROUND(v_price * CASE v_cat
+                    WHEN 1002 THEN 1.00 WHEN 1003 THEN 0.36
+                    WHEN 1004 THEN 0.39 ELSE 2.00 END, 2),
+                'FIXED', 2001, 'SELF_PICKUP', 'MARGIN_THEN_BALANCE',
                 NULL, NOW(6) + INTERVAL 7 DAY, 'OPEN', 0, NOW(6) - INTERVAL 1 DAY);
 
         -- Freeze the goods the listing offers, exactly as the service does.
