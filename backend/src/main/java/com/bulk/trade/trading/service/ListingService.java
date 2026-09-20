@@ -113,6 +113,18 @@ public class ListingService {
         }
 
         listingMapper.insert(listing);
+
+        // The freeze was created before the listing had an id, so it could not
+        // record which listing it belongs to. Filled in now that one exists.
+        //
+        // Worth the extra write: without it a freeze row says only "some goods
+        // are reserved" and cannot be traced back to the offer they are
+        // reserved for. The link exists — a listing points at its freeze — but
+        // only one way, so reconciling the other direction (this money-like
+        // reservation, which offer is it?) is impossible without a scan.
+        if (listing.getFreezeId() != null) {
+            freezeService.attributeTo(listing.getFreezeId(), listing.getId());
+        }
         log.info("Listing {} published by enterprise {}: {} {} of {}",
                 listing.getListingNo(), enterpriseId, request.quantity().toPlainString(),
                 listing.getUnit(), listing.getCommodityName());

@@ -176,9 +176,15 @@ public class FreezeService {
      * nothing and keep the trail honest.
      *
      * @param quantity must be positive and no greater than the frozen amount
+     * @return the id of the freeze now holding the remainder, or null when the
+     *         whole reservation was spent. <b>The caller must keep this.</b>
+     *         The original record is closed rather than rewritten, so a caller
+     *         that still points at it is pointing at a settled reservation —
+     *         which is how a partly-sold listing ended up unable to sell again
+     *         or to release what was left.
      */
     @Transactional
-    public void consumeInventoryPartial(Long enterpriseId, Long freezeId, BigDecimal quantity) {
+    public Long consumeInventoryPartial(Long enterpriseId, Long freezeId, BigDecimal quantity) {
         FreezeRecord record = loadFrozen(enterpriseId, freezeId);
 
         if (quantity == null || quantity.signum() <= 0) {
@@ -203,6 +209,7 @@ public class FreezeService {
         BigDecimal remainder = record.getQuantity().subtract(quantity);
         markConsumed(record);
 
+        Long remainderId = null;
         if (remainder.signum() > 0) {
             FreezeRecord next = new FreezeRecord();
             next.setFreezeNo(nextNo("FZ"));
@@ -215,6 +222,7 @@ public class FreezeService {
             next.setStatus(FreezeRecord.Status.FROZEN);
             next.setReason("部分消耗后剩余");
             freezeRecordMapper.insert(next);
+            remainderId = next.getId();
         }
 
         if (note.getTotalQuantity().signum() == 0) {
@@ -224,8 +232,28 @@ public class FreezeService {
             }
         }
 
-        log.info("Consumed {} of freeze {}; remainder {}",
-                quantity.toPlainString(), freezeId, remainder.toPlainString());
+        log.info("Consumed {} of freeze {}; remainder {} held by {}",
+                quantity.toPlainString(), freezeId, remainder.toPlainString(),
+                remainderId == null ? "(nothing)" : remainderId);
+        return remainderId;
+    }
+
+    /**
+     * Records which business object a freeze was made for.
+     *
+     * <p>Separate from creation because the two are not always known at the
+     * same moment: a listing is frozen before it is inserted, so its id does
+     * not exist yet. An explicit follow-up makes that ordering visible instead
+     * of leaving a null that looks like "this freeze belongs to nothing".
+     */
+    @Transactional
+    public void attributeTo(Long freezeId, Long bizId) {
+        FreezeRecord record = freezeRecordMapper.selectById(freezeId);
+        if (record == null || bizId == null) {
+            return;
+        }
+        record.setBizId(bizId);
+        freezeRecordMapper.updateById(record);
     }
 
     // ------------------------------------------------------------------

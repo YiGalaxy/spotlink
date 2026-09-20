@@ -202,6 +202,10 @@ public class OrderService {
         // The acceptance reserved the goods; answering it is what moves them.
         order.setGoodsFreezeId(transferGoods(
                 listing, order.getQuantity(), order.getBuyerId(), order.getSellerId()));
+        // Written here rather than left to the caller: the reservation the
+        // listing points at may have just moved to a new row, and unlike the
+        // accept path there is no later step that would persist it.
+        persistListingReservation(listing);
         order.setConfirmedAt(OffsetDateTime.now());
         order.setConfirmDeadline(null);
         orderMapper.updateById(order);
@@ -417,7 +421,15 @@ public class OrderService {
             // not taken stays frozen and stays on offer.
             var freezeBefore = freezeService.findFrozen(sellerId, goodsFreezeId);
             sellerNoteId = freezeBefore.getEntityId();
-            freezeService.consumeInventoryPartial(sellerId, goodsFreezeId, quantity);
+
+            // The remainder is a NEW record — partial consumption closes the
+            // original rather than rewriting it — so the listing has to be
+            // pointed at the new one before this method returns. Without this
+            // the listing keeps referring to a settled reservation, and from
+            // then on it can neither be accepted again nor withdrawn: both
+            // paths load the freeze by that id and are refused.
+            Long remainderId = freezeService.consumeInventoryPartial(sellerId, goodsFreezeId, quantity);
+            listing.setFreezeId(remainderId);
         } else {
             // A BUY listing: the goods come from the accepting seller's own
             // stock, so find a note that can cover it.
@@ -585,9 +597,25 @@ public class OrderService {
     }
 
     private Long sellerNoteIdOf(Listing listing) {
+        if (listing.getFreezeId() == null) {
+            // Reachable only if a listing is open with nothing reserved behind
+            // it, which the platform does not produce — the freeze is released
+            // only when the remainder is gone, and that is the point at which
+            // the listing stops being open. Said plainly rather than left to
+            // become a null pointer three frames down.
+            throw BusinessException.of(ResultCode.CONFLICT,
+                    "该挂牌没有可归还的冻结货物，请刷新后重试");
+        }
         // The freeze that backed the listing points at the note the goods sit on.
         var freeze = freezeService.findFrozen(listing.getEnterpriseId(), listing.getFreezeId());
         return freeze.getEntityId();
+    }
+
+    /** Writes the listing back, so a changed reservation pointer is not lost. */
+    private void persistListingReservation(Listing listing) {
+        if (listingMapper.updateById(listing) == 0) {
+            throw BusinessException.of(ResultCode.CONFLICT, "该挂牌正在被其他操作修改，请重试");
+        }
     }
 
     /**
