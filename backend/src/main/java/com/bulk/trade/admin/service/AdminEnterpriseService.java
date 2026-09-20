@@ -7,6 +7,7 @@ import com.bulk.trade.identity.mapper.EnterpriseMapper;
 import com.bulk.trade.shared.audit.AuditService;
 import com.bulk.trade.shared.exception.BusinessException;
 import com.bulk.trade.shared.security.SecurityUtils;
+import com.bulk.trade.settlement.service.FundService;
 import com.bulk.trade.shared.web.ResultCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,7 @@ public class AdminEnterpriseService {
 
     private final EnterpriseMapper enterpriseMapper;
     private final AuditService audit;
+    private final FundService fundService;
 
     public List<AdminViews.EnterpriseRow> search(Integer status, String keyword) {
         var query = Wrappers.<Enterprise>lambdaQuery().orderByDesc(Enterprise::getId);
@@ -72,6 +74,10 @@ public class AdminEnterpriseService {
             enterprise.setTraderCode(issueTraderCode(enterprise, traderCode));
         }
         update(enterprise);
+
+        // 席位和资金账户是同一个状态的两样东西：有席位才算这家企业能交易，而账户是它
+        // 交易时钱要去的地方。开在这里，因为「已通过」正是从这一刻起成立的。
+        fundService.openAccountIfAbsent(enterprise.getId(), enterprise.getEnterpriseCode());
 
         audit.record("enterprise", "approve", "ENTERPRISE", id, before, state(enterprise));
         log.info("Enterprise {} approved by {}", enterprise.getEnterpriseCode(),

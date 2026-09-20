@@ -60,6 +60,34 @@ public class FundService {
                 .eq(FundAccount::getEnterpriseId, enterpriseId));
     }
 
+    /**
+     * 开一个资金账户，如果这家企业还没有的话。
+     *
+     * <p>「通过审核的企业都有一个资金账户」是这套系统的一条不变量，而此前没有任何地方
+     * 在建立它：迁移 V6 给当时已存在的企业各开了一个，此后通过审核的企业则没有。于是
+     * 一家新企业的第一笔资金操作会撞上「资金账户不存在」，而没有任何界面能把它补出来。
+     *
+     * <p>账户的形状——账号怎么起、三个金额从哪来、状态取什么值——是结算模块的事，
+     * 所以放在这里，而不是放在审核那一侧。审核只需要表达「这家企业现在可以交易了」。
+     */
+    @Transactional
+    public FundAccount openAccountIfAbsent(Long enterpriseId, String enterpriseCode) {
+        FundAccount existing = findAccount(enterpriseId);
+        if (existing != null) {
+            return existing;
+        }
+        FundAccount account = new FundAccount();
+        account.setAccountNo("ACC" + enterpriseCode);
+        account.setEnterpriseId(enterpriseId);
+        account.setBalance(BigDecimal.ZERO);
+        account.setAvailableBalance(BigDecimal.ZERO);
+        account.setFrozenBalance(BigDecimal.ZERO);
+        account.setStatus(1);
+        accountMapper.insert(account);
+        log.info("Opened fund account {} for enterprise {}", account.getAccountNo(), enterpriseCode);
+        return account;
+    }
+
     public List<FundFlow> flows(Long enterpriseId, int limit) {
         FundAccount account = requireAccount(enterpriseId);
         return flowMapper.selectList(Wrappers.<FundFlow>lambdaQuery()

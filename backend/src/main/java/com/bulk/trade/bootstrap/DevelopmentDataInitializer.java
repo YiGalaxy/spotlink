@@ -14,6 +14,7 @@ import com.bulk.trade.identity.mapper.RolePermissionMapper;
 import com.bulk.trade.identity.mapper.UserRoleMapper;
 import java.util.List;
 import com.bulk.trade.identity.mapper.UserMapper;
+import com.bulk.trade.settlement.service.FundService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -44,6 +45,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
     private final RolePermissionMapper rolePermissionMapper;
     private final PermissionMapper permissionMapper;
     private final PasswordEncoder passwordEncoder;
+    private final FundService fundService;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -145,6 +147,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         Enterprise existing = enterpriseMapper.selectOne(Wrappers.<Enterprise>lambdaQuery()
                 .eq(Enterprise::getEnterpriseCode, code));
         if (existing != null) {
+            ensureAccount(existing);
             return existing;
         }
 
@@ -167,7 +170,24 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         }
         enterpriseMapper.insert(enterprise);
         log.info("Seeded enterprise {} ({}), status={}", name, code, status);
+        ensureAccount(enterprise);
         return enterprise;
+    }
+
+    /**
+     * 已通过审核的企业要有一个资金账户。
+     *
+     * <p>这曾经是一条无人建立的不变量：迁移 V6 给当时已存在的企业各开了一个账户，
+     * 此后通过审核的企业则没有——种子账号 {@code seller01} 就在其中，于是新库上的
+     * 第一笔资金操作会撞上「资金账户不存在」。审核那边现在会开账户，这里补的是那些
+     * 在那次改动之前就已经种下的库，包括这台机器上这一个。
+     *
+     * <p>幂等，所以每次启动都走一遍是安全的。
+     */
+    private void ensureAccount(Enterprise enterprise) {
+        if (enterprise.getStatus() != null && enterprise.getStatus() == Enterprise.Status.APPROVED) {
+            fundService.openAccountIfAbsent(enterprise.getId(), enterprise.getEnterpriseCode());
+        }
     }
 
     /**
