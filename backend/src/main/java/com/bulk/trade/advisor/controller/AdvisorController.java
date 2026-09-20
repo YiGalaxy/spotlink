@@ -7,6 +7,7 @@ import com.bulk.trade.advisor.dto.MessageView;
 import com.bulk.trade.advisor.dto.SendMessageRequest;
 import com.bulk.trade.advisor.service.ConversationService;
 import com.bulk.trade.advisor.tool.AdvisorTools;
+import com.bulk.trade.advisor.tool.InventoryAdvisorTools;
 import com.bulk.trade.shared.security.LoginUser;
 import com.bulk.trade.shared.security.SecurityUtils;
 import com.bulk.trade.shared.web.ApiResponse;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 @Tag(name = "AI 顾问", description = "基于 Spring AI 的工具调用型交易顾问")
 @RestController
@@ -125,7 +127,10 @@ public class AdvisorController {
      * never drift from what is actually registered.
      */
     private List<String> registeredToolNames() {
-        return Arrays.stream(AdvisorTools.class.getDeclaredMethods())
+        // Every class whose @Tool methods are handed to the agent. Kept in one
+        // place so this list cannot drift from what is actually registered.
+        return Stream.of(AdvisorTools.class, InventoryAdvisorTools.class)
+                .flatMap(type -> Arrays.stream(type.getDeclaredMethods()))
                 .filter(method -> method.isAnnotationPresent(Tool.class))
                 .map(method -> {
                     Tool tool = method.getAnnotation(Tool.class);
