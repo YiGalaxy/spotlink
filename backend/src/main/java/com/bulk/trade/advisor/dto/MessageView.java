@@ -3,6 +3,8 @@ package com.bulk.trade.advisor.dto;
 import com.bulk.trade.advisor.entity.AdvisorMessage;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.OffsetDateTime;
@@ -14,7 +16,7 @@ import java.util.List;
  */
 @Slf4j
 public record MessageView(
-        Long id,
+        @JsonSerialize(using = ToStringSerializer.class) Long id,
         String role,
         String content,
         List<ToolCallView> toolCalls,
