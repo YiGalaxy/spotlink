@@ -79,6 +79,22 @@ http://localhost:5173
 
 演示完整交易流程需要 `seller01` 与 `buyer01`：`admin` 没有企业归属，`pending01` 进不去。
 
+### 6. 演示数据（可选，但推荐）
+
+`DevelopmentDataInitializer` 只建 3 家企业 4 个账号，数据库是空的。要看到有内容的市场：
+
+```bash
+cd scripts
+run() { docker exec -i spotlink-mysql mysql --default-character-set=utf8mb4         -ubulk -pbulk_trade_2026 bulk_trade < "$1"; }
+run generate-demo-data.sql          # 历史成交，供行情曲线使用
+run generate-inflight-orders.sql    # 覆盖全部订单状态的在途订单
+run generate-rich-catalogue.sql     # 100 条基础品类随机组合出的数百条记录
+run backfill-demo-contracts.sql     # 给历史订单补上它们本该有的合同
+run topup-seller-inventory.sql      # 给 seller01 补一点能卖的货
+```
+
+全部幂等，跑几遍都不会重复。**`--default-character-set=utf8mb4` 不能省**——容器里的 mysql 客户端没有 locale，默认 latin1，不加会把中文写成双重编码。
+
 ---
 
 ## 功能
