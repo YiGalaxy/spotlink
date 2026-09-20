@@ -16,6 +16,23 @@ export interface ApiResponse<T> {
  */
 export type EntityId = string
 
+/**
+ * Platform-wide figures shown to visitors who have not signed in.
+ *
+ * All aggregates over the whole venue. `tradedAmountText` is pre-formatted by
+ * the server so the homepage and any future report round the same way instead
+ * of each inventing its own idea of what "3.2 亿元" is.
+ */
+export interface PublicStats {
+  enterpriseCount: number
+  openListingCount: number
+  tradeCount: number
+  tradedQuantity: number
+  tradedAmount: number
+  tradedAmountText: string
+  inventoryQuantity: number
+}
+
 /** Mirrors LoginResponse in the identity module. */
 export interface UserProfile {
   userId: EntityId

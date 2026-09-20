@@ -47,6 +47,29 @@ public class SecurityConfig {
             "/actuator/info"
     };
 
+    /**
+     * The shop window: reads a visitor may make before identifying.
+     *
+     * <p><b>Scoped to GET, and that is the point.</b> Authenticated writes sit
+     * one segment away from these paths — {@code /api/listings/mine} beside
+     * {@code /api/listings/market}, {@code POST /api/knowledge/embed-pending}
+     * under a prefix that is otherwise readable. Permitting the prefix instead
+     * of the read would open both.
+     *
+     * <p>What is here is what a commodity venue publishes to the street: what
+     * is on offer, what it last traded at, what the rules are. What is absent —
+     * inventory, orders, contracts, funds, the advisor — is everything scoped
+     * to one enterprise, and a visitor has no enterprise to scope it to.
+     */
+    private static final String[] PUBLIC_READS = {
+            "/api/public/**",
+            "/api/listings/market",
+            "/api/categories/**",
+            "/api/market/**",
+            "/api/knowledge/search",
+            "/api/knowledge/stats"
+    };
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ObjectMapper objectMapper;
 
@@ -63,6 +86,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, PUBLIC_READS).permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) ->

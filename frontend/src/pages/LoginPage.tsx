@@ -31,8 +31,11 @@ export default function LoginPage() {
       const data = await loginApi(values.username, values.password)
       login(data)
       notifySuccess('登录成功')
+      // Back where a guard interrupted them, or the workbench. Not the
+      // homepage: someone who has just signed in came here to work, and the
+      // public page is one click away in the menu.
       const from = (location.state as { from?: string } | null)?.from
-      navigate(from ?? '/', { replace: true })
+      navigate(from ?? '/dashboard', { replace: true })
     } catch {
       // The axios layer already surfaced the reason.
     } finally {

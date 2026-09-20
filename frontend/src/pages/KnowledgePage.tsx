@@ -18,6 +18,7 @@ import { SearchOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { embedPending, fetchKnowledgeStats, searchKnowledge } from '@/api/knowledge'
 import type { KnowledgeHit } from '@/api/knowledge'
+import { useAuthStore } from '@/store/auth'
 
 const SAMPLES = ['磅差怎么算', '保证金比例是多少', '交易时间是什么时候', '电子库存单是什么']
 
@@ -27,6 +28,8 @@ export default function KnowledgePage() {
   const [searching, setSearching] = useState(false)
   const [embedding, setEmbedding] = useState(false)
   const queryClient = useQueryClient()
+  // The rulebook is public; only maintaining the index needs an account.
+  const signedIn = Boolean(useAuthStore((state) => state.accessToken))
 
   const { data: stats } = useQuery({
     queryKey: ['knowledge-stats'],
@@ -103,7 +106,10 @@ export default function KnowledgePage() {
         </Col>
       </Row>
 
-      {noVector && (
+      {/* The rulebook is public; maintaining the index is not. A visitor
+          reading the rules has no business triggering a re-embed, and the
+          button would only earn them a 401. */}
+      {signedIn && noVector && (
         <Alert
           type="warning"
           showIcon
@@ -118,7 +124,7 @@ export default function KnowledgePage() {
         />
       )}
 
-      {!noVector && pending > 0 && (
+      {signedIn && !noVector && pending > 0 && (
         <Alert
           type="info"
           showIcon

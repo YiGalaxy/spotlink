@@ -27,7 +27,9 @@ import {
 } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
+import { useAuthStore } from '@/store/auth'
 import {
   acceptListing,
   cancelOrder,
@@ -73,6 +75,9 @@ const ORDER_COLOURS: Record<string, string> = {
 
 export default function TradingPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const accessToken = useAuthStore((state) => state.accessToken)
+  const signedIn = Boolean(accessToken)
   const [acceptTarget, setAcceptTarget] = useState<ListingView | null>(null)
   const [publishOpen, setPublishOpen] = useState(false)
   const [detailOrder, setDetailOrder] = useState<OrderView | null>(null)
@@ -94,19 +99,27 @@ export default function TradingPage() {
     queryFn: () => fetchMarket(undefined, sideFilter),
   })
 
+  // The marketplace is public; everything below is one enterprise's own
+  // business, so a visitor must not even ask. Firing these unauthenticated
+  // would 401, and the client's 401 handler treats that as an expired session
+  // and bounces the visitor to the login page — turning "browsing" into
+  // "ejected".
   const { data: myListings = [] } = useQuery({
     queryKey: ['my-listings'],
     queryFn: fetchMyListings,
+    enabled: signedIn,
   })
 
   const { data: myOrders = [] } = useQuery({
     queryKey: ['my-orders'],
     queryFn: () => fetchMyOrders(),
+    enabled: signedIn,
   })
 
   const { data: notes = [] } = useQuery({
     queryKey: ['inventory-notes'],
     queryFn: () => listInventoryNotes(),
+    enabled: signedIn,
   })
 
   const { data: categories = [] } = useQuery({
@@ -117,6 +130,7 @@ export default function TradingPage() {
   const { data: warehouses = [] } = useQuery({
     queryKey: ['warehouses'],
     queryFn: fetchWarehouses,
+    enabled: signedIn,
   })
 
   const categoryOptions = useMemo(() => flattenLeaves(categories), [categories])
@@ -275,10 +289,14 @@ export default function TradingPage() {
         </Typography.Text>) },
     {
       title: '操作',
-      width: 100,
+      width: 110,
       render: (_: unknown, r: ListingView) =>
         r.mine ? (
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>自己的挂牌</Typography.Text>
+        ) : !signedIn ? (
+          // Not a disabled button: a disabled button says "you cannot", and the
+          // visitor can — after logging in. So it says that instead.
+          <Button size="small" onClick={() => navigate('/login')}>登录后摘牌</Button>
         ) : (
           <Button type="primary" size="small" disabled={Number(r.remainingQuantity) <= 0}
             onClick={() => { setAcceptTarget(r); acceptForm.setFieldsValue({ quantity: r.remainingQuantity }) }}>
@@ -336,6 +354,10 @@ export default function TradingPage() {
 
       <Tabs
         defaultActiveKey="market"
+        // A visitor gets the hall and nothing else. "我的挂牌" and "我的订单"
+        // have no "my" to speak of without an enterprise, and rendering them
+        // empty would look like a broken page rather than an unauthenticated
+        // one.
         items={[
           {
             key: 'market',
@@ -359,55 +381,62 @@ export default function TradingPage() {
               </>
             ),
           },
-          {
-            key: 'mine',
-            label: `我的挂牌 (${myListings.length})`,
-            children: (
-              <>
-                <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 12 }}
-                  onClick={() => setPublishOpen(true)}>
-                  发布挂牌
-                </Button>
-                <Table rowKey="id" size="middle" dataSource={myListings} pagination={false}
-                  columns={[
-                    { title: '挂牌号', dataIndex: 'listingNo', width: 190,
-                      render: (v: string) => <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text> },
-                    { title: '方向', dataIndex: 'sideText', width: 90,
-                      render: (v: string, r: ListingView) => (
-                        <Tag color={r.side === 'SELL' ? 'green' : 'blue'}>{v}</Tag>) },
-                    { title: '商品', dataIndex: 'commodityName' },
-                    { title: '价格', dataIndex: 'priceText', width: 110 },
-                    { title: '剩余 / 总量', width: 140,
-                      render: (_: unknown, r: ListingView) => `${r.remainingQuantity} / ${r.quantity} ${r.unit}` },
-                    { title: '状态', dataIndex: 'statusText', width: 100,
-                      render: (v: string) => <Tag>{v}</Tag> },
-                    {
-                      title: '操作',
-                      width: 100,
-                      render: (_: unknown, r: ListingView) =>
-                        ['OPEN', 'PARTIALLY_FILLED'].includes(r.status) ? (
-                          <Popconfirm title="撤牌并解冻剩余货物？" okText="撤牌" cancelText="取消"
-                            onConfirm={async () => { await closeListing(r.id); void message.success('已撤牌'); invalidate() }}>
-                            <Button type="link" size="small" danger>撤牌</Button>
-                          </Popconfirm>
-                        ) : (
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>—</Typography.Text>
-                        ),
-                    },
-                  ]}
-                  locale={{ emptyText: <Empty description="还没有发布过挂牌" /> }} />
-              </>
-            ),
-          },
-          {
-            key: 'orders',
-            label: `我的订单 (${myOrders.length})`,
-            children: (
-              <Table rowKey="id" size="middle" dataSource={myOrders} columns={orderColumns}
-                pagination={{ pageSize: 10, hideOnSinglePage: true }}
-                locale={{ emptyText: <Empty description="还没有订单" /> }} />
-            ),
-          },
+          ...(signedIn
+            ? [
+                {
+                  key: 'mine',
+                  label: `我的挂牌 (${myListings.length})`,
+                  children: (
+                    <>
+                      <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 12 }}
+                        onClick={() => setPublishOpen(true)}>
+                        发布挂牌
+                      </Button>
+                      <Table rowKey="id" size="middle" dataSource={myListings} pagination={false}
+                        columns={[
+                          { title: '挂牌号', dataIndex: 'listingNo', width: 190,
+                            render: (v: string) => <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text> },
+                          { title: '方向', dataIndex: 'sideText', width: 90,
+                            render: (v: string, r: ListingView) => (
+                              <Tag color={r.side === 'SELL' ? 'green' : 'blue'}>{v}</Tag>) },
+                          { title: '商品', dataIndex: 'commodityName' },
+                          { title: '价格', dataIndex: 'priceText', width: 110 },
+                          { title: '剩余 / 总量', width: 140,
+                            render: (_: unknown, r: ListingView) => `${r.remainingQuantity} / ${r.quantity} ${r.unit}` },
+                          { title: '成交方式', dataIndex: 'confirmModeText', width: 120,
+                            render: (v: string, r: ListingView) => (
+                              <Tag color={r.confirmMode === 'MANUAL' ? 'orange' : 'default'}>{v}</Tag>) },
+                          { title: '状态', dataIndex: 'statusText', width: 100,
+                            render: (v: string) => <Tag>{v}</Tag> },
+                          {
+                            title: '操作',
+                            width: 100,
+                            render: (_: unknown, r: ListingView) =>
+                              ['OPEN', 'PARTIALLY_FILLED'].includes(r.status) ? (
+                                <Popconfirm title="撤牌并解冻剩余货物？" okText="撤牌" cancelText="取消"
+                                  onConfirm={async () => { await closeListing(r.id); void message.success('已撤牌'); invalidate() }}>
+                                  <Button type="link" size="small" danger>撤牌</Button>
+                                </Popconfirm>
+                              ) : (
+                                <Typography.Text type="secondary" style={{ fontSize: 12 }}>—</Typography.Text>
+                              ),
+                          },
+                        ]}
+                        locale={{ emptyText: <Empty description="还没有发布过挂牌" /> }} />
+                    </>
+                  ),
+                },
+                {
+                  key: 'orders',
+                  label: `我的订单 (${myOrders.length})`,
+                  children: (
+                    <Table rowKey="id" size="middle" dataSource={myOrders} columns={orderColumns}
+                      pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                      locale={{ emptyText: <Empty description="还没有订单" /> }} />
+                  ),
+                },
+              ]
+            : []),
         ]}
       />
 
