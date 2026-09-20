@@ -15,6 +15,12 @@ import java.util.Map;
  * <p>A SELL listing must name the inventory note it is backed by: publishing an
  * offer to sell goods you have not identified is not an offer, it is an
  * advertisement. The note's goods are frozen for as long as the listing is open.
+ *
+ * <p>{@code confirmMode} decides what accepting the listing means, which makes
+ * it the most consequential field here. {@code AUTO} (the default) makes the
+ * listing an offer that closes on acceptance. {@code MANUAL} makes it an
+ * invitation to treat that waits for the lister's answer, and is accepted for
+ * SELL listings only.
  */
 public record ListingPublishRequest(
 
@@ -46,6 +52,15 @@ public record ListingPublishRequest(
 
         /** FIXED or NEGOTIABLE. */
         String priceType,
+
+        /**
+         * AUTO or MANUAL. Blank means AUTO.
+         *
+         * <p>Optional rather than required so that an existing client that
+         * knows nothing about confirmation keeps the behaviour it had, instead
+         * of silently acquiring a waiting step it has no UI for.
+         */
+        String confirmMode,
 
         Long warehouseId,
 

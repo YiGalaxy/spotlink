@@ -72,6 +72,18 @@ public class OrderController {
                 List.of(orderService.confirm(id, SecurityUtils.currentUser())), enterpriseId).get(0));
     }
 
+    @Operation(summary = "拒绝摘牌",
+            description = "仅挂牌方本人可操作，且仅对「待挂牌方确认」的订单有效。"
+                    + "此时货权尚未转移，拒绝后挂牌数量原样恢复。")
+    @PostMapping("/{id}/reject")
+    public ApiResponse<OrderView> reject(@PathVariable Long id,
+                                         @RequestBody(required = false) Map<String, String> body) {
+        Long enterpriseId = SecurityUtils.currentEnterpriseId();
+        String reason = body == null ? null : body.get("reason");
+        return ApiResponse.success(viewAssembler.toOrderViews(
+                List.of(orderService.reject(id, reason, SecurityUtils.currentUser())), enterpriseId).get(0));
+    }
+
     @Operation(summary = "取消订单",
             description = "交收开始前可取消，货物会退回卖方（挂牌仍有效则重新占用该挂牌）")
     @PostMapping("/{id}/cancel")

@@ -114,6 +114,18 @@ bulk:
     # MUST be false in any environment real users can reach.
     enabled: true
 
+  trading:
+    # How often the background sweep runs. It answers acceptances whose lister
+    # never replied, and expires listings past their validity — the work nobody
+    # triggers by hand, so this interval bounds how long a stalled offer sits.
+    sweep-interval-ms: 300000
+    # Let the application finish starting before the first sweep.
+    sweep-initial-delay-ms: 60000
+    # How long a lister has to answer an acceptance on a 「需挂牌方确认」 listing.
+    # Capped by each listing's own validity, so it can only ever shorten the
+    # wait. Set this to PT1M to watch the auto-expiry path without waiting a day.
+    confirm-window: ${BULK_CONFIRM_WINDOW:PT24H}
+
   rag:
     embedding:
       # Claude has no embedding endpoint, so this is the one non-Anthropic

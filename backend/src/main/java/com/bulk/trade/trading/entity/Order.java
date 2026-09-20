@@ -1,6 +1,7 @@
 package com.bulk.trade.trading.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -69,6 +70,25 @@ public class Order {
     private OffsetDateTime confirmedAt;
     private OffsetDateTime cancelledAt;
     private String cancelReason;
+
+    /**
+     * When the lister's answer is due.
+     *
+     * <p>Null for any order that never waits — every order under an AUTO
+     * listing, and every order past the point of confirmation. Set only while
+     * the order sits in {@link OrderStatus#PENDING_CONFIRM}, which is what
+     * makes it a deadline rather than a timestamp.
+     *
+     * <p><b>{@code updateStrategy = ALWAYS} is load-bearing.</b> MyBatis-Plus
+     * omits null fields from generated UPDATE statements by default, which
+     * quietly turns "clear this column" into "leave whatever was there". The
+     * entity would read {@code null} and the API would return {@code null}
+     * while the row kept the old value — a lie that survives every test that
+     * inspects the response instead of the database. This is the one field on
+     * this entity that is ever cleared, so it is the one that opts out.
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private OffsetDateTime confirmDeadline;
 
     @Version
     private Integer version;

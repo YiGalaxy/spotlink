@@ -12,7 +12,10 @@ import com.bulk.trade.shared.security.LoginUser;
 import com.bulk.trade.shared.web.ResultCode;
 import com.bulk.trade.trading.dto.ListingPublishRequest;
 import com.bulk.trade.trading.entity.Listing;
+import com.bulk.trade.trading.entity.Order;
+import com.bulk.trade.trading.entity.OrderStatus;
 import com.bulk.trade.trading.mapper.ListingMapper;
+import com.bulk.trade.trading.mapper.OrderMapper;
 import com.bulk.trade.warehouse.entity.Warehouse;
 import com.bulk.trade.warehouse.mapper.WarehouseMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,6 +48,7 @@ public class ListingService {
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private final ListingMapper listingMapper;
+    private final OrderMapper orderMapper;
     private final InventoryNoteMapper inventoryNoteMapper;
     private final CommodityCategoryMapper categoryMapper;
     private final WarehouseMapper warehouseMapper;
@@ -71,6 +75,7 @@ public class ListingService {
         }
 
         String priceType = normalisePriceType(request);
+        String confirmMode = normaliseConfirmMode(request);
 
         CommodityCategory category = categoryMapper.selectById(request.categoryId());
         if (category == null) {
@@ -92,6 +97,7 @@ public class ListingService {
                 ? category.getUnit() : request.unit());
         listing.setPrice(Listing.PriceType.FIXED.equals(priceType) ? request.price() : null);
         listing.setPriceType(priceType);
+        listing.setConfirmMode(confirmMode);
         listing.setWarehouseId(request.warehouseId());
         listing.setDeliveryMethod(request.deliveryMethod() == null
                 ? Listing.DeliveryMethod.SELF_PICKUP : request.deliveryMethod());
@@ -119,10 +125,29 @@ public class ListingService {
      * <p>Only the owner may withdraw, and only while it is open. A listing that
      * has been partly taken can still be withdrawn — the remainder is released,
      * the trades already struck are untouched.
+     *
+     * <p><b>Except while an acceptance is waiting for an answer.</b> That
+     * acceptance is a question the lister has been asked, and the goods behind
+     * it are reserved for the answer. Withdrawing would release that
+     * reservation and leave the waiting order permanently unanswerable, so the
+     * withdrawal is refused until the question is settled. Refusing is the
+     * safer failure: the lister can still decline, and one button press later
+     * the listing is theirs to withdraw.
      */
     @Transactional
     public void close(Long listingId, Long enterpriseId) {
         Listing listing = loadOwned(listingId, enterpriseId);
+
+        // Asked before "is it still open", because a listing whose whole
+        // remainder was accepted reads as FILLED rather than open — yet the
+        // reason its owner cannot withdraw is not that it is finished, it is
+        // that a question is waiting for them. That is the answer that tells
+        // them what to do next; the other one just says no.
+        long waiting = countAwaitingAcceptance(listing.getId());
+        if (waiting > 0) {
+            throw BusinessException.of(ResultCode.CONFLICT,
+                    "有 %d 笔摘牌等待您确认，请先确认或拒绝后再撤牌".formatted(waiting));
+        }
 
         if (!listing.isOpenForTrade()) {
             throw BusinessException.of(ResultCode.LISTING_ALREADY_CLOSED);
@@ -144,6 +169,11 @@ public class ListingService {
      * <em>reading</em> an expired listing should change it, and a marketplace
      * page that mutates rows as a side effect of being viewed is a trap.
      *
+     * <p>A listing with an acceptance still waiting is skipped, for the same
+     * reason withdrawal is refused. This resolves itself rather than deadlocking:
+     * the order sweep answers the waiting acceptance — by expiry, if the lister
+     * never does — and the listing is expired by the next pass.
+     *
      * @return how many listings were expired
      */
     @Transactional
@@ -153,15 +183,20 @@ public class ListingService {
                         .in(Listing::getStatus, Listing.Status.OPEN, Listing.Status.PARTIALLY_FILLED)
                         .lt(Listing::getValidUntil, OffsetDateTime.now()));
 
+        int expired = 0;
         for (Listing listing : overdue) {
+            if (countAwaitingAcceptance(listing.getId()) > 0) {
+                continue;
+            }
             releaseListingFreeze(listing);
             listing.setStatus(Listing.Status.EXPIRED);
             listingMapper.updateById(listing);
+            expired++;
         }
-        if (!overdue.isEmpty()) {
-            log.info("Expired {} listing(s)", overdue.size());
+        if (expired > 0) {
+            log.info("Expired {} listing(s)", expired);
         }
-        return overdue.size();
+        return expired;
     }
 
     /** The marketplace: open listings from every enterprise except the caller's own. */
@@ -257,6 +292,42 @@ public class ListingService {
             log.debug("Listing {} freeze {} was already settled: {}",
                     listing.getListingNo(), listing.getFreezeId(), e.getMessage());
         }
+    }
+
+    /**
+     * How many acceptances of this listing are still unanswered.
+     *
+     * <p>Each one holds a reservation against this listing's freeze, so the
+     * count is what stands between a withdrawal and an order nobody can ever
+     * answer.
+     */
+    private long countAwaitingAcceptance(Long listingId) {
+        return orderMapper.selectCount(Wrappers.<Order>lambdaQuery()
+                .eq(Order::getListingId, listingId)
+                .eq(Order::getStatus, OrderStatus.PENDING_CONFIRM));
+    }
+
+    /**
+     * Resolves the requested confirmation mode.
+     *
+     * <p>MANUAL is refused for a BUY listing here as well as in the database.
+     * The check constraint is the guarantee; this is the explanation, because a
+     * constraint violation reaches the client as a 500 and a person who asked
+     * for something reasonable deserves to be told why it is not on offer.
+     */
+    private String normaliseConfirmMode(ListingPublishRequest request) {
+        String mode = request.confirmMode();
+        if (mode == null || mode.isBlank()) {
+            return Listing.ConfirmMode.AUTO;
+        }
+        if (!Listing.ConfirmMode.AUTO.equals(mode) && !Listing.ConfirmMode.MANUAL.equals(mode)) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "确认方式必须是 AUTO 或 MANUAL");
+        }
+        if (Listing.ConfirmMode.MANUAL.equals(mode) && !Listing.Side.SELL.equals(request.side())) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST,
+                    "买方挂牌不支持「待挂牌方确认」：摘牌时没有已冻结的货物可以等待确认");
+        }
+        return mode;
     }
 
     private String normalisePriceType(ListingPublishRequest request) {

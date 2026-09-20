@@ -8,6 +8,7 @@ import com.bulk.trade.trading.dto.ListingView;
 import com.bulk.trade.trading.dto.OrderView;
 import com.bulk.trade.trading.entity.Listing;
 import com.bulk.trade.trading.entity.Order;
+import com.bulk.trade.trading.mapper.ListingMapper;
 import com.bulk.trade.warehouse.entity.Warehouse;
 import com.bulk.trade.warehouse.mapper.WarehouseMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -41,6 +42,7 @@ public class TradingViewAssembler {
     private final EnterpriseMapper enterpriseMapper;
     private final CommodityCategoryMapper categoryMapper;
     private final WarehouseMapper warehouseMapper;
+    private final ListingMapper listingMapper;
     private final ObjectMapper objectMapper;
 
     public List<ListingView> toListingViews(Collection<Listing> listings, Long viewerEnterpriseId) {
@@ -79,15 +81,34 @@ public class TradingViewAssembler {
         Map<Long, String> categories = categories(orders.stream().map(Order::getCategoryId));
         Map<Long, String> warehouses = warehouses(orders.stream().map(Order::getWarehouseId));
 
+        // Who published each listing decides which actions the viewer may take,
+        // so it is resolved in the same batch as the display names rather than
+        // one query per row.
+        Map<Long, Long> listerOf = listerOf(orders.stream().map(Order::getListingId));
+
         return orders.stream()
                 .map(order -> OrderView.of(
                         order,
                         viewerEnterpriseId,
+                        viewerEnterpriseId != null
+                                && viewerEnterpriseId.equals(listerOf.get(order.getListingId())),
                         enterprises.getOrDefault(order.getBuyerId(), "—"),
                         enterprises.getOrDefault(order.getSellerId(), "—"),
                         categories.getOrDefault(order.getCategoryId(), "—"),
                         warehouses.getOrDefault(order.getWarehouseId(), "—")))
                 .toList();
+    }
+
+    /** Listing id to the enterprise that published it. */
+    private Map<Long, Long> listerOf(Stream<Long> listingIds) {
+        Set<Long> distinct = listingIds
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (distinct.isEmpty()) {
+            return Map.of();
+        }
+        return listingMapper.selectBatchIds(distinct).stream()
+                .collect(Collectors.toMap(Listing::getId, Listing::getEnterpriseId));
     }
 
     /** Spec values stored as jsonb, as a map for the client. */

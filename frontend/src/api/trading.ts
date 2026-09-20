@@ -19,6 +19,8 @@ export interface PublishListingPayload {
   unit?: string
   price?: number
   priceType: 'FIXED' | 'NEGOTIABLE'
+  /** AUTO（默认）摘牌即成交；MANUAL 摘牌后等挂牌方确认。仅卖方挂牌可用 MANUAL。 */
+  confirmMode?: 'AUTO' | 'MANUAL'
   warehouseId?: EntityId
   deliveryMethod?: string
   validUntil: string
@@ -64,8 +66,14 @@ export function fetchOrderHistory(id: EntityId) {
   return api.get<OrderStatusLogEntry[]>(`/orders/${id}/history`)
 }
 
+/** 确认成交：仅挂牌方本人可操作，货权在此刻转移。 */
 export function confirmOrder(id: EntityId) {
   return api.post<OrderView>(`/orders/${id}/confirm`)
+}
+
+/** 拒绝摘牌：仅挂牌方本人可操作，货权尚未转移，挂牌数量原样恢复。 */
+export function rejectOrder(id: EntityId, reason?: string) {
+  return api.post<OrderView>(`/orders/${id}/reject`, { reason })
 }
 
 export function cancelOrder(id: EntityId, reason?: string) {

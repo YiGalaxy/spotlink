@@ -147,6 +147,9 @@ export interface ListingView {
   price: number | null
   priceType: 'FIXED' | 'NEGOTIABLE'
   priceText: string
+  /** AUTO 摘牌即成交；MANUAL 摘牌后需挂牌方确认，确认前货权不转移。 */
+  confirmMode: 'AUTO' | 'MANUAL'
+  confirmModeText: string
   warehouseId: EntityId | null
   warehouseName: string
   deliveryMethod: string
@@ -183,6 +186,8 @@ export interface OrderView {
   statusText: string
   /** Transitions this caller may actually perform — the same table the server enforces. */
   allowedActions: string[]
+  /** 挂牌方的答复截止时间；只有「待挂牌方确认」的订单有值。 */
+  confirmDeadline: string | null
   confirmedAt: string | null
   cancelledAt: string | null
   cancelReason: string | null

@@ -41,6 +41,7 @@ import {
   fetchOrderContract,
   fetchOrderHistory,
   publishListing,
+  rejectOrder,
   signContract,
   startDelivery,
   type PublishListingPayload,
@@ -131,7 +132,9 @@ export default function TradingPage() {
     mutationFn: (vars: { id: EntityId; quantity: number; remark?: string }) =>
       acceptListing(vars.id, vars.quantity, vars.remark),
     onSuccess: (order) => {
-      void message.success(`摘牌成功，订单 ${order.orderNo} 已生成`)
+      void message.success(order.status === 'PENDING_CONFIRM'
+        ? `已摘牌，订单 ${order.orderNo} 等待挂牌方确认`
+        : `摘牌成功，订单 ${order.orderNo} 已生成`)
       setAcceptTarget(null)
       acceptForm.resetFields()
       invalidate()
@@ -152,6 +155,9 @@ export default function TradingPage() {
     switch (action) {
       case 'confirm':
         await confirmOrder(order.id)
+        break
+      case 'reject':
+        await rejectOrder(order.id, '挂牌方拒绝摘牌')
         break
       case 'deliver':
         await startDelivery(order.id)
@@ -184,6 +190,11 @@ export default function TradingPage() {
       unit: values.unit as string | undefined,
       price: values.priceType === 'FIXED' ? (values.price as number) : undefined,
       priceType: values.priceType as 'FIXED' | 'NEGOTIABLE',
+      // The server refuses MANUAL on a BUY listing, so the form does not offer
+      // it there rather than letting the request fail.
+      confirmMode: values.side === 'SELL'
+        ? (values.confirmMode as 'AUTO' | 'MANUAL' | undefined)
+        : undefined,
       warehouseId: (values.warehouseId as EntityId) ?? note?.warehouseId,
       deliveryMethod: values.deliveryMethod as string,
       validUntil: (values.validUntil as dayjs.Dayjs).toISOString(),
@@ -217,17 +228,27 @@ export default function TradingPage() {
           {r.mine && <Tag color="gold">我的</Tag>}
         </Space>) },
     {
-      title: '价格',
-      width: 140,
-      render: (_: unknown, r: ListingView) =>
-        r.priceType === 'NEGOTIABLE' ? (
-          <Tag>面议</Tag>
-        ) : (
-          <Space size={4}>
-            <Typography.Text strong style={{ fontSize: 15 }}>{r.price}</Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 11 }}>元/{r.unit}</Typography.Text>
-          </Space>
-        ),
+      title: '价格 / 成交方式',
+      width: 170,
+      render: (_: unknown, r: ListingView) => (
+        <Space direction="vertical" size={2}>
+          {r.priceType === 'NEGOTIABLE' ? (
+            <Tag>面议</Tag>
+          ) : (
+            <Space size={4}>
+              <Typography.Text strong style={{ fontSize: 15 }}>{r.price}</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 11 }}>元/{r.unit}</Typography.Text>
+            </Space>
+          )}
+          {/* Which of the two conventions applies is the fact a buyer most
+              needs before pressing 摘牌, so it is shown on the market row
+              rather than discovered afterwards. */}
+          <Tag color={r.confirmMode === 'MANUAL' ? 'orange' : 'default'}
+            style={{ fontSize: 11, marginInlineEnd: 0 }}>
+            {r.confirmModeText}
+          </Tag>
+        </Space>
+      ),
     },
     {
       title: '剩余 / 总量',
@@ -402,14 +423,27 @@ export default function TradingPage() {
       >
         {acceptTarget && (
           <>
-            <Alert type="info" showIcon style={{ marginBottom: 16 }}
-              message="摘牌即承诺"
-              description="接受对方的挂牌就是作出承诺，货权当场转移：卖方库存减少，你会获得等量的电子库存单。价格与交收条款按挂牌内容执行。" />
+            {acceptTarget.confirmMode === 'MANUAL' ? (
+              <Alert type="warning" showIcon style={{ marginBottom: 16 }}
+                message="摘牌后需挂牌方确认"
+                description="这张挂牌约定「需挂牌方确认」：摘牌只是把成交条件提交给挂牌方，
+                  货权不会立即转移，要以挂牌方的答复为准。挂牌方确认后才转移货权；
+                  若拒绝或逾期未答复，货物原样退回挂牌，你不会获得库存。" />
+            ) : (
+              <Alert type="info" showIcon style={{ marginBottom: 16 }}
+                message="摘牌即承诺"
+                description="接受对方的挂牌就是作出承诺，货权当场转移：卖方库存减少，你会获得等量的电子库存单。价格与交收条款按挂牌内容执行。" />
+            )}
             <Descriptions column={1} size="small" bordered style={{ marginBottom: 16 }}>
               <Descriptions.Item label="挂牌方">{acceptTarget.enterpriseName}</Descriptions.Item>
               <Descriptions.Item label="单价">{acceptTarget.price} 元/{acceptTarget.unit}</Descriptions.Item>
               <Descriptions.Item label="可摘数量">
                 {acceptTarget.remainingQuantity} {acceptTarget.unit}
+              </Descriptions.Item>
+              <Descriptions.Item label="成交方式">
+                <Tag color={acceptTarget.confirmMode === 'MANUAL' ? 'orange' : 'default'}>
+                  {acceptTarget.confirmModeText}
+                </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="交收仓库">
                 {acceptTarget.warehouseName}（{acceptTarget.deliveryMethodText}）
@@ -447,7 +481,7 @@ export default function TradingPage() {
           description="卖方挂牌会立即冻结对应库存，冻结期间这部分货物不能再挂牌或注销。
             挂牌在有效期内持续有效，期满未成交自动失效并解冻。" />
         <Form form={publishForm} layout="vertical" onFinish={handlePublish}
-          initialValues={{ side: 'SELL', priceType: 'FIXED', deliveryMethod: 'SELF_PICKUP' }}>
+          initialValues={{ side: 'SELL', priceType: 'FIXED', confirmMode: 'AUTO', deliveryMethod: 'SELF_PICKUP' }}>
           <Form.Item name="side" label="挂牌方向">
             <Radio.Group optionType="button" buttonStyle="solid">
               <Radio.Button value="SELL">卖方挂牌（我卖货）</Radio.Button>
@@ -522,6 +556,16 @@ export default function TradingPage() {
               </Form.Item>
             </Col>
           </Row>
+
+          {publishSide !== 'BUY' && (
+            <Form.Item name="confirmMode" label="成交方式"
+              extra="决定摘牌意味着什么：直接成交，还是先问过你。买方挂牌只能是「摘牌即成交」。">
+              <Radio.Group>
+                <Radio value="AUTO">摘牌即成交（挂牌即要约，摘牌即承诺）</Radio>
+                <Radio value="MANUAL">需我确认（摘牌后等我答复，确认前货权不动）</Radio>
+              </Radio.Group>
+            </Form.Item>
+          )}
 
           <Form.Item name="validUntil" label="有效期至"
             rules={[{ required: true, message: '请选择有效期' }]}>
@@ -606,11 +650,28 @@ function OrderDetailModal({
           {order.status !== 'CANCELLED' ? (
             <Steps size="small" current={currentStep}
               items={[
-                { title: '待确认' }, { title: '已确认' }, { title: '已签约' },
+                { title: '待挂牌方确认' }, { title: '已确认' }, { title: '已签约' },
                 { title: '交收中' }, { title: '已完成' },
               ]} />
           ) : (
             <Alert type="warning" showIcon message={`订单已取消${order.cancelReason ? `：${order.cancelReason}` : ''}`} />
+          )}
+
+          {order.status === 'PENDING_CONFIRM' && (
+            <Alert type="warning" showIcon
+              message={order.myRole === 'SELLER'
+                ? '这笔摘牌在等您答复'
+                : '已提交摘牌，等待挂牌方确认'}
+              description={
+                <>
+                  货权尚未转移。挂牌方确认后才转移货权；
+                  拒绝或逾期未答复则挂牌数量原样恢复。
+                  {order.confirmDeadline && (
+                    <> 答复截止 <Typography.Text strong>
+                      {dayjs(order.confirmDeadline).format('MM-DD HH:mm')}</Typography.Text>。</>
+                  )}
+                </>
+              } />
           )}
 
           <Descriptions column={2} size="small" bordered>
@@ -636,7 +697,7 @@ function OrderDetailModal({
                 ['CONFIRMED'].includes(order.status) ? (
                   <Button size="small" type="primary" onClick={() => void handleDraft()}>起草合同</Button>
                 ) : order.status === 'PENDING_CONFIRM' ? (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>订单确认后可起草</Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>挂牌方确认后可起草</Typography.Text>
                 ) : null
               ) : contract.status === 'PENDING_SIGN' ? (
                 <Button size="small" type="primary" loading={signing}
@@ -684,7 +745,17 @@ function OrderDetailModal({
           <Card size="small" title="可执行操作">
             <Space wrap>
               {order.allowedActions.includes('CONFIRMED') && (
-                <Button type="primary" onClick={() => void onAction('confirm', order)}>确认订单</Button>
+                <Button type="primary" onClick={() => void onAction('confirm', order)}>确认成交</Button>
+              )}
+              {/* Only the lister ever reaches this: the server strips CONFIRMED
+                  from the counterparty's action list, so the button they must
+                  not press is never rendered for them. */}
+              {order.status === 'PENDING_CONFIRM' && order.myRole === 'SELLER' && (
+                <Popconfirm title="拒绝这笔摘牌？" description="货权尚未转移，拒绝后挂牌数量原样恢复。"
+                  okText="拒绝" cancelText="再想想" okButtonProps={{ danger: true }}
+                  onConfirm={() => void onAction('reject', order)}>
+                  <Button danger>拒绝摘牌</Button>
+                </Popconfirm>
               )}
               {order.allowedActions.includes('DELIVERING') && (
                 <Button type="primary" onClick={() => void onAction('deliver', order)}>开始交收</Button>

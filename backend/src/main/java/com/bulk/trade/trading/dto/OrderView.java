@@ -2,6 +2,7 @@ package com.bulk.trade.trading.dto;
 
 import com.bulk.trade.trading.entity.Order;
 import com.bulk.trade.trading.entity.OrderStatus;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 
@@ -16,7 +17,22 @@ import java.util.List;
  * correctly without guessing which side the viewer is on, and {@code
  * allowedActions} carries the transitions this caller may actually perform —
  * the same table the server enforces, so a button shown is a button that works.
+ *
+ * <p>That second guarantee is why {@code callerIsLister} exists. Answering a
+ * waiting acceptance is one named party's move alone, so an action list
+ * computed without knowing who is looking would offer the other side a button
+ * the server then rejects — worse than hiding it, because a button reads as a
+ * promise.
+ *
+ * <p><b>Nulls are written, not omitted.</b> The application-wide Jackson
+ * setting drops null properties, which for a view DTO makes the response shape
+ * depend on the data: a field that is null one moment and absent the next
+ * forces every client to treat "missing" and "null" as the same thing, and they
+ * are not — {@code confirmDeadline: null} means "no answer is awaited", while a
+ * missing key means the client has no idea what the server said. The client
+ * declares these fields as nullable, so the server should say so out loud.
  */
+@JsonInclude(JsonInclude.Include.ALWAYS)
 public record OrderView(
         @JsonSerialize(using = ToStringSerializer.class) Long id,
         String orderNo,
@@ -48,6 +64,9 @@ public record OrderView(
         String statusText,
         List<String> allowedActions,
 
+        /** When the lister's answer is due; null unless one is awaited. */
+        OffsetDateTime confirmDeadline,
+
         OffsetDateTime confirmedAt,
         OffsetDateTime cancelledAt,
         String cancelReason,
@@ -56,6 +75,7 @@ public record OrderView(
 
     public static OrderView of(Order order,
                                Long viewerEnterpriseId,
+                               boolean callerIsLister,
                                String buyerName,
                                String sellerName,
                                String categoryName,
@@ -83,7 +103,8 @@ public record OrderView(
                 "DELIVERED".equals(order.getDeliveryMethod()) ? "送到" : "自提",
                 order.getStatus(),
                 OrderStatus.text(order.getStatus()),
-                List.copyOf(OrderStatus.allowedFrom(order.getStatus())),
+                List.copyOf(OrderStatus.allowedFrom(order.getStatus(), callerIsLister)),
+                order.getConfirmDeadline(),
                 order.getConfirmedAt(),
                 order.getCancelledAt(),
                 order.getCancelReason(),

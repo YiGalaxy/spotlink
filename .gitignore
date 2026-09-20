@@ -38,3 +38,5 @@ application-prod.yml
 
 # ---- Build output ----
 /bulk-trade-*
+scripts/__pycache__/
+*.pyc

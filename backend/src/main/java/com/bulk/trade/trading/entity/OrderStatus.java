@@ -18,6 +18,12 @@ import java.util.Set;
  *         └─────────────────┴─────────────┴──→ CANCELLED
  * </pre>
  *
+ * <p><b>{@code PENDING_CONFIRM} is entered only by a MANUAL listing</b> — one
+ * whose terms say an acceptance must be answered by the lister. A listing that
+ * is itself the offer ({@code AUTO}) goes straight to {@code CONFIRMED} at
+ * acceptance, because there the contract is already formed and a "waiting for
+ * confirmation" state would describe a question nobody is asking.
+ *
  * <p>Cancelling is allowed until delivery starts, because that is when goods
  * physically move. After that the remedy is not an order state change.
  */
@@ -60,12 +66,31 @@ public final class OrderStatus {
         return TRANSITIONS.getOrDefault(status, Set.of());
     }
 
+    /**
+     * Legal moves for a particular caller.
+     *
+     * <p>Only {@code PENDING_CONFIRM} is role-sensitive, and deliberately so:
+     * the whole point of that state is that <em>one named party</em> owes an
+     * answer. Letting the counterparty press confirm would let the party who
+     * proposed the deal accept it on the other's behalf, which is the same as
+     * having no confirmation step at all. They may still walk away — declining
+     * your own offer is not something anyone needs protecting from.
+     */
+    public static Set<String> allowedFrom(String status, boolean callerIsLister) {
+        if (PENDING_CONFIRM.equals(status) && !callerIsLister) {
+            return Set.of(CANCELLED);
+        }
+        return allowedFrom(status);
+    }
+
     public static String text(String status) {
         if (status == null) {
             return "未知";
         }
         return switch (status) {
-            case PENDING_CONFIRM -> "待确认";
+            // Named for who owes the answer, not merely that one is owed: the
+            // reader's next move differs depending on which side they are.
+            case PENDING_CONFIRM -> "待挂牌方确认";
             case CONFIRMED -> "已确认";
             case CONTRACTED -> "已签约";
             case DELIVERING -> "交收中";

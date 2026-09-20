@@ -1,6 +1,7 @@
 package com.bulk.trade.trading.dto;
 
 import com.bulk.trade.trading.entity.Listing;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 
@@ -11,10 +12,20 @@ import java.util.Map;
 /**
  * A listing as the client sees it.
  *
- * <p>{@code mine} and {@code ownSide} are computed per caller so the market
- * screen can hide the "accept" button on one's own listings without a second
- * request. Accepting your own offer is not a trade.
+ * <p>{@code mine} is computed per caller so the market screen can hide the
+ * "accept" button on one's own listings without a second request. Accepting
+ * your own offer is not a trade.
+ *
+ * <p>{@code confirmModeText} is carried to the market screen, not just to the
+ * owner's own list. Whether an acceptance closes the deal or waits for the
+ * lister is the single fact a buyer most needs before pressing the button, and
+ * discovering it afterwards is how a party ends up feeling misled.
+ *
+ * <p>Nulls are written rather than omitted, for the reason given on
+ * {@link OrderView}: a response whose shape depends on its values is one every
+ * client has to guess at.
  */
+@JsonInclude(JsonInclude.Include.ALWAYS)
 public record ListingView(
         @JsonSerialize(using = ToStringSerializer.class) Long id,
         String listingNo,
@@ -39,6 +50,11 @@ public record ListingView(
         BigDecimal price,
         String priceType,
         String priceText,
+
+        /** AUTO or MANUAL. */
+        String confirmMode,
+        /** "摘牌即成交" or "需挂牌方确认". */
+        String confirmModeText,
 
         @JsonSerialize(using = ToStringSerializer.class) Long warehouseId,
         String warehouseName,
@@ -82,6 +98,8 @@ public record ListingView(
                 Listing.PriceType.NEGOTIABLE.equals(listing.getPriceType())
                         ? "面议"
                         : listing.getPrice().stripTrailingZeros().toPlainString(),
+                listing.getConfirmMode(),
+                confirmModeText(listing.getConfirmMode()),
                 listing.getWarehouseId(),
                 warehouseName,
                 listing.getDeliveryMethod(),
@@ -91,6 +109,10 @@ public record ListingView(
                 statusText(listing.getStatus()),
                 mine,
                 listing.getCreatedAt());
+    }
+
+    private static String confirmModeText(String mode) {
+        return Listing.ConfirmMode.MANUAL.equals(mode) ? "需挂牌方确认" : "摘牌即成交";
     }
 
     private static String statusText(String status) {
