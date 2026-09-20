@@ -1,7 +1,7 @@
 package com.bulk.trade.advisor.service;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import com.bulk.trade.advisor.agent.AgentLoop;
+import com.bulk.trade.advisor.agent.AdvisorAgent;
 import com.bulk.trade.advisor.agent.AgentResult;
 import com.bulk.trade.advisor.agent.ConversationTurn;
 import com.bulk.trade.advisor.dto.ConversationDetail;
@@ -11,8 +11,8 @@ import com.bulk.trade.advisor.entity.AdvisorMessage;
 import com.bulk.trade.advisor.entity.Conversation;
 import com.bulk.trade.advisor.mapper.AdvisorMessageMapper;
 import com.bulk.trade.advisor.mapper.ConversationMapper;
-import com.bulk.trade.advisor.tool.AdvisorContext;
 import com.bulk.trade.shared.exception.BusinessException;
+import com.bulk.trade.shared.security.LoginUser;
 import com.bulk.trade.shared.web.ResultCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +44,7 @@ public class ConversationService {
 
     private final ConversationMapper conversationMapper;
     private final AdvisorMessageMapper messageMapper;
-    private final AgentLoop agentLoop;
+    private final AdvisorAgent advisorAgent;
     private final ObjectMapper objectMapper;
 
     // ------------------------------------------------------------------
@@ -65,8 +65,6 @@ public class ConversationService {
     }
 
     public ConversationDetail create(Long userId, Long enterpriseId, String title) {
-        OffsetDateTime now = OffsetDateTime.now();
-
         Conversation conversation = new Conversation();
         conversation.setUserId(userId);
         conversation.setEnterpriseId(enterpriseId);
@@ -74,7 +72,7 @@ public class ConversationService {
         conversation.setMessageCount(0);
         // Stamped at creation rather than left null so ordering is a plain
         // descending sort with no null-handling special case.
-        conversation.setLastMessageAt(now);
+        conversation.setLastMessageAt(OffsetDateTime.now());
         conversationMapper.insert(conversation);
 
         return new ConversationDetail(conversation.getId(), conversation.getTitle(), List.of());
@@ -116,14 +114,14 @@ public class ConversationService {
      * writes with no invariant between them — losing one leaves a shorter
      * transcript, not corrupt data.
      */
-    public MessageView sendMessage(Long conversationId, String userMessage, AdvisorContext context) {
-        Conversation conversation = requireOwned(conversationId, context.userId());
+    public MessageView sendMessage(Long conversationId, String userMessage, LoginUser user) {
+        Conversation conversation = requireOwned(conversationId, user.getUserId());
 
         List<ConversationTurn> history = loadHistory(conversationId);
-        AgentResult result = agentLoop.run(userMessage, history, context);
+        AgentResult result = advisorAgent.run(userMessage, history, user);
 
-        persistUserMessage(conversation, context, userMessage);
-        AdvisorMessage assistantRow = persistAssistantMessage(conversation, context, result);
+        persistUserMessage(conversation, user, userMessage);
+        AdvisorMessage assistantRow = persistAssistantMessage(conversation, user, result);
         touchConversation(conversation, userMessage);
 
         return MessageView.from(assistantRow, objectMapper);
@@ -169,34 +167,36 @@ public class ConversationService {
         return conversation;
     }
 
-    private void persistUserMessage(Conversation conversation, AdvisorContext context, String content) {
-        AdvisorMessage message = newMessage(conversation, context);
+    private void persistUserMessage(Conversation conversation, LoginUser user, String content) {
+        AdvisorMessage message = newMessage(conversation, user);
         message.setRole(AdvisorMessage.Role.USER);
         message.setContent(content);
         messageMapper.insert(message);
     }
 
     private AdvisorMessage persistAssistantMessage(Conversation conversation,
-                                                   AdvisorContext context,
+                                                   LoginUser user,
                                                    AgentResult result) {
-        AdvisorMessage message = newMessage(conversation, context);
+        AdvisorMessage message = newMessage(conversation, user);
         message.setRole(AdvisorMessage.Role.ASSISTANT);
         message.setContent(result.answer());
         message.setToolCalls(serialiseToolCalls(result));
-        message.setIterations(result.iterations());
-        message.setInputTokens(result.inputTokens());
-        message.setOutputTokens(result.outputTokens());
-        message.setCacheReadTokens(result.cacheReadTokens());
-        message.setCacheCreationTokens(result.cacheCreationTokens());
+        message.setInputTokens(toLong(result.inputTokens()));
+        message.setOutputTokens(toLong(result.outputTokens()));
+        // Spring AI reports neither cached-token counts nor loop iterations, so
+        // these stay null rather than being filled with a misleading zero.
+        message.setCacheReadTokens(null);
+        message.setCacheCreationTokens(null);
+        message.setIterations(null);
         messageMapper.insert(message);
         return message;
     }
 
-    private AdvisorMessage newMessage(Conversation conversation, AdvisorContext context) {
+    private AdvisorMessage newMessage(Conversation conversation, LoginUser user) {
         AdvisorMessage message = new AdvisorMessage();
         message.setConversationId(conversation.getId());
-        message.setEnterpriseId(context.enterpriseId());
-        message.setUserId(context.userId());
+        message.setEnterpriseId(user.getEnterpriseId());
+        message.setUserId(user.getUserId());
         return message;
     }
 
@@ -207,7 +207,8 @@ public class ConversationService {
      * and written back, so two turns arriving together cannot lose an update.
      */
     private void touchConversation(Conversation conversation, String firstQuestion) {
-        boolean isFirstTurn = conversation.getMessageCount() == null || conversation.getMessageCount() == 0;
+        boolean isFirstTurn = conversation.getMessageCount() == null
+                || conversation.getMessageCount() == 0;
 
         var update = Wrappers.<Conversation>lambdaUpdate()
                 .eq(Conversation::getId, conversation.getId())
@@ -239,5 +240,9 @@ public class ConversationService {
             log.warn("Could not serialise tool-call trail", e);
             return null;
         }
+    }
+
+    private Long toLong(Integer value) {
+        return value == null ? null : value.longValue();
     }
 }

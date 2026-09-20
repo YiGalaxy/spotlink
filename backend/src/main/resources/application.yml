@@ -54,6 +54,25 @@ spring:
     deserialization:
       fail-on-unknown-properties: false
 
+  ai:
+    anthropic:
+      # Auto-configuration requires a non-empty key at startup. A placeholder
+      # keeps the platform bootable without an advisor key; the advisor reports
+      # itself unavailable instead of the whole application refusing to start.
+      api-key: ${BULK_ADVISOR_API_KEY:not-configured}
+      base-url: ${BULK_ADVISOR_BASE_URL:https://api.anthropic.com}
+      chat:
+        model: ${BULK_ADVISOR_MODEL:claude-opus-5}
+        max-tokens: 8192
+        cache-options:
+          # Cache the system prompt. The stable half of it is identical for
+          # every tenant, so one cache entry serves all callers.
+          strategy: SYSTEM_ONLY
+          # Send each system message as its own block. Without this the stable
+          # and caller-specific halves are merged and the prefix changes per
+          # user, which misses the cache on every request.
+          multi-block-system-caching: true
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
@@ -97,16 +116,11 @@ bulk:
 
   advisor:
     enabled: true
-    # Endpoint. Defaults to the official Claude API; a compatible gateway can
-    # be substituted through configuration without touching application code.
-    base-url: ${BULK_ADVISOR_BASE_URL:https://api.anthropic.com}
-    # NEVER commit a key here. Supply it through an environment variable.
-    api-key: ${BULK_ADVISOR_API_KEY:}
-    model: ${BULK_ADVISOR_MODEL:claude-opus-5}
-    max-tokens: 8192
     # Upper bound on agent-loop iterations. A tool-calling loop with no ceiling
     # can spin forever, and every turn is billed.
     max-iterations: 8
+    # Endpoint, key, model and token ceiling live under spring.ai.anthropic so
+    # there is exactly one place to configure the model connection.
 
 logging:
   level:

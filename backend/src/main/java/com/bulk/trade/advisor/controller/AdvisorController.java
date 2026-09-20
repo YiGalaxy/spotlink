@@ -1,15 +1,12 @@
 package com.bulk.trade.advisor.controller;
 
-import com.bulk.trade.advisor.client.AdvisorClientFactory;
-import com.bulk.trade.advisor.config.AdvisorProperties;
 import com.bulk.trade.advisor.dto.ConversationDetail;
 import com.bulk.trade.advisor.dto.ConversationSummary;
 import com.bulk.trade.advisor.dto.CreateConversationRequest;
 import com.bulk.trade.advisor.dto.MessageView;
 import com.bulk.trade.advisor.dto.SendMessageRequest;
 import com.bulk.trade.advisor.service.ConversationService;
-import com.bulk.trade.advisor.tool.AdvisorContext;
-import com.bulk.trade.advisor.tool.ToolRegistry;
+import com.bulk.trade.advisor.tool.AdvisorTools;
 import com.bulk.trade.shared.security.LoginUser;
 import com.bulk.trade.shared.security.SecurityUtils;
 import com.bulk.trade.shared.web.ApiResponse;
@@ -17,6 +14,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,18 +24,29 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-@Tag(name = "AI 顾问", description = "工具调用型交易顾问与会话管理")
+@Tag(name = "AI 顾问", description = "基于 Spring AI 的工具调用型交易顾问")
 @RestController
 @RequestMapping("/api/advisor")
 @RequiredArgsConstructor
 public class AdvisorController {
 
+    /** Placeholder used when no key is configured; see application.yml. */
+    private static final String UNCONFIGURED_KEY = "not-configured";
+
     private final ConversationService conversationService;
-    private final AdvisorClientFactory clientFactory;
-    private final ToolRegistry toolRegistry;
+
+    @Value("${spring.ai.anthropic.api-key:}")
+    private String apiKey;
+
+    @Value("${spring.ai.anthropic.base-url:}")
+    private String baseUrl;
+
+    @Value("${spring.ai.anthropic.chat.model:}")
+    private String model;
 
     // ------------------------------------------------------------------
     // Conversations
@@ -81,8 +91,8 @@ public class AdvisorController {
     @PostMapping("/conversations/{id}/messages")
     public ApiResponse<MessageView> sendMessage(@PathVariable Long id,
                                                 @Valid @RequestBody SendMessageRequest request) {
-        return ApiResponse.success(conversationService.sendMessage(
-                id, request.message(), AdvisorContext.current()));
+        return ApiResponse.success(
+                conversationService.sendMessage(id, request.message(), SecurityUtils.currentUser()));
     }
 
     // ------------------------------------------------------------------
@@ -96,13 +106,32 @@ public class AdvisorController {
     @Operation(summary = "查看顾问配置状态")
     @GetMapping("/status")
     public ApiResponse<Map<String, Object>> status() {
-        AdvisorProperties properties = clientFactory.properties();
+        boolean configured = apiKey != null
+                && !apiKey.isBlank()
+                && !UNCONFIGURED_KEY.equals(apiKey);
+
         return ApiResponse.success(Map.of(
-                "available", clientFactory.isAvailable(),
-                "enabled", properties.enabled(),
-                "endpoint", properties.baseUrl(),
-                "model", properties.model(),
-                "maxIterations", properties.effectiveMaxIterations(),
-                "registeredTools", toolRegistry.all().stream().map(t -> t.name()).toList()));
+                "available", configured,
+                "endpoint", baseUrl == null ? "" : baseUrl,
+                "model", model == null ? "" : model,
+                "framework", "Spring AI",
+                "registeredTools", registeredToolNames()));
+    }
+
+    /**
+     * Names the tools the model can currently call.
+     *
+     * <p>Read from the annotations rather than a hard-coded list, so this can
+     * never drift from what is actually registered.
+     */
+    private List<String> registeredToolNames() {
+        return Arrays.stream(AdvisorTools.class.getDeclaredMethods())
+                .filter(method -> method.isAnnotationPresent(Tool.class))
+                .map(method -> {
+                    Tool tool = method.getAnnotation(Tool.class);
+                    return tool.name().isBlank() ? method.getName() : tool.name();
+                })
+                .sorted()
+                .toList();
     }
 }

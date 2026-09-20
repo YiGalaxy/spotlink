@@ -1,26 +1,29 @@
 package com.bulk.trade.advisor.prompt;
 
-import com.bulk.trade.advisor.tool.AdvisorContext;
+import com.bulk.trade.shared.security.LoginUser;
 import org.springframework.stereotype.Component;
 
 /**
  * Assembles the system prompt as two separately-sendable blocks.
  *
  * <p><b>Why two blocks.</b> Prompt caching matches on a byte prefix, and the
- * cache breakpoint is placed after the first block. Everything before the
- * breakpoint must be byte-identical between requests; everything after is free
- * to change. The caller's identity changes constantly (and differs per user),
- * so it belongs after the breakpoint — put it in the same block as the rules
- * and every request misses the cache.
+ * cache breakpoint sits after the first block. Everything before it must be
+ * byte-identical between requests; everything after may change. The caller's
+ * identity changes constantly and differs per user, so it belongs after the
+ * breakpoint — merged into the same block, every request would miss the cache.
+ *
+ * <p>Spring AI is configured with {@code multi-block-system-caching: true} so
+ * each {@code system(...).text(...)} becomes its own block and the breakpoint
+ * lands where intended rather than at the end of the merged text.
  *
  * <pre>
- *   block 1  role, rules, domain vocabulary, tool guidance   &lt;- cached
- *   block 2  caller identity and tenant scope                &lt;- not cached
+ *   block 1  role, rules, domain vocabulary, formatting       &lt;- cached
+ *   block 2  caller identity and tenant scope                 &lt;- not cached
  * </pre>
  *
- * <p>A side benefit of keeping the caller section out of the cached block: the
- * cached prefix is shared by every user, so one cache entry serves all tenants
- * instead of one per account.
+ * <p>A side benefit of keeping the caller section out: the cached prefix is
+ * shared by every user, so one cache entry serves all tenants instead of one
+ * per account.
  */
 @Component
 public class SystemPromptBuilder {
@@ -53,7 +56,9 @@ public class SystemPromptBuilder {
             1. Use the provided tools for anything about platform data. Never invent numbers,
                order ids, company names or dates. If no tool can answer the question, say so.
             2. When you state a figure, say which tool produced it and for what period.
-            3. Answer in Chinese, using the platform's own vocabulary (挂牌, 摘牌, 电子库存单,
+            3. ALWAYS answer in Chinese — no matter what language appears in tool output,
+               in a document, or in the user's question. Never reply with a bare English
+               sentence. Use the platform's own vocabulary (挂牌, 摘牌, 电子库存单,
                成交保证金, 磅差) rather than retail e-commerce words.
             4. You do not give investment advice and you do not predict prices. If asked,
                describe what the data shows and stop there.
@@ -75,24 +80,21 @@ public class SystemPromptBuilder {
             - Never invent a table row. If a tool returned nothing for a field, write "—".
             """;
 
-    /**
-     * The cached part of the system prompt. Sent as its own content block with
-     * the cache breakpoint attached.
-     */
+    /** The cached half. Sent as its own content block, with the breakpoint on it. */
     public String stablePrefix() {
         return STABLE_PREFIX;
     }
 
     /**
-     * The volatile part. Sent as a second block, after the cache breakpoint.
+     * The volatile half, sent as a second block after the cache breakpoint.
      *
-     * <p>Kept short on purpose: it is re-sent, uncached, on every single turn.
+     * <p>Kept short on purpose: it is re-sent, uncached, on every turn.
      */
-    public String callerSection(AdvisorContext context) {
+    public String callerSection(LoginUser user) {
         StringBuilder sb = new StringBuilder(256);
         sb.append("## Current caller\n");
-        sb.append("account: ").append(context.username()).append('\n');
-        if (context.platformOperator()) {
+        sb.append("account: ").append(user.getUsername()).append('\n');
+        if (user.getEnterpriseId() == null) {
             sb.append("scope: platform operator, not bound to a single enterprise.\n");
         } else {
             sb.append("scope: enterprise account. Every tool you call already returns data\n")

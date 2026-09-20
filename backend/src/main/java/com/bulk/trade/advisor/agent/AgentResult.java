@@ -1,32 +1,32 @@
 package com.bulk.trade.advisor.agent;
 
+import com.bulk.trade.advisor.tool.ToolCallRecorder;
+
 import java.util.List;
 
 /**
- * Outcome of one agent run.
+ * Outcome of one advisor turn.
  *
- * <p>Token counters are carried out of the loop rather than discarded: they are
- * what per-tenant cost accounting and the "is prompt caching actually working"
- * check are built on.
+ * <p>Token counters are carried out of the call rather than discarded: they are
+ * what per-tenant cost accounting is built on.
+ *
+ * <p>Note what is <em>not</em> here. The hand-written loop this replaced could
+ * count its own iterations and read prompt-cache statistics from the response.
+ * Spring AI runs the tool loop internally and reports neither, so iteration
+ * count is gone and cache tokens read as zero. Both are real losses — they are
+ * recorded in the walkthrough rather than papered over with placeholder values.
  */
 public record AgentResult(
         String answer,
-        List<ToolInvocation> toolInvocations,
-        int iterations,
-        long inputTokens,
-        long outputTokens,
-        long cacheReadTokens,
-        long cacheCreationTokens
+        List<ToolCallRecorder.Invocation> toolInvocations,
+        Integer inputTokens,
+        Integer outputTokens
 ) {
 
-    /** One tool call, kept for the audit trail. */
-    public record ToolInvocation(String name, String input, String output) {
-    }
-
-    public static AgentResult of(String answer, List<ToolInvocation> invocations, int iterations,
-                                 long inputTokens, long outputTokens,
-                                 long cacheReadTokens, long cacheCreationTokens) {
-        return new AgentResult(answer, List.copyOf(invocations), iterations,
-                inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens);
+    public static AgentResult of(String answer,
+                                 List<ToolCallRecorder.Invocation> toolInvocations,
+                                 Integer inputTokens,
+                                 Integer outputTokens) {
+        return new AgentResult(answer, List.copyOf(toolInvocations), inputTokens, outputTokens);
     }
 }
