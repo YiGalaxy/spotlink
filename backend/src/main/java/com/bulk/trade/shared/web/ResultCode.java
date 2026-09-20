@@ -75,7 +75,16 @@ public enum ResultCode {
     // ---- 7xxxx logistics ----
     DELIVERY_NOT_FOUND(70000, "交收单不存在"),
     DELIVERY_STATUS_INVALID(70001, "交收单当前状态不允许此操作"),
-    WEIGHING_DEVIATION_EXCEEDED(70002, "磅差超出合同约定范围，需人工协商");
+    WEIGHING_DEVIATION_EXCEEDED(70002, "磅差超出合同约定范围，需人工协商"),
+
+    // ---- 8xxxx ai advisor ----
+    ADVISOR_NOT_CONFIGURED(80000, "AI 顾问未配置，请先设置 API 密钥"),
+    ADVISOR_DISABLED(80001, "AI 顾问未启用"),
+    ADVISOR_TOOL_NOT_FOUND(80002, "AI 顾问调用了未注册的工具"),
+    ADVISOR_TOOL_NOT_PERMITTED(80003, "AI 顾问无权调用该工具"),
+    ADVISOR_ITERATION_LIMIT(80004, "AI 顾问处理步骤超出上限，请简化问题后重试"),
+    ADVISOR_UNAVAILABLE(80005, "AI 服务暂时不可用，请稍后重试"),
+    CONVERSATION_NOT_FOUND(80006, "会话不存在");
 
     private final int code;
     private final String message;

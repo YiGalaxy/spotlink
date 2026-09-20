@@ -1,0 +1,19 @@
+# Template for application-local.yml. Copy it and fill in your own values.
+#
+#   cp application-local.yml.example application-local.yml
+#
+# The real file is gitignored so keys never reach the repository.
+#
+# Leaving this file out entirely is fine: the application then uses the
+# defaults in application.yml (official Claude API, empty key). The advisor
+# reports itself as unavailable until an api-key is supplied.
+
+bulk:
+  advisor:
+    # Official API. Set this to an Anthropic-compatible gateway if you use one.
+    base-url: https://api.anthropic.com
+    # Prefer an environment variable over a literal so the key stays out of
+    # shell history and out of any file you might share.
+    api-key: ${BULK_ADVISOR_API_KEY:}
+    # claude-opus-5 is the strongest model available on the official API.
+    model: claude-opus-5

@@ -3,6 +3,7 @@ package com.bulk.trade;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
  * Entry point of the bulk commodity spot trading platform.
@@ -22,6 +23,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * </pre>
  */
 @SpringBootApplication
+@ConfigurationPropertiesScan
 @MapperScan("com.bulk.trade.**.mapper")
 public class BulkTradeApplication {
 

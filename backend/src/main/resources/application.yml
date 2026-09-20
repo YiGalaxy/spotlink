@@ -9,6 +9,11 @@ spring:
   application:
     name: bulk-trade
 
+  # Defaults to the local profile for developer machines; any other
+  # environment must set SPRING_PROFILES_ACTIVE explicitly.
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
   datasource:
     # stringtype=unspecified lets a Java String bind to a jsonb column: the
     # driver sends it as an untyped parameter and PostgreSQL infers the target
@@ -89,6 +94,19 @@ bulk:
     # Seeds development accounts (admin / seller01 / buyer01 / pending01).
     # MUST be false in any environment real users can reach.
     enabled: true
+
+  advisor:
+    enabled: true
+    # Endpoint. Defaults to the official Claude API; a compatible gateway can
+    # be substituted through configuration without touching application code.
+    base-url: ${BULK_ADVISOR_BASE_URL:https://api.anthropic.com}
+    # NEVER commit a key here. Supply it through an environment variable.
+    api-key: ${BULK_ADVISOR_API_KEY:}
+    model: ${BULK_ADVISOR_MODEL:claude-opus-5}
+    max-tokens: 8192
+    # Upper bound on agent-loop iterations. A tool-calling loop with no ceiling
+    # can spin forever, and every turn is billed.
+    max-iterations: 8
 
 logging:
   level:
