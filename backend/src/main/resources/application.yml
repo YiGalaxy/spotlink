@@ -1,0 +1,98 @@
+server:
+  port: 8081
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: bulk-trade
+
+  datasource:
+    # stringtype=unspecified lets a Java String bind to a jsonb column: the
+    # driver sends it as an untyped parameter and PostgreSQL infers the target
+    # column type. Without it the driver sends varchar and jsonb rejects it.
+    url: jdbc:postgresql://localhost:15432/bulk_trade?stringtype=unspecified
+    username: bulk
+    password: bulk_trade_2026
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      pool-name: BulkTradeHikari
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  data:
+    redis:
+      host: localhost
+      port: 16379
+      password: bulk_trade_2026
+      database: 0
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: false
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+# Application-specific settings
+bulk:
+  security:
+    jwt:
+      # Base64-encoded 256-bit secret. Override in every non-local environment.
+      secret: ${BULK_JWT_SECRET:YnVsay10cmFkZS1kZXYtc2VjcmV0LWtleS1jaGFuZ2UtbWUtMjAyNg==}
+      access-token-ttl: 2h
+      refresh-token-ttl: 7d
+
+  init:
+    # Seeds development accounts (admin / seller01 / buyer01 / pending01).
+    # MUST be false in any environment real users can reach.
+    enabled: true
+
+logging:
+  level:
+    root: info
+    com.bulk.trade: debug
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
