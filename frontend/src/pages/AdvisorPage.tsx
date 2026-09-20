@@ -54,6 +54,20 @@ export default function AdvisorPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
+  /**
+   * Guards against a second submission arriving before React has re-rendered
+   * with the new `sending` state.
+   *
+   * <p>State updates are asynchronous, so during `await createConversation()`
+   * the `sending` flag is still false and a second click passes the check. Two
+   * conversations get created and the same question is asked twice. A ref
+   * changes synchronously, so it closes the window entirely.
+   */
+  const sendingRef = useRef(false)
+
+  /** Mirrors activeId for callbacks that outlive the render they started in. */
+  const activeIdRef = useRef<EntityId | null>(null)
+
   const { data: conversations = [] } = useQuery({
     queryKey: ['conversations'],
     queryFn: listConversations,
@@ -75,6 +89,7 @@ export default function AdvisorPage() {
 
   const openConversation = async (id: EntityId) => {
     setActiveId(id)
+    activeIdRef.current = id
     setLoadingHistory(true)
     try {
       const detail = await getConversation(id)
@@ -93,6 +108,7 @@ export default function AdvisorPage() {
    */
   const handleNewConversation = () => {
     setActiveId(null)
+    activeIdRef.current = null
     setMessages([])
     setInput('')
   }
@@ -100,36 +116,60 @@ export default function AdvisorPage() {
   const handleDeleteConversation = async (id: EntityId) => {
     await deleteConversation(id)
     await refreshList()
-    if (activeId === id) {
+    if (activeIdRef.current === id) {
       setActiveId(null)
+      activeIdRef.current = null
       setMessages([])
     }
   }
 
   const send = async (text?: string) => {
+    // The synchronous guard, checked before anything else can happen.
+    if (sendingRef.current) return
+
     const content = (text ?? input).trim()
-    if (!content || sending) return
+    if (!content) return
 
-    // A conversation is created lazily on the first question, so clicking
-    // "新建对话" does not litter the list with empty sessions.
-    let conversationId = activeId
-    if (conversationId === null) {
-      const detail = await createConversation()
-      conversationId = detail.id
-      setActiveId(conversationId)
-    }
-
-    setInput('')
-    setMessages((prev) => [...prev, localTurn('user', content)])
+    sendingRef.current = true
     setSending(true)
 
+    let conversationId = activeId
     try {
-      const reply = await sendMessage(conversationId, content)
-      setMessages((prev) => [...prev, reply])
+      // A conversation is created lazily on the first question, so clicking
+      // "新建对话" does not litter the list with empty sessions.
+      if (conversationId === null) {
+        const detail = await createConversation()
+        conversationId = detail.id
+        setActiveId(conversationId)
+        activeIdRef.current = conversationId
+      }
+
+      setInput('')
+      setMessages((prev) => [...prev, localTurn('user', content)])
+
+      await sendMessage(conversationId, content)
       await refreshList()
+
+      // Reload the transcript from the server instead of appending the reply
+      // locally. The list then always matches what was actually stored, and a
+      // reply that arrives after the user switched away is not appended to a
+      // different conversation's messages.
+      if (activeIdRef.current === conversationId) {
+        const detail = await getConversation(conversationId)
+        setMessages(detail.messages)
+      }
     } catch {
-      setMessages((prev) => [...prev, localTurn('assistant', '本轮请求失败，请稍后重试。')])
+      if (conversationId !== null && activeIdRef.current === conversationId) {
+        // The turn failed, so nothing was stored and no answer is coming.
+        // Drop the optimistic question (the entry just appended) and say so,
+        // rather than leaving a question that will never be answered.
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          localTurn('assistant', '本轮请求失败，请稍后重试。'),
+        ])
+      }
     } finally {
+      sendingRef.current = false
       setSending(false)
     }
   }
