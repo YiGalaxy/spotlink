@@ -20,6 +20,7 @@ import {
   Steps,
   Table,
   Tabs,
+  type TableColumnsType,
   Tag,
   Timeline,
   Typography,
@@ -49,6 +50,7 @@ import {
   type PublishListingPayload,
 } from '@/api/trading'
 import { fetchCategoryTree, fetchWarehouses, listInventoryNotes } from '@/api/inventory'
+import { LIST_PAGINATION, byNumberNullsLast, byTime } from '@/utils/table'
 import type { CategoryNode, EntityId, ListingView, OrderView } from '@/types/api'
 
 function flattenLeaves(nodes: CategoryNode[], depth = 0): { id: EntityId; label: string }[] {
@@ -82,6 +84,7 @@ export default function TradingPage() {
   const [publishOpen, setPublishOpen] = useState(false)
   const [detailOrder, setDetailOrder] = useState<OrderView | null>(null)
   const [sideFilter, setSideFilter] = useState<string | undefined>(undefined)
+  const [keyword, setKeyword] = useState('')
   const [acceptForm] = Form.useForm()
   const [publishForm] = Form.useForm()
   const publishSide = Form.useWatch('side', publishForm)
@@ -95,8 +98,11 @@ export default function TradingPage() {
   }
 
   const { data: market = [], isLoading: marketLoading } = useQuery({
-    queryKey: ['market', sideFilter],
-    queryFn: () => fetchMarket(undefined, sideFilter),
+    queryKey: ['market', sideFilter, keyword],
+    // The server has always supported keyword search — browse() has taken one
+    // since it was written — but nothing asked for it. With a hall that only
+    // grows, filtering is the difference between a list and a haystack.
+    queryFn: () => fetchMarket(undefined, sideFilter, keyword || undefined),
   })
 
   // The marketplace is public; everything below is one enterprise's own
@@ -218,12 +224,16 @@ export default function TradingPage() {
 
   // ---- columns ----
 
-  const marketColumns = [
+  const marketColumns: TableColumnsType<ListingView> = [
     { title: '方向', dataIndex: 'sideText', width: 96,
+      // Sorts by the code, not the label, so the order is stable regardless of
+      // how the two sides happen to be worded.
+      sorter: (a: ListingView, b: ListingView) => a.side.localeCompare(b.side),
       render: (v: string, r: ListingView) => (
         <Tag color={r.side === 'SELL' ? 'green' : 'blue'}>{v}</Tag>) },
     {
       title: '商品',
+      sorter: (a: ListingView, b: ListingView) => a.commodityName.localeCompare(b.commodityName, 'zh'),
       render: (_: unknown, r: ListingView) => (
         <div>
           <Typography.Text strong>{r.commodityName}</Typography.Text>
@@ -236,6 +246,7 @@ export default function TradingPage() {
       ),
     },
     { title: '挂牌方', dataIndex: 'enterpriseName', width: 180,
+      sorter: (a: ListingView, b: ListingView) => a.enterpriseName.localeCompare(b.enterpriseName, 'zh'),
       render: (v: string, r: ListingView) => (
         <Space size={4}>
           <span>{v}</span>
@@ -244,6 +255,9 @@ export default function TradingPage() {
     {
       title: '价格 / 成交方式',
       width: 170,
+      // 面议 rows have no price; byNumberNullsLast keeps them from sorting as
+      // zeros and burying the real figures.
+      sorter: byNumberNullsLast<ListingView>((r) => (r.price == null ? null : Number(r.price))),
       render: (_: unknown, r: ListingView) => (
         <Space direction="vertical" size={2}>
           {r.priceType === 'NEGOTIABLE' ? (
@@ -267,6 +281,8 @@ export default function TradingPage() {
     {
       title: '剩余 / 总量',
       width: 150,
+      sorter: (a: ListingView, b: ListingView) =>
+        Number(a.remainingQuantity) - Number(b.remainingQuantity),
       render: (_: unknown, r: ListingView) => (
         <Space direction="vertical" size={0}>
           <Typography.Text strong style={{ fontSize: 15 }}>{r.remainingQuantity}</Typography.Text>
@@ -282,11 +298,27 @@ export default function TradingPage() {
           <div style={{ fontSize: 13 }}>{v}</div>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>{r.deliveryMethodText}</Typography.Text>
         </div>) },
-    { title: '有效期至', dataIndex: 'validUntil', width: 120,
+    { title: '有效期至', dataIndex: 'validUntil', width: 130,
+      sorter: (a: ListingView, b: ListingView) =>
+        dayjs(a.validUntil).valueOf() - dayjs(b.validUntil).valueOf(),
       render: (v: string) => (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {dayjs(v).format('MM-DD HH:mm')}
         </Typography.Text>) },
+    {
+      title: '发布时间',
+      dataIndex: 'createdAt',
+      width: 140,
+      // The default sort, and the reason the column exists: without a visible
+      // timestamp the only thing a long list can be ordered by is the order the
+      // server happened to return.
+      sorter: byTime,
+      defaultSortOrder: 'descend',
+      render: (v: string) => (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {dayjs(v).format('MM-DD HH:mm')}
+        </Typography.Text>),
+    },
     {
       title: '操作',
       width: 110,
@@ -306,11 +338,13 @@ export default function TradingPage() {
     },
   ]
 
-  const orderColumns = [
+  const orderColumns: TableColumnsType<OrderView> = [
     { title: '订单号', dataIndex: 'orderNo', width: 190,
+      sorter: (a: OrderView, b: OrderView) => a.orderNo.localeCompare(b.orderNo),
       render: (v: string) => <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text> },
     {
       title: '商品',
+      sorter: (a: OrderView, b: OrderView) => a.commodityName.localeCompare(b.commodityName, 'zh'),
       render: (_: unknown, r: OrderView) => (
         <div>
           <Typography.Text strong>{r.commodityName}</Typography.Text>
@@ -321,15 +355,18 @@ export default function TradingPage() {
     {
       title: '我的角色',
       width: 100,
+      sorter: (a: OrderView, b: OrderView) => a.myRole.localeCompare(b.myRole),
       render: (_: unknown, r: OrderView) => (
         <Tag color={r.myRole === 'BUYER' ? 'blue' : 'green'}>
           {r.myRole === 'BUYER' ? '买方' : '卖方'}
         </Tag>),
     },
-    { title: '对手方', dataIndex: 'counterpartyName', width: 180 },
+    { title: '对手方', dataIndex: 'counterpartyName', width: 180,
+      sorter: (a: OrderView, b: OrderView) => a.counterpartyName.localeCompare(b.counterpartyName, 'zh') },
     {
       title: '数量 / 金额',
-      width: 170,
+      width: 180,
+      sorter: (a: OrderView, b: OrderView) => Number(a.amount) - Number(b.amount),
       render: (_: unknown, r: OrderView) => (
         <Space direction="vertical" size={0}>
           <span>{r.quantity} {r.unit} × {r.price}</span>
@@ -338,7 +375,8 @@ export default function TradingPage() {
     },
     {
       title: '状态',
-      width: 140,
+      width: 150,
+      sorter: (a: OrderView, b: OrderView) => a.status.localeCompare(b.status),
       render: (_: unknown, r: OrderView) => (
         <Space size={4}>
           <Tag color={ORDER_COLOURS[r.status]}>{r.statusText}</Tag>
@@ -353,6 +391,12 @@ export default function TradingPage() {
         </Space>
       ),
     },
+    { title: '创建时间', dataIndex: 'createdAt', width: 140,
+      sorter: byTime, defaultSortOrder: 'descend' as const,
+      render: (v: string) => (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {dayjs(v).format('MM-DD HH:mm')}
+        </Typography.Text>) },
     {
       title: '操作',
       width: 100,
@@ -383,19 +427,37 @@ export default function TradingPage() {
             children: (
               <>
                 <Card size="small" style={{ marginBottom: 12 }} styles={{ body: { padding: '10px 16px' } }}>
-                  <Segmented
-                    value={sideFilter ?? 'all'}
-                    onChange={(v) => setSideFilter(v === 'all' ? undefined : (v as string))}
-                    options={[
-                      { label: '全部', value: 'all' },
-                      { label: '卖方挂牌', value: 'SELL' },
-                      { label: '买方挂牌', value: 'BUY' },
-                    ]}
-                  />
+                  <Space wrap size={12}>
+                    <Segmented
+                      value={sideFilter ?? 'all'}
+                      onChange={(v) => setSideFilter(v === 'all' ? undefined : (v as string))}
+                      options={[
+                        { label: '全部', value: 'all' },
+                        { label: '卖方挂牌', value: 'SELL' },
+                        { label: '买方挂牌', value: 'BUY' },
+                      ]}
+                    />
+                    <Input.Search allowClear placeholder="按商品名称搜索"
+                      style={{ width: 240 }}
+                      onSearch={setKeyword}
+                      onClear={() => setKeyword('')} />
+                    {(sideFilter || keyword) && (
+                      <Button type="link" size="small"
+                        onClick={() => { setSideFilter(undefined); setKeyword('') }}>
+                        重置筛选
+                      </Button>
+                    )}
+                  </Space>
                 </Card>
                 <Table rowKey="id" size="middle" loading={marketLoading} dataSource={market}
-                  columns={marketColumns} pagination={{ pageSize: 10, hideOnSinglePage: true }}
-                  locale={{ emptyText: <Empty description="当前没有有效挂牌" /> }} />
+                  columns={marketColumns} pagination={LIST_PAGINATION}
+                  locale={{
+                    emptyText: (
+                      <Empty description={
+                        sideFilter || keyword ? '没有符合筛选条件的挂牌' : '当前没有有效挂牌'
+                      } />
+                    ),
+                  }} />
               </>
             ),
           },
@@ -410,22 +472,37 @@ export default function TradingPage() {
                         onClick={() => setPublishOpen(true)}>
                         发布挂牌
                       </Button>
-                      <Table rowKey="id" size="middle" dataSource={myListings} pagination={false}
+                      <Table rowKey="id" size="middle" dataSource={myListings}
+                        pagination={LIST_PAGINATION}
                         columns={[
                           { title: '挂牌号', dataIndex: 'listingNo', width: 190,
+                            sorter: (a: ListingView, b: ListingView) => a.listingNo.localeCompare(b.listingNo),
                             render: (v: string) => <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text> },
                           { title: '方向', dataIndex: 'sideText', width: 90,
+                            sorter: (a: ListingView, b: ListingView) => a.side.localeCompare(b.side),
                             render: (v: string, r: ListingView) => (
                               <Tag color={r.side === 'SELL' ? 'green' : 'blue'}>{v}</Tag>) },
-                          { title: '商品', dataIndex: 'commodityName' },
-                          { title: '价格', dataIndex: 'priceText', width: 110 },
-                          { title: '剩余 / 总量', width: 140,
+                          { title: '商品', dataIndex: 'commodityName',
+                            sorter: (a: ListingView, b: ListingView) => a.commodityName.localeCompare(b.commodityName, 'zh') },
+                          { title: '价格', dataIndex: 'priceText', width: 110,
+                            sorter: byNumberNullsLast<ListingView>((r) => (r.price == null ? null : Number(r.price))) },
+                          { title: '剩余 / 总量', width: 150,
+                            sorter: (a: ListingView, b: ListingView) =>
+                              Number(a.remainingQuantity) - Number(b.remainingQuantity),
                             render: (_: unknown, r: ListingView) => `${r.remainingQuantity} / ${r.quantity} ${r.unit}` },
                           { title: '成交方式', dataIndex: 'confirmModeText', width: 120,
+                            sorter: (a: ListingView, b: ListingView) => a.confirmMode.localeCompare(b.confirmMode),
                             render: (v: string, r: ListingView) => (
                               <Tag color={r.confirmMode === 'MANUAL' ? 'orange' : 'default'}>{v}</Tag>) },
-                          { title: '状态', dataIndex: 'statusText', width: 100,
+                          { title: '状态', dataIndex: 'statusText', width: 110,
+                            sorter: (a: ListingView, b: ListingView) => a.status.localeCompare(b.status),
                             render: (v: string) => <Tag>{v}</Tag> },
+                          { title: '发布时间', dataIndex: 'createdAt', width: 140,
+                            sorter: byTime, defaultSortOrder: 'descend' as const,
+                            render: (v: string) => (
+                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                {dayjs(v).format('MM-DD HH:mm')}
+                              </Typography.Text>) },
                           {
                             title: '操作',
                             width: 100,
@@ -449,7 +526,7 @@ export default function TradingPage() {
                   label: `我的订单 (${myOrders.length})`,
                   children: (
                     <Table rowKey="id" size="middle" dataSource={myOrders} columns={orderColumns}
-                      pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                      pagination={LIST_PAGINATION}
                       locale={{ emptyText: <Empty description="还没有订单" /> }} />
                   ),
                 },
