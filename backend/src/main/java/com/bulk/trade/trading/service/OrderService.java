@@ -14,6 +14,7 @@ import com.bulk.trade.trading.entity.Order;
 import com.bulk.trade.trading.entity.OrderStatus;
 import com.bulk.trade.trading.entity.OrderStatusLog;
 import com.bulk.trade.trading.event.OrderTradedEvent;
+import com.bulk.trade.trading.event.TaskChangedEvent;
 import com.bulk.trade.trading.mapper.ListingMapper;
 import com.bulk.trade.trading.mapper.OrderMapper;
 import com.bulk.trade.trading.mapper.OrderStatusLogMapper;
@@ -163,6 +164,10 @@ public class OrderService {
         if (!awaitsLister) {
             publishTraded(order);
         }
+        // Either way somebody's list changed: under MANUAL the lister gained a
+        // question to answer, and under AUTO the buyer gained a contract to
+        // draft.
+        publishTaskChange(awaitsLister ? "摘牌待确认" : "摘牌成交", order);
 
         log.info("Order {} created: {} {} of {} at {} (buyer={}, seller={}, {})",
                 order.getOrderNo(), quantity.toPlainString(), listing.getUnit(),
@@ -202,6 +207,7 @@ public class OrderService {
         orderMapper.updateById(order);
 
         publishTraded(order);
+        publishTaskChange("摘牌已确认", order);
 
         log.info("Order {} confirmed by lister {}", order.getOrderNo(), user.getEnterpriseId());
         return order;
@@ -234,6 +240,7 @@ public class OrderService {
         order.setConfirmDeadline(null);
         orderMapper.updateById(order);
 
+        publishTaskChange("摘牌被拒绝", order);
         log.info("Order {} rejected by lister {}", order.getOrderNo(), user.getEnterpriseId());
         return order;
     }
@@ -263,6 +270,7 @@ public class OrderService {
         order.setConfirmDeadline(null);
         orderMapper.updateById(order);
 
+        publishTaskChange("订单已取消", order);
         log.info("Order {} cancelled by enterprise {}", order.getOrderNo(), user.getEnterpriseId());
         return order;
     }
@@ -292,6 +300,7 @@ public class OrderService {
             order.setCancelReason("挂牌方未在期限内确认");
             order.setConfirmDeadline(null);
             orderMapper.updateById(order);
+            publishTaskChange("摘牌已逾期失效", order);
         }
         if (!lapsed.isEmpty()) {
             log.info("Lapsed {} unanswered acceptance(s)", lapsed.size());
@@ -305,6 +314,7 @@ public class OrderService {
         Order order = loadParticipant(orderId, user.getEnterpriseId());
         transition(order, OrderStatus.DELIVERING, user, "开始交收");
         orderMapper.updateById(order);
+        publishTaskChange("已开始交收", order);
         return order;
     }
 
@@ -314,6 +324,7 @@ public class OrderService {
         Order order = loadParticipant(orderId, user.getEnterpriseId());
         transition(order, OrderStatus.COMPLETED, user, "交收完成");
         orderMapper.updateById(order);
+        publishTaskChange("交收已完成", order);
         return order;
     }
 
@@ -604,6 +615,23 @@ public class OrderService {
         OffsetDateTime byWindow = OffsetDateTime.now().plus(properties.effectiveConfirmWindow());
         OffsetDateTime validUntil = listing.getValidUntil();
         return validUntil != null && validUntil.isBefore(byWindow) ? validUntil : byWindow;
+    }
+
+    /**
+     * Tells the named enterprises that their pending work changed.
+     *
+     * <p>Only names them — the event carries no task data. Recomputing the task
+     * here would put a second copy of "what counts as pending" into the event,
+     * and the two copies would eventually disagree; the listener refetches
+     * through {@link TaskService} instead, so that question has one answer.
+     *
+     * <p>Both parties are told even when only one of them gained work: a move
+     * by one side changes what the other sees, and a stale screen is the
+     * complaint this exists to fix.
+     */
+    private void publishTaskChange(String reason, Order order) {
+        eventPublisher.publishEvent(
+                new TaskChangedEvent(reason, order.getBuyerId(), order.getSellerId()));
     }
 
     /** Announces a completed trade. The trading module does not know a market

@@ -15,6 +15,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * Reads the bearer token and populates the security context.
@@ -55,22 +56,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     /**
      * Finds the bearer token.
      *
-     * <p>Normally the Authorization header. The market stream is the one
-     * exception: the browser's EventSource API cannot set headers, so that
-     * endpoint also accepts the token as a query parameter.
+     * <p>Normally the Authorization header. The streaming endpoints are the
+     * exception: the browser's EventSource API cannot set headers, so those
+     * also accept the token as a query parameter.
      *
      * <p>This is a real trade-off and not a free one — a token in a URL can end
-     * up in access logs, browser history and proxy logs. It is confined to the
-     * single streaming path, and the proper fix (a short-lived, single-use
+     * up in access logs, browser history and proxy logs. So the exception is a
+     * <b>named list of paths</b>, never a rule like "anything containing
+     * stream": widening it by accident is exactly how the token ends up in a
+     * log line nobody thought about. The proper fix (a short-lived, single-use
      * stream ticket) is noted rather than pretended away.
      */
+    private static final List<String> TOKEN_IN_QUERY_PATHS = List.of(
+            "/market/stream",
+            "/tasks/stream");
+
     private String resolveToken(HttpServletRequest request) {
         String header = request.getHeader(HEADER);
         if (StringUtils.hasText(header) && header.startsWith(PREFIX)) {
             return header.substring(PREFIX.length()).trim();
         }
-        if (request.getRequestURI().endsWith("/market/stream")) {
-            return request.getParameter("token");
+        String uri = request.getRequestURI();
+        for (String path : TOKEN_IN_QUERY_PATHS) {
+            if (uri.endsWith(path)) {
+                return request.getParameter("token");
+            }
         }
         return null;
     }

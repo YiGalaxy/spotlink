@@ -474,7 +474,7 @@ export default function InventoryPage() {
             type="info"
             showIcon
             message="登记后货物立即进入「在库」状态，可以挂牌出售。"
-            description="实际平台需要交收仓库确认收货后才会解锁交易——平台记录仓库告诉它的信息，而不是听信存货方的自述。"
+            description="实际平台需要交收仓库确认收货后才会解锁交易。"
           />
         </Form>
       </Modal>
@@ -495,7 +495,7 @@ export default function InventoryPage() {
           showIcon
           style={{ marginBottom: 16 }}
           message="只能修改描述信息"
-          description="数量、仓库、单位不可修改。那些是货物的物理事实，变动要走入库、出库或移库流程，而不是改表单——否则平台记录和仓库里实际的货就对不上了。"
+          description="数量、仓库、单位不可修改。变动要走入库、出库或移库流程。"
         />
         <Form form={editForm} layout="vertical" onFinish={(values) => editing && void doUpdate({ id: editing.id, values })}>
           <Form.Item name="categoryId" label="品类" rules={[{ required: true, message: '请选择品类' }]}>

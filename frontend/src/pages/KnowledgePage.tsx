@@ -211,16 +211,6 @@ export default function KnowledgePage() {
         )}
       </Card>
 
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginTop: 16 }}
-        message="为什么是混合检索"
-        description="向量检索能找到同义改写——「履约担保金」和「保证金」语义接近，字面不同。
-          但它对精确术语反而不稳：问「溢短装」时，语义相近但不同的词可能排在前面。
-          关键词（trigram）召回管的就是这种字面命中。两者按 RRF（倒数排名融合）合并，
-          不需要在两套不可比的分数之间做加权——那个权重本身就是个拍脑袋的数字。"
-      />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { Alert, Card, Descriptions, Tag, Typography } from 'antd'
+import { Card, Descriptions, Tag, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { fetchCurrentUser } from '@/api/auth'
 
@@ -19,14 +19,6 @@ export default function EnterprisePage() {
       <Typography.Title level={4} style={{ marginTop: 0 }}>
         企业信息
       </Typography.Title>
-
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        message="这里的数据来自 GET /api/auth/me"
-        description="企业 ID 由后端从 JWT 中解析，前端从不传企业 ID。这是多租户隔离的做法：越权在结构上就不可能发生。"
-      />
 
       <Card loading={isLoading} title="账号" size="small" style={{ marginBottom: 16 }}>
         <Descriptions column={2} size="small">

@@ -1,4 +1,4 @@
-import { Avatar, Button, Dropdown, Layout, Menu, Space, Tag, Typography } from 'antd'
+import { Avatar, Badge, Button, Dropdown, Layout, Menu, Space, Tag, Typography } from 'antd'
 import {
   BankOutlined,
   BookOutlined,
@@ -13,6 +13,9 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { fetchTasks } from '@/api/tasks'
+import { useTaskStream } from '@/hooks/useTaskStream'
 import { useAuthStore } from '@/store/auth'
 
 const { Header, Sider, Content } = Layout
@@ -52,6 +55,18 @@ export default function MainLayout() {
 
   const signedIn = Boolean(accessToken)
 
+  // Pushed when the server can reach us, polled otherwise. The poll is the
+  // fallback rather than the mechanism: it keeps a long-idle tab honest if the
+  // stream could not be held open.
+  useTaskStream()
+  const { data: tasks = [] } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: fetchTasks,
+    enabled: signedIn,
+    refetchInterval: 60_000,
+  })
+  const pendingCount = tasks.length
+
   // Member entries are inserted before 知识库 rather than appended, so signing
   // in does not reshuffle the items a visitor has just learned the positions
   // of.
@@ -59,6 +74,27 @@ export default function MainLayout() {
     ? [PUBLIC_MENU[0], PUBLIC_MENU[1], PUBLIC_MENU[2], ...MEMBER_MENU, PUBLIC_MENU[3]]
     : PUBLIC_MENU
 
+  // The count rides on 挂牌交易 even though the tasks span orders, contracts
+  // and delivery. That is where the user goes to act on them, and a count on a
+  // menu entry nobody clicks is a number rather than a prompt.
+  const itemsWithBadge = menuItems.map((item) =>
+    item.key === '/trading' && pendingCount > 0
+      ? {
+          ...item,
+          label: (
+            <Space size={6}>
+              <span>{item.label}</span>
+              <Badge count={pendingCount} size="small" />
+            </Space>
+          ),
+        }
+      : item,
+  )
+
+  // Exact match, deliberately: every entry is a single path segment and a
+  // prefix rule would light up 挂牌交易 while the user is on a sub-page of
+  // something else. Sub-pages are modals over their list page rather than
+  // routes, which is what keeps this honest.
   const selectedKey = menuItems.find((item) => item.key === location.pathname)?.key ?? '/'
 
   const handleLogout = () => {
@@ -87,7 +123,7 @@ export default function MainLayout() {
         <Menu
           mode="inline"
           selectedKeys={[selectedKey]}
-          items={menuItems}
+          items={itemsWithBadge}
           style={{ borderInlineEnd: 'none', paddingTop: 8 }}
           onClick={({ key }) => navigate(key)}
         />

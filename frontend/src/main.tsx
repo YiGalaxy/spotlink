@@ -16,7 +16,19 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      refetchOnWindowFocus: false,
+      // On, which is the opposite of the usual recommendation, and deliberate
+      // here. A trading screen is a shared document: the other party changes it
+      // while you are looking at another tab. With this off, a seller returns
+      // to the tab and sees a stale page until they think to reload — which was
+      // a reported bug, and this line was its root cause.
+      refetchOnWindowFocus: true,
+      // No global refetchInterval. Polling every mounted query would put the
+      // advisor transcript, the rule corpus and the enterprise profile on a
+      // 30-second timer for data that only changes when the user does
+      // something. The one query that genuinely needs a heartbeat — the task
+      // list, which the other party can change at any moment — asks for its own
+      // interval, and the task stream pushes when it can do better than that.
+      staleTime: 5_000,
     },
   },
 })

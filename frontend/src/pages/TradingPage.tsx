@@ -336,13 +336,31 @@ export default function TradingPage() {
           <Typography.Text strong>{r.amountText} 元</Typography.Text>
         </Space>),
     },
-    { title: '状态', dataIndex: 'statusText', width: 100,
-      render: (v: string, r: OrderView) => <Tag color={ORDER_COLOURS[r.status]}>{v}</Tag> },
+    {
+      title: '状态',
+      width: 140,
+      render: (_: unknown, r: OrderView) => (
+        <Space size={4}>
+          <Tag color={ORDER_COLOURS[r.status]}>{r.statusText}</Tag>
+          {/* The server already computed which moves this caller may make; a
+              non-empty list means the next step is theirs. Surfacing it here
+              means a user scanning their orders does not have to open each one
+              to discover that it is waiting on them — and waiting on nobody is
+              indistinguishable from waiting on them without this. */}
+          {r.allowedActions.length > 0 && (
+            <Tag color="orange" style={{ marginInlineEnd: 0 }}>待你处理</Tag>
+          )}
+        </Space>
+      ),
+    },
     {
       title: '操作',
       width: 100,
       render: (_: unknown, r: OrderView) => (
-        <Button type="link" size="small" onClick={() => setDetailOrder(r)}>查看</Button>),
+        <Button type={r.allowedActions.length > 0 ? 'primary' : 'link'} size="small"
+          onClick={() => setDetailOrder(r)}>
+          {r.allowedActions.length > 0 ? '去处理' : '查看'}
+        </Button>),
     },
   ]
 

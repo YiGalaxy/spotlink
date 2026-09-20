@@ -1,37 +1,31 @@
 package com.bulk.trade.advisor.tool;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import com.bulk.trade.contract.entity.Contract;
-import com.bulk.trade.contract.mapper.ContractMapper;
 import com.bulk.trade.shared.security.SecurityUtils;
-import com.bulk.trade.trading.entity.Order;
-import com.bulk.trade.trading.entity.OrderStatus;
-import com.bulk.trade.trading.service.OrderService;
+import com.bulk.trade.trading.dto.TaskView;
+import com.bulk.trade.trading.service.TaskService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
- * What the caller has to act on, across every module at once.
+ * Tells the caller what they have to act on, across every module at once.
  *
- * <p><b>Why this is one tool and not four.</b> "我还有什么要处理的" is the
- * question people actually ask, and it does not know which module the answer
- * lives in. Answering it by hand means the model must remember to check orders,
- * then contracts, then listings — and a model that forgets one step produces a
+ * <p><b>Why one tool and not four.</b> "我还有什么要处理的" is the question people
+ * actually ask, and it does not know which module the answer lives in.
+ * Answering it by hand means the model must remember to check orders, then
+ * contracts, then listings — and a model that forgets one step produces a
  * confident, complete-sounding, wrong answer. That is the worst failure mode
- * available here. One tool that cannot forget is worth more than four that can.
+ * available here, so the gathering is one call that cannot forget.
  *
- * <p>The work is done in Java rather than left to the model for the same
- * reason. Which party owes the next move is a rule — a contract awaiting <em>my
- * </em> signature is a task, the same contract awaiting theirs is not — and
- * rules belong in code that can be tested, not in a prompt that can be
- * paraphrased.
+ * <p><b>It also does not decide anything.</b> Which party owes the next move is
+ * a rule, and rules belong in code that can be tested rather than in a prompt
+ * that can be paraphrased — so {@link TaskService} owns the judgement and this
+ * class only renders it. The web console reads the same service, which is what
+ * keeps the assistant and the screen from disagreeing about what is pending.
  */
 @Component
 @RequiredArgsConstructor
@@ -39,8 +33,7 @@ public class TaskAdvisorTools {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    private final OrderService orderService;
-    private final ContractMapper contractMapper;
+    private final TaskService taskService;
 
     @Tool(name = "list_my_tasks",
             description = """
@@ -56,100 +49,30 @@ public class TaskAdvisorTools {
             return "该账号是平台运营账号，未绑定企业，没有待办事项。";
         }
 
-        List<Order> orders = orderService.listMine(enterpriseId, null);
-        List<String> tasks = new ArrayList<>();
-
-        for (Order order : orders) {
-            // Only the lister answers a waiting acceptance. The counterparty is
-            // waiting too, but waiting is not a task — showing it to them would
-            // invent work that does not exist and hide the work that does.
-            if (OrderStatus.PENDING_CONFIRM.equals(order.getStatus()) && isLister(order, enterpriseId)) {
-                tasks.add(item("确认或拒绝摘牌", order,
-                        "对方摘牌 %s %s，等你答复%s".formatted(
-                                plain(order.getQuantity()), order.getUnit(),
-                                order.getConfirmDeadline() == null
-                                        ? ""
-                                        : "，截止 " + format(order.getConfirmDeadline()))));
-            }
-        }
-
-        for (Contract contract : myContracts(enterpriseId)) {
-            if (Contract.Status.PENDING_SIGN.equals(contract.getStatus())
-                    && !hasSigned(contract, enterpriseId)) {
-                tasks.add("· 签署合同：%s（%s，%s 元）".formatted(
-                        contract.getContractNo(), contract.getTitle(), plain(contract.getAmount())));
-            }
-        }
-
-        for (Order order : orders) {
-            if (!OrderStatus.CONFIRMED.equals(order.getStatus())) {
-                continue;
-            }
-            if (order.getContractId() == null) {
-                tasks.add(item("起草合同", order, "订单已确认，尚未起草合同"));
-            }
-        }
-
-        for (Order order : orders) {
-            if (OrderStatus.CONTRACTED.equals(order.getStatus())) {
-                tasks.add(item("开始交收", order, "合同已生效，可以开始交收"));
-            }
-            if (OrderStatus.DELIVERING.equals(order.getStatus())) {
-                tasks.add(item("确认完成", order, "交收进行中，完成后确认"));
-            }
-        }
-
+        List<TaskView> tasks = taskService.findTasks(enterpriseId);
         if (tasks.isEmpty()) {
             return "当前没有需要你处理的事项。进行中的订单要么在等对方，要么已经完结。";
         }
 
         StringBuilder sb = new StringBuilder("待处理事项共 ").append(tasks.size()).append(" 项：\n");
-        tasks.forEach(task -> sb.append(task).append('\n'));
+        for (TaskView task : tasks) {
+            sb.append("- ").append(task.action()).append("：")
+              .append(task.commodityName());
+            if (task.quantity() != null) {
+                sb.append(' ').append(plain(task.quantity())).append(' ').append(task.unit());
+            }
+            sb.append("（").append(task.targetNo()).append("）")
+              .append(" — 对手 ").append(task.counterparty());
+            if (task.amount() != null) {
+                sb.append("，金额 ").append(plain(task.amount())).append(" 元");
+            }
+            sb.append("，").append(task.detail());
+            if (task.deadline() != null) {
+                sb.append("，截止 ").append(task.deadline().format(DATE));
+            }
+            sb.append('\n');
+        }
         return sb.toString();
-    }
-
-    // ------------------------------------------------------------------
-    // Internals
-    // ------------------------------------------------------------------
-
-    private String item(String action, Order order, String detail) {
-        return "· %s：%s（%s %s，订单 %s）— %s".formatted(
-                action, order.getCommodityName(),
-                plain(order.getQuantity()), order.getUnit(),
-                order.getOrderNo(), detail);
-    }
-
-    /**
-     * Whether the caller published the listing this order came from.
-     *
-     * <p>Read from the order's own columns rather than by loading the listing:
-     * an order under a SELL listing has the lister as its seller, and one under
-     * a BUY listing has them as its buyer. The rule that makes this correct is
-     * written down where it can be checked — {@code Listing.ConfirmMode} — and
-     * only MANUAL listings ever leave an order in this state.
-     */
-    private boolean isLister(Order order, Long enterpriseId) {
-        return enterpriseId.equals(order.getSellerId());
-    }
-
-    /** Contracts the caller is a party to. */
-    private List<Contract> myContracts(Long enterpriseId) {
-        return contractMapper.selectList(Wrappers.<Contract>lambdaQuery()
-                .and(w -> w.eq(Contract::getBuyerId, enterpriseId)
-                        .or()
-                        .eq(Contract::getSellerId, enterpriseId))
-                .orderByDesc(Contract::getId)
-                .last("limit 50"));
-    }
-
-    private boolean hasSigned(Contract contract, Long enterpriseId) {
-        return contract.isBuyer(enterpriseId)
-                ? contract.getBuyerSignedAt() != null
-                : contract.getSellerSignedAt() != null;
-    }
-
-    private String format(OffsetDateTime time) {
-        return time == null ? "—" : time.format(DATE);
     }
 
     private String plain(BigDecimal value) {

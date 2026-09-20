@@ -3,6 +3,7 @@ package com.bulk.trade.contract.service;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.bulk.trade.contract.entity.Contract;
 import com.bulk.trade.contract.mapper.ContractMapper;
+import com.bulk.trade.trading.event.TaskChangedEvent;
 import com.bulk.trade.shared.exception.BusinessException;
 import com.bulk.trade.shared.security.LoginUser;
 import com.bulk.trade.shared.web.ResultCode;
@@ -14,6 +15,7 @@ import com.bulk.trade.trading.mapper.OrderStatusLogMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +50,7 @@ public class ContractService {
     private final OrderMapper orderMapper;
     private final OrderStatusLogMapper statusLogMapper;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Draws up a contract for a confirmed order.
@@ -97,6 +100,8 @@ public class ContractService {
         orderMapper.updateById(order);
 
         log.info("Contract {} drafted for order {}", contract.getContractNo(), order.getOrderNo());
+        // Both sides: one now has a contract to sign, the other has one to watch.
+        publishTaskChange("合同已起草", order);
         return contract;
     }
 
@@ -139,6 +144,7 @@ public class ContractService {
                 throw BusinessException.of(ResultCode.CONFLICT, "合同正在被其他操作修改，请重试");
             }
             advanceOrder(contract, user);
+            publishTaskChange("合同已生效", contract);
             log.info("Contract {} signed by both parties; order {} is now contracted",
                     contract.getContractNo(), contract.getOrderId());
             return contract;
@@ -147,6 +153,7 @@ public class ContractService {
         if (contractMapper.updateById(contract) == 0) {
             throw BusinessException.of(ResultCode.CONFLICT, "合同正在被其他操作修改，请重试");
         }
+        publishTaskChange("合同待对方签署", contract);
         log.info("Contract {} signed by enterprise {}; awaiting the other side",
                 contract.getContractNo(), user.getEnterpriseId());
         return contract;
@@ -204,6 +211,24 @@ public class ContractService {
      * <p>Stored as JSON rather than columns: terms are written once, read whole,
      * and never queried by individual field.
      */
+    /**
+     * Tells both parties their pending work changed.
+     *
+     * <p>Carries no task data — recomputing it here would put a second copy of
+     * "what counts as pending" in the event, and the two copies would drift.
+     * Each client refetches through {@code TaskService} instead.
+     */
+    private void publishTaskChange(String reason, Order order) {
+        eventPublisher.publishEvent(
+                new TaskChangedEvent(reason, order.getBuyerId(), order.getSellerId()));
+    }
+
+    /** The same, for the two places that hold a contract but not its order. */
+    private void publishTaskChange(String reason, Contract contract) {
+        eventPublisher.publishEvent(
+                new TaskChangedEvent(reason, contract.getBuyerId(), contract.getSellerId()));
+    }
+
     private String writeTerms(Order order) {
         Map<String, Object> terms = new LinkedHashMap<>();
         terms.put("commodityName", order.getCommodityName());

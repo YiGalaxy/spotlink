@@ -211,6 +211,36 @@ export interface OrderView {
   createdAt: string
 }
 
+/**
+ * One thing the current enterprise has to act on.
+ *
+ * `kind` decides which buttons the row shows — a waiting acceptance needs a
+ * confirm/reject pair, a draft needs a single "起草" — while `action` is the
+ * already-worded label. Keeping both means the label and the behaviour cannot
+ * drift apart. The backend gathers these from every module at once, so the
+ * console and the AI advisor cannot disagree about what is pending.
+ */
+export interface TaskView {
+  kind:
+    | 'ACCEPTANCE_PENDING'
+    | 'CONTRACT_TO_SIGN'
+    | 'CONTRACT_TO_DRAFT'
+    | 'DELIVERY_TO_START'
+    | 'DELIVERY_TO_COMPLETE'
+  action: string
+  targetType: 'ORDER' | 'CONTRACT'
+  targetId: EntityId
+  targetNo: string
+  commodityName: string
+  counterparty: string
+  quantity: number | null
+  unit: string | null
+  amount: number | null
+  detail: string
+  /** Null when nothing lapses if the user is slow. */
+  deadline: string | null
+}
+
 export interface OrderStatusLogEntry {
   fromStatus: string
   fromText: string
