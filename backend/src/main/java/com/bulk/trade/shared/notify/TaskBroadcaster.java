@@ -112,8 +112,19 @@ public class TaskBroadcaster {
         }
     }
 
-    /** Open connections for one enterprise; for the health endpoint. */
+    /**
+     * Open connections for one enterprise; for the health endpoint.
+     *
+     * <p>Guards against a null tenant because a platform operator has none, and
+     * {@link ConcurrentHashMap#get} throws on a null key rather than returning
+     * null. The same guard appears in {@link #notify}, which had it from the
+     * start — this method did not, and the health endpoint answered 500 to the
+     * one account most likely to call it.
+     */
     public int connectionCount(Long enterpriseId) {
+        if (enterpriseId == null) {
+            return 0;
+        }
         List<SseEmitter> connections = byEnterprise.get(enterpriseId);
         return connections == null ? 0 : connections.size();
     }

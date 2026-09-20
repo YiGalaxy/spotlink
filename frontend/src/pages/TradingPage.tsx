@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   Alert,
+  Badge,
   Button,
   Card,
   Col,
@@ -79,7 +80,18 @@ export default function TradingPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const accessToken = useAuthStore((state) => state.accessToken)
+  const user = useAuthStore((state) => state.user)
   const signedIn = Boolean(accessToken)
+
+  /**
+   * Whether this account has an enterprise to trade as.
+   *
+   * <p>Distinct from being signed in. A platform operator is a legitimate
+   * account with no tenant, so every tenant-scoped query returns "未绑定企业" —
+   * which meant the member tabs appeared, and then errored when opened. Gate
+   * on what the tabs need, not on the looser thing that happens to correlate.
+   */
+  const isMember = signedIn && Boolean(user?.enterpriseId)
   const [acceptTarget, setAcceptTarget] = useState<ListingView | null>(null)
   const [publishOpen, setPublishOpen] = useState(false)
   const [detailOrder, setDetailOrder] = useState<OrderView | null>(null)
@@ -113,19 +125,19 @@ export default function TradingPage() {
   const { data: myListings = [] } = useQuery({
     queryKey: ['my-listings'],
     queryFn: fetchMyListings,
-    enabled: signedIn,
+    enabled: isMember,
   })
 
   const { data: myOrders = [] } = useQuery({
     queryKey: ['my-orders'],
     queryFn: () => fetchMyOrders(),
-    enabled: signedIn,
+    enabled: isMember,
   })
 
   const { data: notes = [] } = useQuery({
     queryKey: ['inventory-notes'],
     queryFn: () => listInventoryNotes(),
-    enabled: signedIn,
+    enabled: isMember,
   })
 
   const { data: categories = [] } = useQuery({
@@ -136,8 +148,21 @@ export default function TradingPage() {
   const { data: warehouses = [] } = useQuery({
     queryKey: ['warehouses'],
     queryFn: fetchWarehouses,
-    enabled: signedIn,
+    enabled: isMember,
   })
+
+  /**
+   * How many of this enterprise's orders are waiting on it.
+   *
+   * <p>Derived from `allowedActions`, the same field the server enforces, so
+   * the number on the tab and the buttons inside it cannot disagree. A count
+   * computed any other way — by status, say — would be a second opinion about
+   * what "pending" means.
+   */
+  const pendingOrderCount = useMemo(
+    () => myOrders.filter((o) => o.allowedActions.length > 0).length,
+    [myOrders],
+  )
 
   const categoryOptions = useMemo(() => flattenLeaves(categories), [categories])
   /** Only notes with something free can back a SELL listing. */
@@ -376,23 +401,34 @@ export default function TradingPage() {
     {
       title: '状态',
       width: 150,
-      sorter: (a: OrderView, b: OrderView) => a.status.localeCompare(b.status),
+      // Pending first, then by lifecycle stage. The default sort for this
+      // table, because the reason someone opens 我的订单 is almost always to
+      // find the one waiting on them — and with twenty rows, a list ordered by
+      // anything else makes that a search.
+      //
+      // It sorts on `allowedActions` rather than on a status code because
+      // "pending" is not a status: the same 已确认 order is your move if the
+      // contract is undrafted and nobody's move once it exists.
+      sorter: (a: OrderView, b: OrderView) => {
+        const pendingA = a.allowedActions.length > 0 ? 0 : 1
+        const pendingB = b.allowedActions.length > 0 ? 0 : 1
+        if (pendingA !== pendingB) return pendingA - pendingB
+        return a.status.localeCompare(b.status)
+      },
+      defaultSortOrder: 'ascend' as const,
+      // One tag, the current status. A second one beside it reads as a second
+      // status, and the row has exactly one. That the row needs you is said by
+      // the 去处理 button in the next column and by the ordering, both of which
+      // are about the action rather than the state.
       render: (_: unknown, r: OrderView) => (
-        <Space size={4}>
-          <Tag color={ORDER_COLOURS[r.status]}>{r.statusText}</Tag>
-          {/* The server already computed which moves this caller may make; a
-              non-empty list means the next step is theirs. Surfacing it here
-              means a user scanning their orders does not have to open each one
-              to discover that it is waiting on them — and waiting on nobody is
-              indistinguishable from waiting on them without this. */}
-          {r.allowedActions.length > 0 && (
-            <Tag color="orange" style={{ marginInlineEnd: 0 }}>待你处理</Tag>
-          )}
-        </Space>
+        <Tag color={ORDER_COLOURS[r.status]}>{r.statusText}</Tag>
       ),
     },
+    // Deliberately not the default sort: Ant Design applies only one, and
+    // pending-first is the more useful opening view. Newest-first is one click
+    // away.
     { title: '创建时间', dataIndex: 'createdAt', width: 140,
-      sorter: byTime, defaultSortOrder: 'descend' as const,
+      sorter: byTime,
       render: (v: string) => (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {dayjs(v).format('MM-DD HH:mm')}
@@ -461,7 +497,7 @@ export default function TradingPage() {
               </>
             ),
           },
-          ...(signedIn
+          ...(isMember
             ? [
                 {
                   key: 'mine',
@@ -523,7 +559,17 @@ export default function TradingPage() {
                 },
                 {
                   key: 'orders',
-                  label: `我的订单 (${myOrders.length})`,
+                  // The count people actually scan for. A tab that says "21"
+                  // when eleven of them are waiting on you is a number that
+                  // hides the only thing worth knowing.
+                  label: (
+                    <Space size={6}>
+                      <span>{`我的订单 (${myOrders.length})`}</span>
+                      {pendingOrderCount > 0 && (
+                        <Badge count={pendingOrderCount} size="small" />
+                      )}
+                    </Space>
+                  ),
                   children: (
                     <Table rowKey="id" size="middle" dataSource={myOrders} columns={orderColumns}
                       pagination={LIST_PAGINATION}
