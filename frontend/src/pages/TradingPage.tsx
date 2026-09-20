@@ -310,7 +310,7 @@ export default function TradingPage() {
   return (
     <div style={{ padding: 24, maxWidth: 1500, margin: '0 auto' }}>
       <Typography.Title level={4} style={{ marginTop: 0, marginBottom: 16 }}>
-        挂单交易
+        挂牌交易
       </Typography.Title>
 
       <Tabs
@@ -318,7 +318,7 @@ export default function TradingPage() {
         items={[
           {
             key: 'market',
-            label: `挂单大厅 (${market.length})`,
+            label: `挂牌大厅 (${market.length})`,
             children: (
               <>
                 <Card size="small" style={{ marginBottom: 12 }} styles={{ body: { padding: '10px 16px' } }}>
@@ -509,7 +509,7 @@ export default function TradingPage() {
           <Row gutter={12}>
             <Col span={12}>
               <Form.Item name="warehouseId" label="交收仓库">
-                <Select placeholder="留空则取库存单所在仓库"
+                <Select placeholder="留空则取库存单所在交收仓库"
                   options={warehouses.map((w) => ({ value: w.id, label: w.name }))} />
               </Form.Item>
             </Col>

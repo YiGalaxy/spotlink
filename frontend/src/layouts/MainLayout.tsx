@@ -23,7 +23,7 @@ const { Header, Sider, Content } = Layout
 const MENU_ITEMS = [
   { key: '/', icon: <DashboardOutlined />, label: '工作台' },
   { key: '/market', icon: <LineChartOutlined />, label: '行情' },
-  { key: '/trading', icon: <SwapOutlined />, label: '挂单交易' },
+  { key: '/trading', icon: <SwapOutlined />, label: '挂牌交易' },
   { key: '/inventory', icon: <DatabaseOutlined />, label: '我的库存' },
   { key: '/advisor', icon: <RobotOutlined />, label: 'AI 顾问' },
   { key: '/knowledge', icon: <BookOutlined />, label: '知识库' },

@@ -435,7 +435,7 @@ export default function InventoryPage() {
 
           <Form.Item name="warehouseId" label="交收仓库" rules={[{ required: true, message: '请选择交收仓库' }]}>
             <Select
-              placeholder="货物所在仓库"
+              placeholder="货物所在交收仓库"
               options={warehouses.map((w) => ({ value: w.id, label: `${w.code} ${w.name}` }))}
             />
           </Form.Item>
