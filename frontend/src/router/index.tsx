@@ -5,6 +5,7 @@ import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import AdvisorPage from '@/pages/AdvisorPage'
 import EnterprisePage from '@/pages/EnterprisePage'
+import InventoryPage from '@/pages/InventoryPage'
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <DashboardPage /> },
+      { path: 'inventory', element: <InventoryPage /> },
       { path: 'advisor', element: <AdvisorPage /> },
       { path: 'enterprise', element: <EnterprisePage /> },
     ],

@@ -74,6 +74,58 @@ export interface ConversationDetail {
   messages: MessageView[]
 }
 
+// ---- commodity / inventory ----
+
+export interface CategoryNode {
+  id: EntityId
+  parentId: EntityId
+  code: string
+  name: string
+  level: number
+  unit: string
+  sortOrder: number
+  children: CategoryNode[]
+}
+
+export interface WarehouseView {
+  id: EntityId
+  code: string
+  name: string
+  shortName: string | null
+  province: string | null
+  city: string | null
+  address: string | null
+  contactName: string | null
+  contactPhone: string | null
+}
+
+/**
+ * An electronic inventory note (电子库存单).
+ *
+ * All three quantity figures are present, not just the available one: a seller
+ * who sees only "available" cannot tell whether goods are gone or merely
+ * reserved by an active listing.
+ */
+export interface InventoryNoteView {
+  id: EntityId
+  noteNo: string
+  categoryId: EntityId
+  categoryName: string
+  warehouseId: EntityId
+  warehouseName: string
+  commodityName: string
+  brand: string | null
+  origin: string | null
+  spec: Record<string, unknown>
+  totalQuantity: number
+  availableQuantity: number
+  frozenQuantity: number
+  unit: string
+  status: number
+  statusText: string
+  createdAt: string
+}
+
 export interface AdvisorStatus {
   available: boolean
   enabled: boolean

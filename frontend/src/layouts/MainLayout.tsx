@@ -2,6 +2,7 @@ import { Avatar, Dropdown, Layout, Menu, Tag, Typography } from 'antd'
 import {
   BankOutlined,
   DashboardOutlined,
+  DatabaseOutlined,
   LogoutOutlined,
   RobotOutlined,
   UserOutlined,
@@ -18,6 +19,7 @@ const { Header, Sider, Content } = Layout
  */
 const MENU_ITEMS = [
   { key: '/', icon: <DashboardOutlined />, label: '工作台' },
+  { key: '/inventory', icon: <DatabaseOutlined />, label: '我的库存' },
   { key: '/advisor', icon: <RobotOutlined />, label: 'AI 顾问' },
   { key: '/enterprise', icon: <BankOutlined />, label: '企业信息' },
 ]
