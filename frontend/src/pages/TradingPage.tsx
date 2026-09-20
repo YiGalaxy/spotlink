@@ -67,6 +67,16 @@ function flattenLeaves(nodes: CategoryNode[], depth = 0): { id: EntityId; label:
 }
 
 const ORDER_STEPS = ['PENDING_CONFIRM', 'CONFIRMED', 'CONTRACTED', 'DELIVERING', 'COMPLETED']
+
+/** Mirrors OrderStatus.text on the server; used for the filter chips. */
+const ORDER_STAGE_TEXT: Record<string, string> = {
+  PENDING_CONFIRM: '待挂牌方确认',
+  CONFIRMED: '已确认',
+  CONTRACTED: '已签约',
+  DELIVERING: '交收中',
+  COMPLETED: '已完成',
+  CANCELLED: '已取消',
+}
 const ORDER_COLOURS: Record<string, string> = {
   PENDING_CONFIRM: 'processing',
   CONFIRMED: 'processing',
@@ -97,6 +107,10 @@ export default function TradingPage() {
   const [detailOrder, setDetailOrder] = useState<OrderView | null>(null)
   const [sideFilter, setSideFilter] = useState<string | undefined>(undefined)
   const [keyword, setKeyword] = useState('')
+  /** 'ACTIVE' | 'FINISHED' | 'ALL' — the top-level split on 我的订单. */
+  const [orderPhase, setOrderPhase] = useState<'ACTIVE' | 'FINISHED' | 'ALL'>('ACTIVE')
+  /** '' means every status within the chosen phase. */
+  const [orderStage, setOrderStage] = useState('')
   const [acceptForm] = Form.useForm()
   const [publishForm] = Form.useForm()
   const publishSide = Form.useWatch('side', publishForm)
@@ -161,6 +175,55 @@ export default function TradingPage() {
    */
   const pendingOrderCount = useMemo(
     () => myOrders.filter((o) => o.allowedActions.length > 0).length,
+    [myOrders],
+  )
+
+  /**
+   * The unfinished statuses, in the order the trade flow goes through them.
+   *
+   * <p>Written out rather than derived from the data, because the order is the
+   * point: 待确认 → 已确认 → 已签约 → 交收中 is the sequence a deal moves
+   * through, and a list sorted by whatever statuses happen to be present would
+   * put them in an order that means nothing. A stage nobody is in is still
+   * shown, with a zero, so the reader can see it was considered.
+   */
+  const ACTIVE_STAGES = ['PENDING_CONFIRM', 'CONFIRMED', 'CONTRACTED', 'DELIVERING']
+  const FINISHED_STAGES = ['COMPLETED', 'CANCELLED']
+
+  const ordersInPhase = useMemo(() => {
+    if (orderPhase === 'ACTIVE') {
+      return myOrders.filter((o) => ACTIVE_STAGES.includes(o.status))
+    }
+    if (orderPhase === 'FINISHED') {
+      return myOrders.filter((o) => FINISHED_STAGES.includes(o.status))
+    }
+    return myOrders
+  }, [myOrders, orderPhase])
+
+  /**
+   * Counts per status, then the rows to show.
+   *
+   * <p>Two levels on purpose. 「已结束」 and 「进行中」 answer "is this deal still
+   * mine to worry about", and the individual statuses answer "which step is it
+   * on" — mixing them into one flat list of seven chips is a filter nobody
+   * reads. Which statuses belong to which phase comes from the server's own
+   * lifecycle rather than from a guess about the sort order.
+   */
+  const stageCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const order of ordersInPhase) {
+      counts[order.status] = (counts[order.status] ?? 0) + 1
+    }
+    return counts
+  }, [ordersInPhase])
+
+  const visibleOrders = useMemo(
+    () => (orderStage ? ordersInPhase.filter((o) => o.status === orderStage) : ordersInPhase),
+    [ordersInPhase, orderStage],
+  )
+
+  const activeCount = useMemo(
+    () => myOrders.filter((o) => ACTIVE_STAGES.includes(o.status)).length,
     [myOrders],
   )
 
@@ -587,9 +650,67 @@ export default function TradingPage() {
                     </Space>
                   ),
                   children: (
-                    <Table rowKey="id" size="middle" dataSource={myOrders} columns={orderColumns}
-                      pagination={LIST_PAGINATION}
-                      locale={{ emptyText: <Empty description="还没有订单" /> }} />
+                    <>
+                      <Card size="small" style={{ marginBottom: 12 }}
+                        styles={{ body: { padding: '10px 16px' } }}>
+                        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                          <Segmented
+                            value={orderPhase}
+                            onChange={(v) => {
+                              setOrderPhase(v as 'ACTIVE' | 'FINISHED' | 'ALL')
+                              // The stage filter belongs to a phase; carrying it
+                              // across would show an empty table under a chip
+                              // that is no longer on screen.
+                              setOrderStage('')
+                            }}
+                            options={[
+                              { label: `进行中 (${activeCount})`, value: 'ACTIVE' },
+                              {
+                                label: `已结束 (${myOrders.length - activeCount})`,
+                                value: 'FINISHED',
+                              },
+                              { label: `全部 (${myOrders.length})`, value: 'ALL' },
+                            ]}
+                          />
+                          {orderPhase !== 'ALL' && (
+                            <Segmented
+                              size="small"
+                              value={orderStage}
+                              onChange={(v) => setOrderStage(v as string)}
+                              options={[
+                                {
+                                  label: `全部 ${orderPhase === 'ACTIVE' ? '进行中' : '已结束'} (${ordersInPhase.length})`,
+                                  value: '',
+                                },
+                                ...(orderPhase === 'ACTIVE' ? ACTIVE_STAGES : FINISHED_STAGES).map(
+                                  (stage) => ({
+                                    label: `${ORDER_STAGE_TEXT[stage]} (${stageCounts[stage] ?? 0})`,
+                                    value: stage,
+                                  }),
+                                ),
+                              ]}
+                            />
+                          )}
+                        </Space>
+                      </Card>
+                      <Table rowKey="id" size="middle" dataSource={visibleOrders} columns={orderColumns}
+                        pagination={LIST_PAGINATION}
+                        locale={{
+                          emptyText: (
+                            <Empty
+                              description={
+                                myOrders.length === 0
+                                  ? '还没有订单'
+                                  : orderStage
+                                    ? `没有「${ORDER_STAGE_TEXT[orderStage]}」状态的订单`
+                                    : orderPhase === 'ACTIVE'
+                                      ? '没有进行中的订单'
+                                      : '没有已结束的订单'
+                              }
+                            />
+                          ),
+                        }} />
+                    </>
                   ),
                 },
               ]
