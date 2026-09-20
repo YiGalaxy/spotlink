@@ -1,0 +1,117 @@
+package com.bulk.trade.inventory.service;
+
+import com.bulk.trade.commodity.entity.CommodityCategory;
+import com.bulk.trade.commodity.mapper.CommodityCategoryMapper;
+import com.bulk.trade.inventory.dto.InventoryNoteView;
+import com.bulk.trade.inventory.entity.InventoryNote;
+import com.bulk.trade.warehouse.entity.Warehouse;
+import com.bulk.trade.warehouse.mapper.WarehouseMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+/**
+ * Turns inventory notes into views, resolving category and warehouse names.
+ *
+ * <p>Names are looked up in batches rather than per row: a list of fifty notes
+ * would otherwise issue a hundred extra queries, which is the classic N+1 that
+ * only shows up once someone has real data.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class InventoryViewAssembler {
+
+    private final CommodityCategoryMapper categoryMapper;
+    private final WarehouseMapper warehouseMapper;
+    private final ObjectMapper objectMapper;
+
+    public InventoryNoteView toView(InventoryNote note) {
+        return toViews(List.of(note)).get(0);
+    }
+
+    public List<InventoryNoteView> toViews(Collection<InventoryNote> notes) {
+        if (notes.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, String> categoryNames = lookup(
+                notes.stream().map(InventoryNote::getCategoryId).collect(Collectors.toSet()),
+                ids -> categoryMapper.selectBatchIds(ids).stream()
+                        .collect(Collectors.toMap(CommodityCategory::getId, CommodityCategory::getName)));
+
+        Map<Long, String> warehouseNames = lookup(
+                notes.stream().map(InventoryNote::getWarehouseId).collect(Collectors.toSet()),
+                ids -> warehouseMapper.selectBatchIds(ids).stream()
+                        .collect(Collectors.toMap(Warehouse::getId, Warehouse::getName)));
+
+        return notes.stream()
+                .map(note -> new InventoryNoteView(
+                        note.getId(),
+                        note.getNoteNo(),
+                        note.getCategoryId(),
+                        categoryNames.getOrDefault(note.getCategoryId(), "—"),
+                        note.getWarehouseId(),
+                        warehouseNames.getOrDefault(note.getWarehouseId(), "—"),
+                        note.getCommodityName(),
+                        note.getBrand(),
+                        note.getOrigin(),
+                        readSpec(note.getSpec()),
+                        note.getTotalQuantity(),
+                        note.getAvailableQuantity(),
+                        note.getFrozenQuantity(),
+                        note.getUnit(),
+                        note.getStatus(),
+                        statusText(note),
+                        note.getCreatedAt()))
+                .toList();
+    }
+
+    private Map<Long, String> lookup(Set<Long> ids, Function<Set<Long>, Map<Long, String>> loader) {
+        Set<Long> present = ids.stream().filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        if (present.isEmpty()) {
+            return Map.of();
+        }
+        return loader.apply(present);
+    }
+
+    private Map<String, Object> readSpec(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<HashMap<String, Object>>() {
+            });
+        } catch (Exception e) {
+            log.warn("Could not parse stored spec, returning empty map", e);
+            return Map.of();
+        }
+    }
+
+    private String statusText(InventoryNote note) {
+        Integer status = note.getStatus();
+        if (status == null) {
+            return "未知";
+        }
+        return switch (status) {
+            case InventoryNote.Status.DRAFT -> "草稿";
+            case InventoryNote.Status.PENDING_REVIEW -> "待审核";
+            case InventoryNote.Status.IN_STOCK -> "在库";
+            case InventoryNote.Status.FULLY_FROZEN -> "全部冻结";
+            case InventoryNote.Status.PARTIALLY_FROZEN -> "部分冻结";
+            case InventoryNote.Status.DELIVERED -> "已交收";
+            case InventoryNote.Status.CANCELLED -> "已注销";
+            default -> "未知";
+        };
+    }
+}
