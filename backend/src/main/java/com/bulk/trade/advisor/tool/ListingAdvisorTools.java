@@ -1,5 +1,7 @@
 package com.bulk.trade.advisor.tool;
 
+import com.bulk.trade.identity.entity.Enterprise;
+import com.bulk.trade.identity.mapper.EnterpriseMapper;
 import com.bulk.trade.shared.security.SecurityUtils;
 import com.bulk.trade.trading.entity.Listing;
 import com.bulk.trade.trading.service.ListingService;
@@ -13,19 +15,31 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * What this enterprise has put on the market.
+ * Listings, from both sides of the shop window.
  *
- * <p><b>Added because the assistant was asked "我挂牌了些啥货物" and had to say
- * it could not look that up.</b> It was telling the truth — every other tool
- * reads inventory, orders or contracts, and none of those is a listing. A
- * frozen quantity on an inventory note says goods are reserved; only the
- * listing says what they are reserved <em>for</em>, at what price, and until
- * when. Answering by inference from the freeze was the alternative, and it
- * would have been a guess dressed as an answer.
+ * <p><b>Two tools, and the difference between them is the point.</b>
+ * {@code list_my_listings} reads the caller's own book — including listings that
+ * are filled, withdrawn or expired, which nobody else can see.
+ * {@code query_market_listings} reads the public hall: what every enterprise
+ * currently has on offer, which an anonymous visitor can already browse on the
+ * marketplace page.
  *
- * <p>Scoped like everything else: the service call takes the caller's own
- * enterprise, and there is no parameter through which another one could be
- * named.
+ * <p>The second was added because the assistant was asked what the cheapest
+ * thing on the platform was and had to say it could not look — a question about
+ * <em>public</em> information that the platform publishes to the street. The
+ * first tool does not cover it: that answers "what have I listed", not "what is
+ * on offer".
+ *
+ * <p><b>Returning other companies' names and prices is not a leak.</b> The hall
+ * is public by design, and a venue that hid who was selling what would not be a
+ * venue. What stays private is everything behind those offers — inventory,
+ * orders, contracts, funds — and none of it is reachable from here. Worth
+ * stating, because "the tool returns other enterprises' data" reads like a
+ * violation until you notice which data.
+ *
+ * <p>Both tools are scoped the way everything else is: neither accepts an
+ * enterprise as an argument, so there is no way to ask for one company's
+ * listings rather than the market's.
  */
 @Component
 @RequiredArgsConstructor
@@ -33,15 +47,19 @@ public class ListingAdvisorTools {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
+    /** Enough to compare offers, few enough that the answer stays readable. */
+    private static final int MARKET_ROWS = 15;
+
     private final ListingService listingService;
+    private final EnterpriseMapper enterpriseMapper;
 
     @Tool(name = "list_my_listings",
             description = """
                     Lists the listings this enterprise has published: direction, commodity,
                     quantity and what remains, price, how the deal closes, status, and the
                     validity deadline. Use it for "我挂牌了什么", "我的挂牌", "还有多少没卖掉",
-                    "挂牌价是多少". Covers listings only — for the goods behind them use
-                    query_my_inventory.""")
+                    "挂牌价是多少". Covers the caller's own listings only — for what the whole
+                    market has on offer use query_market_listings.""")
     public String listMyListings(
             @ToolParam(description = """
                     Optional filter: OPEN (anything still on offer), FILLED, CLOSED
@@ -88,6 +106,63 @@ public class ListingAdvisorTools {
             }
             sb.append('\n');
         }
+        return sb.toString();
+    }
+
+    @Tool(name = "query_market_listings",
+            description = """
+                    What the whole platform currently has on offer — every enterprise's open
+                    listings, not just the caller's. Use it for "现在最便宜的货是什么", "市场上
+                    有没有人卖电解铜", "挂牌价大概多少", or to compare an offer against the
+                    market. Filterable by commodity name and by side. Each row names its
+                    seller, so the caller can see whose offer it is and whether it is theirs.""")
+    public String queryMarketListings(
+            @ToolParam(description = "Only listings whose commodity name contains this text. Optional.")
+            String keyword,
+            @ToolParam(description = "SELL for offers to sell, BUY for requests to buy. Leave empty for both.")
+            String side) {
+
+        Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();
+        String wantedSide = side == null || side.isBlank() ? null : side.trim().toUpperCase();
+        if (wantedSide != null
+                && !Listing.Side.SELL.equals(wantedSide) && !Listing.Side.BUY.equals(wantedSide)) {
+            return "挂牌方向只能是 SELL 或 BUY。";
+        }
+
+        List<Listing> listings = listingService.browse(null, wantedSide, keyword);
+        if (listings.isEmpty()) {
+            return keyword == null || keyword.isBlank()
+                    ? "当前市场上没有在挂的挂牌。"
+                    : "市场上没有名称包含「%s」的在挂挂牌。".formatted(keyword.trim());
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("市场在挂挂牌共 ").append(listings.size()).append(" 条");
+        if (listings.size() > MARKET_ROWS) {
+            sb.append("，按发布时间由新到旧列出前 ").append(MARKET_ROWS).append(" 条");
+        }
+        sb.append("：\n");
+
+        for (Listing listing : listings.stream().limit(MARKET_ROWS).toList()) {
+            sb.append("- ").append(listing.getCommodityName())
+              .append(" | ").append(sideText(listing))
+              .append(' ').append(plain(listing.getRemainingQuantity())).append('/')
+              .append(plain(listing.getQuantity())).append(' ').append(listing.getUnit())
+              .append(" | ").append(priceText(listing))
+              .append(" | ").append(confirmModeText(listing))
+              .append(" | 挂牌方 ").append(enterpriseName(listing.getEnterpriseId()));
+            if (enterpriseId != null && enterpriseId.equals(listing.getEnterpriseId())) {
+                // Marked because the caller is usually about to compare prices,
+                // and without it the assistant will cheerfully recommend
+                // accepting an offer that cannot be accepted — it is their own.
+                sb.append("（本方）");
+            }
+            sb.append('\n');
+        }
+
+        // Said because the caller is usually about to judge a price, and a list
+        // of asking prices is not a list of trades.
+        sb.append("以上是挂牌报价，不是成交价。判断价位是否合理要用 query_market_price 看实际成交。");
         return sb.toString();
     }
 
@@ -142,6 +217,11 @@ public class ListingAdvisorTools {
             case Listing.Status.EXPIRED -> "已过期";
             default -> status;
         };
+    }
+
+    private String enterpriseName(Long id) {
+        Enterprise enterprise = id == null ? null : enterpriseMapper.selectById(id);
+        return enterprise == null ? "—" : enterprise.getName();
     }
 
     private String plain(BigDecimal value) {
