@@ -50,18 +50,6 @@ public final class AnswerCleaner {
      */
     private static final int MIN_CJK_CHARS = 4;
 
-    /**
-     * Shown when the model produced nothing but working notes.
-     *
-     * <p>Deliberately not the raw text. A wall of the model's English planning
-     * is not a partial answer — it is the assistant thinking out loud at
-     * someone who asked a question, and it reads as a malfunction. A short
-     * sentence asking them to try again is less informative and much less
-     * alarming.
-     */
-    private static final String NOTHING_TO_SHOW =
-            "抱歉，这次没能生成回答。请把问题再发一次，或换个说法。";
-
     private AnswerCleaner() {
     }
 
@@ -70,7 +58,9 @@ public final class AnswerCleaner {
      *
      * @param raw whatever the model produced, possibly prefixed with planning
      * @return the answer; the input unchanged when it already reads as one; and
-     *         a short apology when the model produced notes and no answer
+     *         <b>null</b> when nothing in it reads as an answer at all, so the
+     *         caller can decide what to do about that — which is not this
+     *         class's decision to make
      */
     public static String clean(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -99,7 +89,11 @@ public final class AnswerCleaner {
             // worse than both.
             log.warn("Advisor produced no answer line in {} characters; suppressed",
                     raw.length());
-            return NOTHING_TO_SHOW;
+            // The text is logged in full, because the alternative is guessing
+            // twice about what shape a suppressed answer had — which is exactly
+            // what happened the first time this fired in earnest.
+            log.warn("Suppressed advisor text:\n{}", raw);
+            return null;
         }
 
         if (start == 0) {

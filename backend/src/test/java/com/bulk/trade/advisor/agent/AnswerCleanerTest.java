@@ -103,11 +103,10 @@ class AnswerCleanerTest {
                 4. paymentTerms MARGIN_THEN_BALANCE — a gap to flag.
                 """;
 
-        String cleaned = AnswerCleaner.clean(scratchpadOnly);
-
-        assertThat(cleaned).doesNotContain("Let me analyze");
-        assertThat(cleaned).doesNotContain("a gap to flag");
-        assertThat(cleaned).contains("请把问题再发一次");
+        // Null rather than an apology: deciding what to do about a model that
+        // produced no answer is the agent's business, not this class's. The
+        // agent retries once and only then apologises.
+        assertThat(AnswerCleaner.clean(scratchpadOnly)).isNull();
     }
 
     @Test
@@ -124,8 +123,7 @@ class AnswerCleanerTest {
         // The cost is that a genuinely English answer is discarded and the user
         // is asked to retry. That is recoverable and visible; showing someone
         // their assistant's private monologue is neither.
-        assertThat(AnswerCleaner.clean("OK, here is the answer you asked for."))
-                .contains("请把问题再发一次");
+        assertThat(AnswerCleaner.clean("OK, here is the answer you asked for.")).isNull();
     }
 
     @Test

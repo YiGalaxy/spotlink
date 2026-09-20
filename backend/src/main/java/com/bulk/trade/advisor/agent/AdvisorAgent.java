@@ -129,8 +129,26 @@ public class AdvisorAgent {
                     .call()
                     .chatResponse();
 
+            String answer = AnswerCleaner.clean(extractText(response));
+            if (answer == null) {
+                // The model analysed and stopped without concluding. Seen on
+                // questions that need several rows weighed against each other —
+                // a contract review, and "find me the cheap large copper
+                // lots" — where it produces a page of English working and no
+                // answer. Every tool result it needs is already in the
+                // conversation, so asking once more costs one round trip and
+                // turns a dead end into a reply.
+                log.info("No answer line produced; asking once more without tools");
+                answer = AnswerCleaner.clean(retryForAnswer(messages));
+            }
+            if (answer == null) {
+                // Twice is enough. The text was logged by the cleaner, so this
+                // is diagnosable rather than mysterious.
+                answer = "抱歉，这次没能生成回答。请把问题再发一次，或换个说法。";
+            }
+
             return AgentResult.of(
-                    AnswerCleaner.clean(extractText(response)),
+                    answer,
                     ToolCallRecorder.drain(),
                     promptTokens(response),
                     completionTokens(response));
@@ -145,6 +163,36 @@ public class AdvisorAgent {
             log.error("Advisor call failed for user {}", user.getUsername(), e);
             throw BusinessException.of(ResultCode.ADVISOR_UNAVAILABLE,
                     "AI 服务调用失败：" + rootMessage(e));
+        }
+    }
+
+    /**
+     * Asks again, with the tools taken away.
+     *
+     * <p>Removing them is the point rather than an optimisation: a model that
+     * just spent its turn analysing is likely to spend the next one calling
+     * more tools, which is how the first attempt ended up concluding nothing.
+     * With no tools on offer the only thing it can produce is text, and the
+     * conversation already holds everything it needs.
+     *
+     * <p>The scratchpad is deliberately <em>not</em> echoed back as an
+     * assistant turn. Feeding a model its own unfinished reasoning and asking
+     * it to continue is a good way to get more of the same.
+     */
+    private String retryForAnswer(List<Message> messages) {
+        List<Message> followUp = new ArrayList<>(messages);
+        followUp.add(new UserMessage(
+                "请直接给出最终答案。只输出结论和依据，不要输出任何分析过程或思考步骤。"));
+        try {
+            ChatResponse response = chatClientBuilder.build()
+                    .prompt()
+                    .messages(followUp)
+                    .call()
+                    .chatResponse();
+            return extractText(response);
+        } catch (Exception e) {
+            log.warn("Follow-up for a final answer failed: {}", e.getMessage());
+            return null;
         }
     }
 

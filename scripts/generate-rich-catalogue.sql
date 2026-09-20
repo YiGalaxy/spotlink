@@ -97,6 +97,8 @@ rich_gen: BEGIN
 
     DECLARE v_existing    INT DEFAULT 0;
     DECLARE v_enterprises INT DEFAULT 0;
+    DECLARE v_categories  INT DEFAULT 0;
+    DECLARE v_warehouses  INT DEFAULT 0;
     DECLARE v_msg         VARCHAR(256) DEFAULT '';
 
     -- -----------------------------------------------------------------
@@ -109,6 +111,28 @@ rich_gen: BEGIN
     IF v_enterprises < 8 THEN
         SET v_msg = CONCAT('企业数量不足（需要 8 家以上，实际 ', v_enterprises,
                            ' 家）。请先运行 scripts/generate-demo-data.sql 并启动过后端。');
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_msg;
+    END IF;
+
+    -- The pool below names its categories and warehouses by id. Reading them
+    -- first and refusing to run without them is the difference between a
+    -- catalogue that references real grades and one that quietly produces
+    -- goods no category page can show — the same failure mode as a hard-coded
+    -- enterprise id, one level down.
+    SELECT COUNT(*) INTO v_categories
+      FROM t_commodity_category
+     WHERE deleted = 0 AND id IN (1002, 1003, 1004, 1006, 1007, 1009);
+    IF v_categories < 6 THEN
+        SET v_msg = CONCAT('品类数据不完整（需要 6 个可交易品类，实际 ', v_categories,
+                           ' 个）。t_commodity_category 的种子数据在 V4 迁移中。');
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_msg;
+    END IF;
+
+    SELECT COUNT(*) INTO v_warehouses
+      FROM t_warehouse WHERE deleted = 0 AND id IN (2001, 2002) AND status = 1;
+    IF v_warehouses < 2 THEN
+        SET v_msg = CONCAT('交割仓库数据不完整（需要 2001/2002 两个可用仓库，实际 ',
+                           v_warehouses, ' 个）。');
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_msg;
     END IF;
 
@@ -568,8 +592,11 @@ rich_gen: BEGIN
     -- grade is actually quoted: tens of yuan per tonne, whole yuan per kilo.
     UPDATE tmp_rch_listing l
       JOIN tmp_rch_pool p ON p.seq = l.pool_seq
-       SET l.price_type = IF(l.seq % 10 < 7, 'FIXED', 'NEGOTIABLE'),
-           l.price      = IF(l.seq % 10 < 7,
+       -- 11 rather than 10: a tenth of the sequence number is correlated with
+       -- the status bucket above (20 is a multiple of 10), which would leave
+       -- whole statuses quoted only one way.
+       SET l.price_type = IF(l.seq % 11 < 8, 'FIXED', 'NEGOTIABLE'),
+           l.price      = IF(l.seq % 11 < 8,
                              ROUND(p.base_price * (0.98 + (l.seq % 9) * 0.005),
                                    IF(p.unit = '千克', 0, -1)),
                              NULL);
@@ -763,7 +790,7 @@ rich_gen: BEGIN
            -- NEGOTIABLE carries no price at all; the agreed price lives on the
            -- order that came out of it.
            l.price, l.price_type,
-           l.warehouse_id, IF(l.seq % 3 = 0, 'DELIVERED', 'SELF_PICKUP'),
+           l.warehouse_id, IF(l.seq % 6 = 0, 'DELIVERED', 'SELF_PICKUP'),
            'MARGIN_THEN_BALANCE',
            l.freeze_id, l.valid_until, l.status, l.confirm_mode, 0,
            CASE WHEN l.status = 'EXPIRED' THEN '演示挂牌：有效期届满未成交'
@@ -936,8 +963,8 @@ rich_gen: BEGIN
 
     UPDATE tmp_rch_order o
       SET o.amount = ROUND(o.price * o.quantity, 4),
-          o.warehouse_id = IF(o.seq % 2 = 0, 2002, 2001),
-          o.delivery_method = IF(o.seq % 3 = 0, 'DELIVERED', 'SELF_PICKUP');
+          o.warehouse_id = IF(o.seq % 7 < 4, 2001, 2002),
+          o.delivery_method = IF(o.seq % 6 = 0, 'DELIVERED', 'SELF_PICKUP');
 
     -- Two statements rather than one join: a temporary table cannot be
     -- referenced twice in the same statement, so the buyer and the seller are
@@ -1163,6 +1190,10 @@ UNION ALL SELECT '冻结记录', CAST(COUNT(*) AS CHAR)
     FROM t_freeze_record WHERE freeze_no LIKE 'FZ2026RCH%'
 UNION ALL SELECT '状态流水', CAST(COUNT(*) AS CHAR)
     FROM t_order_status_log WHERE id BETWEEN 7400000000000000000 AND 7400000000000099999
+UNION ALL SELECT '企业不存在的挂牌（应为 0）', CAST(COUNT(*) AS CHAR)
+    FROM t_listing l
+   WHERE l.deleted = 0
+     AND NOT EXISTS (SELECT 1 FROM t_enterprise e WHERE e.id = l.enterprise_id)
 UNION ALL SELECT '库存数量不平（应为 0）', CAST(COUNT(*) AS CHAR)
     FROM t_inventory_note n
    WHERE n.deleted = 0 AND n.available_quantity + n.frozen_quantity <> n.total_quantity

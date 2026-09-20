@@ -1,4 +1,4 @@
-import { Avatar, Badge, Button, Dropdown, Layout, Menu, Space, Tag, Typography } from 'antd'
+import { Avatar, Badge, Button, Divider, Dropdown, Layout, Menu, Space, Tag, Typography } from 'antd'
 import {
   BankOutlined,
   BookOutlined,
@@ -18,7 +18,16 @@ import { fetchTasks } from '@/api/tasks'
 import { useTaskStream } from '@/hooks/useTaskStream'
 import { useAuthStore } from '@/store/auth'
 
-const { Header, Sider, Content } = Layout
+const { Header, Sider, Content, Footer } = Layout
+
+const footerStyle: React.CSSProperties = {
+  textAlign: 'center',
+  background: '#fff',
+  borderTop: '1px solid #eceef2',
+  padding: '12px 24px',
+  height: 'auto',
+  lineHeight: 1.6,
+}
 
 /**
  * Menu entries map one-to-one onto routes. Modules that do not exist yet are
@@ -204,6 +213,23 @@ export default function MainLayout() {
         <Content style={{ background: '#f5f6f8' }}>
           <Outlet />
         </Content>
+
+        {/* A portfolio project, and saying so is the point of the footer. Kept
+            to one quiet line: a trading screen that shouts about its author is
+            a demo, and the screens above it are meant to look like a product. */}
+        <Footer style={footerStyle}>
+          <Space size={8} wrap split={<Divider type="vertical" />}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              个人作品集项目 · 现货通 SpotLink
+            </Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              作者 别太在亿啦
+            </Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              Java 21 · Spring Boot 3 · MySQL 8 · Spring AI · React 19
+            </Typography.Text>
+          </Space>
+        </Footer>
       </Layout>
     </Layout>
   )
