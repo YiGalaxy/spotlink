@@ -12,6 +12,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -81,6 +82,19 @@ public class GlobalExceptionHandler {
         // 永远不会被执行。方法级权限和安全过滤器链应该以同一种方式失败，
         // 而这一种是带着状态码的那种。
         throw e;
+    }
+
+    /**
+     * 一个没有对应处理器的路径。
+     *
+     * <p>Spring 6 把「没有路由匹配」也抛成异常，于是它会落进最后那道兜底：一条 ERROR
+     * 级别的完整堆栈，对调用方则是一句「系统繁忙」。一个拼错的 URL 不是系统故障，
+     * 它该得到一句说得清的话，日志里也不该为它留一份堆栈。
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ApiResponse<Void> handleNoResource(NoResourceFoundException e) {
+        log.warn("No handler for {}", e.getResourcePath());
+        return ApiResponse.failure(ResultCode.NOT_FOUND);
     }
 
     /** 最后一道兜底。记下完整堆栈，对调用方隐藏内部细节。 */
