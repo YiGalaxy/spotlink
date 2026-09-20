@@ -114,6 +114,15 @@ bulk:
     # MUST be false in any environment real users can reach.
     enabled: true
 
+  rag:
+    embedding:
+      # Claude has no embedding endpoint, so this is the one non-Anthropic
+      # piece of the advisor stack. BGE-M3 served by Ollama: strong in Chinese,
+      # free per call, and runs without network access.
+      enabled: ${BULK_EMBEDDING_ENABLED:true}
+      base-url: ${BULK_EMBEDDING_URL:http://localhost:11434}
+      model: ${BULK_EMBEDDING_MODEL:bge-m3}
+
   advisor:
     enabled: true
     # Upper bound on agent-loop iterations. A tool-calling loop with no ceiling
