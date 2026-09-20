@@ -86,12 +86,46 @@ class AnswerCleanerTest {
     }
 
     @Test
-    @DisplayName("通篇没有中文时原样返回，不把答案清空")
-    void nonChineseInputIsReturnedAsIs() {
-        // Should not happen — rule 3 mandates Chinese — but emptying the answer
-        // would be a worse response to it than showing it.
-        String odd = "OK, here is the answer you asked for.";
-        assertThat(AnswerCleaner.clean(odd)).isEqualTo(odd);
+    @DisplayName("只有推理、没有答案时，不把草稿给用户看")
+    void scratchpadOnlyIsSuppressed() {
+        // Observed in practice: a contract review returned fifteen hundred
+        // characters of English planning and never reached a conclusion. The
+        // user saw the assistant thinking out loud, which reads as a
+        // malfunction — and it contains no answer to salvage.
+        String scratchpadOnly = """
+                The user wants a contract review. Let me analyze the contract.
+
+                Contract: CT202609202219011901
+                - Title: 江铜电解铜 20 吨（金额 1360000 元）购销合同
+                - Buyer: 浙江建工物资有限公司
+
+                3. Quality dispute 7 days matches platform rule. OK.
+                4. paymentTerms MARGIN_THEN_BALANCE — a gap to flag.
+                """;
+
+        String cleaned = AnswerCleaner.clean(scratchpadOnly);
+
+        assertThat(cleaned).doesNotContain("Let me analyze");
+        assertThat(cleaned).doesNotContain("a gap to flag");
+        assertThat(cleaned).contains("请把问题再发一次");
+    }
+
+    @Test
+    @DisplayName("整段没有中文，无论长短一律不展示")
+    void nonChineseIsSuppressedWhicheverShapeItHas() {
+        // Deliberate, and the narrower reading of the rule. Rule 3 of the prompt
+        // requires Chinese unconditionally, so a response with no Chinese in it
+        // is a malfunction whatever it looks like — a fifteen-hundred-character
+        // scratchpad or one tidy English sentence. Distinguishing them would
+        // mean guessing which malfunctions are acceptable to show, and the
+        // answer to that is none of them: the reader asked a Chinese question
+        // and would get an English reply they did not ask for.
+        //
+        // The cost is that a genuinely English answer is discarded and the user
+        // is asked to retry. That is recoverable and visible; showing someone
+        // their assistant's private monologue is neither.
+        assertThat(AnswerCleaner.clean("OK, here is the answer you asked for."))
+                .contains("请把问题再发一次");
     }
 
     @Test

@@ -50,6 +50,18 @@ public final class AnswerCleaner {
      */
     private static final int MIN_CJK_CHARS = 4;
 
+    /**
+     * Shown when the model produced nothing but working notes.
+     *
+     * <p>Deliberately not the raw text. A wall of the model's English planning
+     * is not a partial answer — it is the assistant thinking out loud at
+     * someone who asked a question, and it reads as a malfunction. A short
+     * sentence asking them to try again is less informative and much less
+     * alarming.
+     */
+    private static final String NOTHING_TO_SHOW =
+            "抱歉，这次没能生成回答。请把问题再发一次，或换个说法。";
+
     private AnswerCleaner() {
     }
 
@@ -57,7 +69,8 @@ public final class AnswerCleaner {
      * Returns the answer with any leading working notes removed.
      *
      * @param raw whatever the model produced, possibly prefixed with planning
-     * @return the answer, or the input unchanged when nothing looked like notes
+     * @return the answer; the input unchanged when it already reads as one; and
+     *         a short apology when the model produced notes and no answer
      */
     public static String clean(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -73,10 +86,23 @@ public final class AnswerCleaner {
             }
         }
 
-        if (start <= 0) {
-            // Either the first line already reads as the answer, or nothing in
-            // the whole text does — in which case this is not the failure being
-            // handled and the text is returned as-is rather than emptied.
+        if (start < 0) {
+            // Not one line anywhere reads as an answer. Two ways that happens,
+            // and they are worth telling apart: the model answered in a
+            // language the prompt forbids, or it produced only its scratchpad
+            // and stopped. The second is the one seen in practice — a contract
+            // review that returned fifteen hundred characters of English
+            // planning and never reached a conclusion.
+            //
+            // Both mean there is no answer to show, so neither is returned.
+            // Emptiness would be worse than an apology, and the raw text is
+            // worse than both.
+            log.warn("Advisor produced no answer line in {} characters; suppressed",
+                    raw.length());
+            return NOTHING_TO_SHOW;
+        }
+
+        if (start == 0) {
             return raw;
         }
 

@@ -6,6 +6,7 @@ import com.bulk.trade.advisor.tool.ContractAdvisorTools;
 import com.bulk.trade.advisor.tool.ContractReviewTools;
 import com.bulk.trade.advisor.tool.InventoryAdvisorTools;
 import com.bulk.trade.advisor.tool.KnowledgeAdvisorTools;
+import com.bulk.trade.advisor.tool.ListingAdvisorTools;
 import com.bulk.trade.advisor.tool.MarketAdvisorTools;
 import com.bulk.trade.advisor.tool.OrderAdvisorTools;
 import com.bulk.trade.advisor.tool.TaskAdvisorTools;
@@ -52,6 +53,7 @@ public class AdvisorAgent {
     private final ContractAdvisorTools contractAdvisorTools;
     private final ContractReviewTools contractReviewTools;
     private final MarketAdvisorTools marketAdvisorTools;
+    private final ListingAdvisorTools listingAdvisorTools;
     private final OrderAdvisorTools orderAdvisorTools;
     private final TaskAdvisorTools taskAdvisorTools;
     private final SystemPromptBuilder promptBuilder;
@@ -74,7 +76,7 @@ public class AdvisorAgent {
     public List<Object> toolBeans() {
         return List.of(advisorTools, inventoryAdvisorTools, knowledgeAdvisorTools,
                 contractAdvisorTools, contractReviewTools, marketAdvisorTools,
-                orderAdvisorTools, taskAdvisorTools);
+                listingAdvisorTools, orderAdvisorTools, taskAdvisorTools);
     }
 
     /**
