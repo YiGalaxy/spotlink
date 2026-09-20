@@ -7,6 +7,7 @@ import com.bulk.trade.advisor.dto.MessageView;
 import com.bulk.trade.advisor.dto.SendMessageRequest;
 import com.bulk.trade.advisor.service.ConversationService;
 import com.bulk.trade.advisor.tool.AdvisorTools;
+import com.bulk.trade.advisor.tool.ContractAdvisorTools;
 import com.bulk.trade.advisor.tool.InventoryAdvisorTools;
 import com.bulk.trade.advisor.tool.KnowledgeAdvisorTools;
 import com.bulk.trade.shared.security.LoginUser;
@@ -131,7 +132,7 @@ public class AdvisorController {
         // Every class whose @Tool methods are handed to the agent. Kept in one
         // place so this list cannot drift from what is actually registered.
         return Stream.of(AdvisorTools.class, InventoryAdvisorTools.class,
-                        KnowledgeAdvisorTools.class)
+                        KnowledgeAdvisorTools.class, ContractAdvisorTools.class)
                 .flatMap(type -> Arrays.stream(type.getDeclaredMethods()))
                 .filter(method -> method.isAnnotationPresent(Tool.class))
                 .map(method -> {

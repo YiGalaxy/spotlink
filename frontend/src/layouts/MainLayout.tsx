@@ -1,6 +1,7 @@
 import { Avatar, Dropdown, Layout, Menu, Tag, Typography } from 'antd'
 import {
   BankOutlined,
+  BookOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   LineChartOutlined,
@@ -25,6 +26,7 @@ const MENU_ITEMS = [
   { key: '/trading', icon: <SwapOutlined />, label: '挂单交易' },
   { key: '/inventory', icon: <DatabaseOutlined />, label: '我的库存' },
   { key: '/advisor', icon: <RobotOutlined />, label: 'AI 顾问' },
+  { key: '/knowledge', icon: <BookOutlined />, label: '知识库' },
   { key: '/enterprise', icon: <BankOutlined />, label: '企业信息' },
 ]
 

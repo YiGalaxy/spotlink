@@ -8,6 +8,7 @@ import EnterprisePage from '@/pages/EnterprisePage'
 import InventoryPage from '@/pages/InventoryPage'
 import MarketPage from '@/pages/MarketPage'
 import TradingPage from '@/pages/TradingPage'
+import KnowledgePage from '@/pages/KnowledgePage'
 
 export const router = createBrowserRouter([
   {
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
       { path: 'trading', element: <TradingPage /> },
       { path: 'inventory', element: <InventoryPage /> },
       { path: 'advisor', element: <AdvisorPage /> },
+      { path: 'knowledge', element: <KnowledgePage /> },
       { path: 'enterprise', element: <EnterprisePage /> },
     ],
   },
