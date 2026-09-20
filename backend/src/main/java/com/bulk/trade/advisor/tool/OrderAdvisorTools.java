@@ -44,16 +44,16 @@ public class OrderAdvisorTools {
 
     @Tool(name = "list_my_orders",
             description = """
-                    Lists the caller's orders — as buyer or as seller — grouped by status with a
-                    count for each, then the most recent rows in detail. Use it for "我有多少订单",
-                    "有多少订单没处理", "我的订单", or to find an order number. Covers orders only;
-                    for everything the caller needs to act on, prefer list_my_tasks.""")
+                    列出调用方的订单——作为买方或卖方——按状态分组并给出每组的数量，
+                    然后列出最近几笔的明细。用于「我有多少订单」「有多少订单没处理」
+                    「我的订单」，或查一个订单号。只覆盖订单；调用方需要处理的一切，
+                    优先用 list_my_tasks。""")
     public String listMyOrders(
             @ToolParam(description = """
-                    Optional status filter. Accepts Chinese or the code:
-                    待挂牌方确认/PENDING_CONFIRM, 已确认/CONFIRMED, 已签约/CONTRACTED,
-                    交收中/DELIVERING, 已完成/COMPLETED, 已取消/CANCELLED.
-                    Leave empty for everything.""")
+                    可选状态筛选。接受中文或状态码：
+                    待挂牌方确认/PENDING_CONFIRM、已确认/CONFIRMED、已签约/CONTRACTED、
+                    交收中/DELIVERING、已完成/COMPLETED、已取消/CANCELLED。
+                    留空表示全部。""")
             String status) {
 
         Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();
@@ -96,13 +96,12 @@ public class OrderAdvisorTools {
 
     @Tool(name = "get_order_detail",
             description = """
-                    Returns one order in full — parties, commodity, quantity, price, amount,
-                    delivery, status, deadline — plus its complete status history showing who
-                    moved it, when, and why. Use it when asked about a specific order or about
-                    how one reached its current state. Requires the order number, which
-                    list_my_orders provides.""")
+                    返回一笔订单的完整内容——双方、商品、数量、价格、金额、交收、状态、
+                    截止时间——外加它完整的状态历史，显示是谁、在什么时候、因为什么推动了它。
+                    被问及某笔具体订单，或它是怎么走到当前状态时用它。需要订单号，
+                    订单号由 list_my_orders 提供。""")
     public String getOrderDetail(
-            @ToolParam(description = "Order number, e.g. OR202609202141016986")
+            @ToolParam(description = "订单号，例如 OR202609202141016986")
             String orderNo) {
 
         Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();

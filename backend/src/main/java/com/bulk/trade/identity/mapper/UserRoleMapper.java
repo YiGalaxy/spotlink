@@ -3,6 +3,6 @@ package com.bulk.trade.identity.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bulk.trade.identity.entity.UserRole;
 
-/** Plain CRUD; the joins that need more are hand-written where they are used. */
+/** 日常 CRUD；需要更多能力的连接查询，就写在用到它的地方。 */
 public interface UserRoleMapper extends BaseMapper<UserRole> {
 }

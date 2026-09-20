@@ -9,8 +9,8 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * Which permissions a role carries. Same reasoning as {@link UserRole} for the
- * absent soft-delete column: withdrawing a permission removes it.
+ * 一个角色带着哪些权限。没有软删除列的理由与 {@link UserRole} 相同：
+ * 收回一项权限，就是把它删掉。
  */
 @Getter
 @Setter

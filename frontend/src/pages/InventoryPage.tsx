@@ -35,7 +35,7 @@ import {
 } from '@/api/inventory'
 import type { CategoryNode, EntityId, InventoryNoteView } from '@/types/api'
 
-/** Only leaf categories are selectable — goods belong to something specific. */
+/** 只有叶子品类可选——货物总归属于某个具体的东西。 */
 function flattenLeaves(nodes: CategoryNode[], depth = 0): { id: EntityId; label: string }[] {
   const options: { id: EntityId; label: string }[] = []
   for (const node of nodes) {
@@ -58,7 +58,7 @@ const STATUS_COLOURS: Record<number, string> = {
   6: 'default',
 }
 
-/** Trims the trailing zeros BigDecimal keeps, e.g. 100.000 -> 100. */
+/** 去掉 BigDecimal 保留的尾随零，例如 100.000 -> 100。 */
 function qty(value: number | string | null | undefined): string {
   if (value === null || value === undefined) return '—'
   const num = Number(value)
@@ -93,7 +93,7 @@ export default function InventoryPage() {
 
   const categoryOptions = useMemo(() => flattenLeaves(categories), [categories])
 
-  /** Totals across the notes currently loaded, so the header reflects the filter. */
+  /** 当前已加载的库存合计，让表头跟着筛选条件走。 */
   const summary = useMemo(
     () =>
       notes.reduce(
@@ -315,7 +315,7 @@ export default function InventoryPage() {
         </Button>
       </div>
 
-      {/* Summary reflects whatever the current filter selected. */}
+      {/* 汇总跟着当前筛选选中的内容走。 */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col xs={12} sm={6}>
           <Card size="small">

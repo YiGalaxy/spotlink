@@ -11,8 +11,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * One message as the client sees it — the same shape for a freshly produced
- * answer and for one loaded from history, so the frontend has a single renderer.
+ * 客户端看到的一条消息——刚生成的回答和从历史里读出来的回答是同一个形状，
+ * 这样前端只需要一个渲染器。
  */
 @Slf4j
 public record MessageView(
@@ -51,7 +51,7 @@ public record MessageView(
                 entity.getCreatedAt());
     }
 
-    /** A turn that has not been persisted yet. */
+    /** 一个尚未落库的回合。 */
     public static MessageView ofAssistant(String content,
                                           List<ToolCallView> toolCalls,
                                           int iterations,
@@ -61,8 +61,8 @@ public record MessageView(
     }
 
     /**
-     * A malformed trail must not break loading a whole conversation, so a parse
-     * failure degrades to "no tool calls" and is logged.
+     * 一段格式错乱的轨迹不能把整个会话的加载搞坏，所以解析失败降级为
+     * 「没有工具调用」，并记日志。
      */
     private static List<ToolCallView> parseToolCalls(String json, ObjectMapper objectMapper) {
         if (json == null || json.isBlank()) {

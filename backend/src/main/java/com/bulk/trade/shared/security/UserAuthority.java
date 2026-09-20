@@ -3,22 +3,19 @@ package com.bulk.trade.shared.security;
 import java.util.Set;
 
 /**
- * What an account may do, resolved live rather than read from its token.
+ * 一个账号能做什么，实时解析出来，而不是从它的令牌里读。
  *
- * <p><b>Why this is not a JWT claim.</b> A token is issued once and trusted for
- * its whole lifetime — two hours here. Permission revocation has to take effect
- * in less than that, and a claim cannot be un-issued. The same argument applies
- * to account status, which is why it travels here too: a disabled account
- * holding a valid token is one that keeps working until the token expires,
- * which is precisely when someone disabling it wanted the opposite.
+ * <p><b>为什么这不是一个 JWT 声明。</b>令牌只签发一次，并在它的整个生命周期内被信任
+ * ——这里是两小时。而权限的收回必须在这之前生效，声明却是无法撤回的。同样的道理也适用于
+ * 账号状态，这正是它也跟着走这里的原因：**一个持有有效令牌的被禁用账号，会一直工作到
+ * 令牌过期为止，而那恰恰是禁用它的那个人最不想要的。**
  *
- * @param status      the account's status code; {@link #ACTIVE} is the only one
- *                    that can use the platform
- * @param permissions authority strings, e.g. {@code admin:enterprise:review}
+ * @param status      账号状态码；只有 {@link #ACTIVE} 能使用平台
+ * @param permissions 权限码，例如 {@code admin:enterprise:review}
  */
 public record UserAuthority(int status, Set<String> permissions) {
 
-    /** {@code User.Status.ACTIVE}, restated so this package needs no dependency. */
+    /** {@code User.Status.ACTIVE}，在这里重述一遍，好让这个包不依赖别的包。 */
     public static final int ACTIVE = 1;
 
     public boolean isActive() {

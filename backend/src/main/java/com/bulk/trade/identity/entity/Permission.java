@@ -12,17 +12,15 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * One thing a platform account may do, or one console screen it may see.
+ * 一个平台账号可以做的一件事，或它能看见的一个后台页面。
  *
- * <p>{@code code} is the authority string — {@code admin:enterprise:review} —
- * and it is the only field authorization reads. Everything else is for people:
- * the name to show in a checkbox list, the path to show beside it, the order to
- * list them in.
+ * <p>{@code code} 是权限码——{@code admin:enterprise:review}——**而它是授权逻辑
+ * 唯一读取的字段**。其余字段都是给人看的：勾选列表里显示的名字、旁边显示的路由、
+ * 以及排列它们的顺序。
  *
- * <p>There is no {@code enterprise_id}. The catalogue is platform-global: what
- * exists to be granted is the same list for every tenant, and a per-tenant
- * catalogue would mean two operators could not be described with one
- * vocabulary.
+ * <p>这里没有 {@code enterprise_id}。这份目录是平台全局的：可以被授予的东西，
+ * 对每个租户都是同一份清单；而按租户各存一份目录，就意味着两个运营账号无法用
+ * 同一套词汇来描述。
  */
 @Getter
 @Setter
@@ -32,16 +30,16 @@ public class Permission {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    /** 0 for a top-level entry; used only to nest the console menu. */
+    /** 0 表示顶层条目；只用来把后台菜单嵌套起来。 */
     private Long parentId;
 
     private String code;
     private String name;
 
-    /** 1 = menu, 2 = button, 3 = api. See {@link PermType}. */
+    /** 1 = 菜单，2 = 按钮，3 = 接口。见 {@link PermType}。 */
     private Integer permType;
 
-    /** The console route this guards, for menu entries. Documentation, not a driver. */
+    /** 这一项守护的后台路由，仅菜单条目用。是文档，不是驱动。 */
     private String path;
 
     private Integer sortOrder;
@@ -55,7 +53,7 @@ public class Permission {
     @TableLogic
     private Integer deleted;
 
-    /** What a permission is. The numbers are the database's, stated once. */
+    /** 一条权限是什么。这些数字属于数据库，在这里只陈述一次。 */
     public static final class PermType {
         public static final int MENU = 1;
         public static final int BUTTON = 2;

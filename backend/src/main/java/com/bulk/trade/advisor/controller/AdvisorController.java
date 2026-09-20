@@ -35,7 +35,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AdvisorController {
 
-    /** Placeholder used when no key is configured; see application.yml. */
+    /** 未配置密钥时使用的占位值；见 application.yml。 */
     private static final String UNCONFIGURED_KEY = "not-configured";
 
     private final ConversationService conversationService;
@@ -51,7 +51,7 @@ public class AdvisorController {
     private String model;
 
     // ------------------------------------------------------------------
-    // Conversations
+    // 会话
     // ------------------------------------------------------------------
 
     @Operation(summary = "我的会话列表", description = "按最近消息时间倒序，不含消息内容")
@@ -98,12 +98,12 @@ public class AdvisorController {
     }
 
     // ------------------------------------------------------------------
-    // Status
+    // 状态
     // ------------------------------------------------------------------
 
     /**
-     * Readiness probe. Reports the endpoint and model in use without revealing
-     * the key, so a misconfiguration is visible before a chat request fails.
+     * 就绪探针。报告当前使用的端点与模型，但不泄露密钥，
+     * 这样配置错误在一次对话请求失败之前就能看见。
      */
     @Operation(summary = "查看顾问配置状态")
     @GetMapping("/status")
@@ -121,21 +121,18 @@ public class AdvisorController {
     }
 
     /**
-     * Names the tools the model can currently call.
+     * 列出模型当前可以调用的工具名。
      *
-     * <p>Scanned from the very beans the agent hands to Spring AI, not from a
-     * list kept here. An earlier version of this method named the classes by
-     * hand under a comment claiming it could never drift — and it drifted the
-     * first time a tool class was added, reporting nine tools while thirteen
-     * were live. A report that is trusted instead of checked is the worst place
-     * to have a second source of truth.
+     * <p>从智能体交给 Spring AI 的那些 bean 本身扫描出来，而不是取自这里手写的一份
+     * 清单。这个方法更早的版本靠手写类名，并且注释还声称它永远不会漂移——**而它第一次
+     * 新增工具类时就漂移了，报告九个工具，实际有十三个**。一个被人拿来「代替检查」的
+     * 报告，是最不该存在第二份真相的地方。
      */
     private List<String> registeredToolNames() {
         return advisorAgent.toolBeans().stream()
-                // The beans are CGLIB proxies: @ToolRecordingAspect matches on
-                // the annotation, so Spring wraps them. getClass() would return
-                // the proxy, whose declared methods do not include the
-                // inherited ones — and the list would come back empty.
+                // 这些 bean 是 CGLIB 代理：@ToolRecordingAspect 是按注解匹配的，
+                // 所以 Spring 把它们包了一层。getClass() 拿到的是代理类，而代理类的
+                // 已声明方法不包含继承来的那些——列表会变成空的。
                 .map(AopUtils::getTargetClass)
                 .flatMap(type -> Arrays.stream(type.getDeclaredMethods()))
                 .filter(method -> method.isAnnotationPresent(Tool.class))

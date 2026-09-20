@@ -12,11 +12,10 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * One chat session, owned by a single user.
+ * 一个聊天会话，归单个用户所有。
  *
- * <p>Ownership is per user rather than per enterprise: a transcript is personal
- * working context, and a colleague in the same company has no business reading
- * which questions another account asked.
+ * <p>归属按用户而不是按企业：对话记录是个人的工作上下文，同一家公司的同事没有理由
+ * 读到另一个账号问过什么。
  */
 @Getter
 @Setter

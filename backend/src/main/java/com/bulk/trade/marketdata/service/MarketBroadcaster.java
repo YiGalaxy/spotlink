@@ -11,19 +11,16 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Pushes market updates to connected browsers over SSE.
+ * 通过 SSE 把行情更新推送给已连接的浏览器。
  *
- * <p><b>Why SSE and not WebSocket.</b> Market data is one-directional: the
- * server has news, the client listens. SSE is plain HTTP, reconnects by itself,
- * needs no protocol upgrade and no special proxy configuration, and is readable
- * in the browser's network panel. A WebSocket would add a handshake, a
- * heartbeat, a reconnect policy and gateway configuration to buy a
- * client-to-server channel that this feature has no use for.
+ * <p><b>为什么用 SSE 而不是 WebSocket。</b>行情是单向的：服务端有消息，客户端听。SSE 就是
+ * 普通 HTTP，自己会重连，不需要协议升级，不需要特殊的代理配置，而且在浏览器的网络面板里
+ * 直接可读。要用 WebSocket，就得额外付出握手、心跳、重连策略和网关配置，换来的却是一条
+ * 本功能根本用不上的客户端到服务端通道。
  *
- * <p>Connections are held in a {@link CopyOnWriteArrayList} because the write
- * pattern is many reads and rare adds. Sends that fail mean the client is gone,
- * so the emitter is dropped rather than retried — a dead browser will not come
- * back on this connection, it will open a new one.
+ * <p>连接放在 {@link CopyOnWriteArrayList} 里，因为写入模式是大量读取、极少新增。发送失败
+ * 说明客户端已经没了，所以直接丢弃这个 emitter 而不是重试——**一个死掉的浏览器不会在这条
+ * 连接上回来，它会另开一条。**
  */
 @Slf4j
 @Component
@@ -33,8 +30,7 @@ public class MarketBroadcaster {
     private final AtomicLong connectionCounter = new AtomicLong();
 
     public SseEmitter register() {
-        // No timeout: a market feed is meant to stay open. Browsers reconnect on
-        // their own if the connection drops.
+        // 不设超时：行情推送本就该一直开着。连接断了浏览器会自己重连。
         SseEmitter emitter = new SseEmitter(0L);
 
         emitter.onCompletion(() -> {
@@ -52,8 +48,8 @@ public class MarketBroadcaster {
         log.debug("SSE connection opened (#{}); {} active", id, emitters.size());
 
         try {
-            // An immediate event tells the client the stream is live rather than
-            // leaving it guessing until the first trade happens.
+            // 立刻发一个事件，是告诉客户端这条流已经通了，而不是让它一直猜到
+            // 第一笔成交发生为止。
             emitter.send(SseEmitter.event()
                     .name("connected")
                     .data(Map.of("message", "行情推送已连接")));
@@ -64,11 +60,10 @@ public class MarketBroadcaster {
     }
 
     /**
-     * Sends an event to every listener.
+     * 向所有监听者发送一个事件。
      *
-     * <p>A failing send is a disconnected client, not an error worth surfacing:
-     * it is removed and the loop continues, so one dead browser cannot stop
-     * updates reaching the others.
+     * <p>发送失败意味着客户端已断开，而不是一个值得上报的错误：把它移除，循环继续，
+     * **于是一个死掉的浏览器无法阻止更新送达其他浏览器。**
      */
     public void broadcast(String eventName, Object payload) {
         if (emitters.isEmpty()) {

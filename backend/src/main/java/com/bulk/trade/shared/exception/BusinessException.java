@@ -4,12 +4,11 @@ import com.bulk.trade.shared.web.ResultCode;
 import lombok.Getter;
 
 /**
- * Thrown when a business rule is violated.
+ * 当某条业务规则被违反时抛出。
  *
- * <p>Business failures are expected outcomes, not bugs: they are caught by
- * {@code GlobalExceptionHandler}, translated into a {@code ResultCode}, and
- * returned with HTTP 200 so the frontend can show the message. Stack traces
- * are therefore suppressed on purpose.
+ * <p>业务失败是预期之内的结果，不是 bug：它们由 {@code GlobalExceptionHandler} 接住，
+ * 翻译成一个 {@code ResultCode}，再以 HTTP 200 返回，好让前端把消息展示出来。
+ * 也正因如此，堆栈跟踪是被刻意压掉的。
  */
 @Getter
 public class BusinessException extends RuntimeException {
@@ -34,7 +33,7 @@ public class BusinessException extends RuntimeException {
         return new BusinessException(resultCode, message);
     }
 
-    /** Throws when {@code condition} is true. Keeps guard clauses to one line. */
+    /** 当 {@code condition} 为真时抛出。让守卫子句保持一行。 */
     public static void throwIf(boolean condition, ResultCode resultCode) {
         if (condition) {
             throw new BusinessException(resultCode);

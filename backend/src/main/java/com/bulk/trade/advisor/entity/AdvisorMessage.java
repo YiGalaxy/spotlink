@@ -11,8 +11,7 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * One turn of a conversation. Append-only: rows are written once and read back
- * in order, never edited.
+ * 会话中的一个回合。只追加：行写一次，按顺序读回，永不修改。
  */
 @Getter
 @Setter
@@ -26,12 +25,12 @@ public class AdvisorMessage {
     private Long enterpriseId;
     private Long userId;
 
-    /** {@link Role#USER} or {@link Role#ASSISTANT}. */
+    /** {@link Role#USER} 或 {@link Role#ASSISTANT}。 */
     private String role;
 
     private String content;
 
-    /** JSON array of tool invocations, serialised as text and stored as jsonb. */
+    /** 工具调用的 JSON 数组，序列化为文本，以 jsonb 存储。 */
     private String toolCalls;
 
     private Integer iterations;

@@ -12,17 +12,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Turns domain events into market feed updates.
+ * 把领域事件变成行情推送。
  *
- * <p>Listening rather than being called: the trading code raises an event and
- * never learns who consumes it, so the market feed can be removed or replaced
- * without touching the order service.
+ * <p>用监听而不是被直接调用：交易代码发出一个事件，并且从不知道谁在消费它，
+ * 于是行情推送可以被移除或替换，而订单服务一行都不用改。
  *
- * <p>Handled synchronously on the publishing thread. That is acceptable here
- * because a broadcast is a handful of non-blocking socket writes, and doing it
- * inline keeps the update in the same transaction's success path — an event
- * fired for a trade that then rolled back would be worse than a slightly slower
- * commit.
+ * <p>在发布线程上同步处理。这里可以接受，因为一次广播不过是几次非阻塞的 socket
+ * 写入，而且就地处理能让这次更新留在同一个事务的成功路径里——**为一笔随后被回滚的
+ * 成交发出推送，比提交稍微慢一点更糟。**
  */
 @Slf4j
 @Component

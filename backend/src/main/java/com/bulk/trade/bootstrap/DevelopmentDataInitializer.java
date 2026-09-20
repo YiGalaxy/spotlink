@@ -25,19 +25,9 @@ import org.springframework.stereotype.Component;
 import java.time.OffsetDateTime;
 
 /**
- * Seeds development accounts on startup.
+ * 在启动时种下开发账号。
  *
- * <p>Passwords are hashed here by the real {@link PasswordEncoder} rather than
- * pasted into a migration as a pre-computed BCrypt string. A copied hash cannot
- * be verified by reading it, and a wrong one only fails later, at login.
- *
- * <p>Every insert is idempotent on its own natural key, so a partially
- * completed run (for example one that failed halfway) is repaired simply by
- * starting the application again — there is no global "already seeded" flag to
- * get stuck on.
- *
- * <p>Disabled by default; enabled through {@code bulk.init.enabled}. It must
- * stay off in any environment real users can reach.
+ * <p>口令由真正的 {@link PasswordEncoder} 在这里现算，
  */
 @Slf4j
 @Component
@@ -59,12 +49,10 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         OffsetDateTime now = OffsetDateTime.now();
 
-        // ---- platform operator: no tenant scope ----
+        // ---- 平台运营：不隶属任何租户 ----
         //
-        // Two of them, holding different roles. A single all-powerful operator
-        // account would demonstrate that permissions exist without ever showing
-        // them doing anything — and the difference is the whole point, so it
-        // should be visible from the login screen.
+        // 给两个，各自持有不同角色。只给一个全能的运营账号，能证明「权限」这套东西存在，
+        // 却永远展示不出它做了什么——而两者的差别正是重点，所以它应该从登录页就能看见。
         User admin = createUserIfAbsent(null, "admin", "平台管理员",
                 User.Type.PLATFORM_OPERATOR, now);
         grantRole(admin, "PLATFORM_ADMIN");
@@ -73,7 +61,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
                 User.Type.PLATFORM_OPERATOR, now);
         grantRole(auditor, "PLATFORM_AUDITOR");
 
-        // ---- approved seller ----
+        // ---- 已通过审核的卖方 ----
         Enterprise seller = createEnterpriseIfAbsent(
                 "ENT20260920001", "华东金属材料有限公司", "华东金属",
                 "91330100MA2XXXXX01", "T0001", "王经理", "13800000001",
@@ -81,7 +69,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         createUserIfAbsent(seller.getId(), "seller01", "王经理",
                 User.Type.ENTERPRISE, now);
 
-        // ---- approved buyer ----
+        // ---- 已通过审核的买方 ----
         Enterprise buyer = createEnterpriseIfAbsent(
                 "ENT20260920002", "浙江建工物资有限公司", "浙江建工",
                 "91330100MA2XXXXX02", "T0002", "李采购", "13800000002",
@@ -89,7 +77,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         createUserIfAbsent(buyer.getId(), "buyer01", "李采购",
                 User.Type.ENTERPRISE, now);
 
-        // ---- enterprise still waiting for review ----
+        // ---- 还在等待审核的企业 ----
         Enterprise pending = createEnterpriseIfAbsent(
                 "ENT20260920003", "安徽有色金属贸易有限公司", "安徽有色",
                 "91330100MA2XXXXX03", null, "赵主管", "13800000003",
@@ -99,16 +87,13 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
     }
 
     /**
-     * Gives an account a platform role, if it does not already hold it.
+     * 给一个账号授予平台角色，如果它还没有这个角色。
      *
-     * <p>Idempotent on the natural key of the grant rather than on the account,
-     * so adding a role here takes effect on the next boot of an existing
-     * database — which is how a development machine picks up a role added after
-     * it was first seeded.
+     * <p>幂等判据是这条授权的自然键，而不是账号本身，所以在这里新增一个角色，会在已有
+     * 数据库的下一次启动时生效——一台开发机就是这样捡到「首次种下之后才加进来」的角色的。
      *
-     * <p>Also tops the system roles back up to the full set of `admin:*` codes.
-     * Without that, a later migration adding a permission would lock every
-     * existing operator out of the new screen until someone wrote SQL by hand.
+     * <p>同时把系统角色的权限码补全到 {@code admin:*} 的全集。没有这一步，后来某个
+     * 新增权限的迁移，会把所有现存运营账号锁在新页面之外，直到有人手写 SQL 去补。
      */
     private void grantRole(User user, String roleCode) {
         if (user == null) {
@@ -136,7 +121,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         if (!"PLATFORM_ADMIN".equals(roleCode)) {
             return;
         }
-        // Every admin:* code, including ones added by later migrations.
+        // 全部 admin:* 权限码，包括后来的迁移新增的那些。
         List<Permission> all = permissionMapper.selectList(Wrappers.<Permission>lambdaQuery()
                 .likeRight(Permission::getCode, "admin:"));
         for (Permission permission : all) {
@@ -186,11 +171,10 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
     }
 
     /**
-     * Creates the account if it is missing, and returns it either way.
+     * 账号不存在就创建，两种情况都把它返回。
      *
-     * <p>Returning the existing row matters here: roles are granted by the
-     * caller, and a grant that only happened on the run that created the
-     * account would never reach a database seeded before the roles existed.
+     * <p>这里返回已存在的行很要紧：角色由调用方授予，而一次只发生在「创建账号那一跑」
+     * 里的授权，永远到不了一个在角色出现之前就已经种好的数据库。
      */
     private User createUserIfAbsent(Long enterpriseId, String username, String realName,
                                     int userType, OffsetDateTime now) {

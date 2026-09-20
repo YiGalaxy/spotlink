@@ -31,16 +31,14 @@ public class MarketAdvisorTools {
 
     @Tool(name = "query_market_price",
             description = """
-                    Returns traded prices from the platform: latest price, change against the
-                    previous trade, number of trades and total volume, per commodity grade.
-                    Use it for questions like "电解铜什么价", "最近行情怎么样", "哪些品种在涨".
-                    Prices are public platform data, not company data — anyone can see them.
+                    返回平台上的成交价格：按商品品级给出最新价、相对上一笔成交的涨跌、
+                    成交笔数和总成交量。用于「电解铜什么价」「最近行情怎么样」「哪些品种在涨」
+                    这类问题。价格是平台公开数据，不是企业数据——任何人都能看到。
 
-                    Note the trade count. This is a spot market where a grade may trade once
-                    or twice a day, so an average from one trade is a data point and not a
-                    trend. Say so when the count is low.""")
+                    注意成交笔数。这是现货市场，一个品级一天可能只成交一两笔，所以一笔
+                    成交算出的均值是一个数据点，不是趋势。笔数低的时候要说明这一点。""")
     public String queryMarketPrice(
-            @ToolParam(description = "Grade name to filter on, e.g. 电解铜. Leave empty for all grades.")
+            @ToolParam(description = "要筛选的品级名称，例如 电解铜。留空表示所有品级。")
             String categoryName) {
 
         List<QuoteRow> quotes = marketService.quotes(180);
@@ -88,16 +86,15 @@ public class MarketAdvisorTools {
 
     @Tool(name = "query_price_trend",
             description = """
-                    Returns the daily average traded price for one grade over a period, with
-                    the number of trades behind each day. Use it when asked about a trend,
-                    "最近涨了吗", or when a single latest price is not enough to answer.
+                    返回某个品级在一段时间内的每日成交均价，以及每一天背后的成交笔数。
+                    被问及趋势、「最近涨了吗」，或仅凭一个最新价不足以回答时用它。
 
-                    Days with no trading are reported as such. This market is thin: gaps are
-                    normal and must not be described as stability.""")
+                    没有成交的日子会照实说明。这个市场很薄：有空档是正常的，
+                    不能把它描述成稳定。""")
     public String queryPriceTrend(
-            @ToolParam(description = "Grade name, e.g. 电解铜")
+            @ToolParam(description = "品级名称，例如 电解铜")
             String categoryName,
-            @ToolParam(description = "Look-back window in days, between 7 and 90. Defaults to 30.")
+            @ToolParam(description = "回溯天数，7 到 90 之间。默认 30。")
             Integer days) {
 
         if (categoryName == null || categoryName.isBlank()) {
@@ -105,8 +102,8 @@ public class MarketAdvisorTools {
         }
         int window = days == null ? 30 : Math.min(Math.max(days, 7), 90);
 
-        // Resolve the name to an id via the quote list, so the caller can pass a
-        // name rather than an internal identifier.
+        // 借报价列表把名称解析成 id，这样调用方可以传名称，
+        // 而不必传一个内部标识符。
         Long categoryId = marketService.quotes(180).stream()
                 .filter(q -> q.categoryName().contains(categoryName.trim())
                         || categoryName.trim().contains(q.categoryName()))

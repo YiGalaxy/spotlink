@@ -41,14 +41,13 @@ public class InventoryAdvisorTools {
 
     @Tool(name = "query_my_inventory",
             description = """
-                    Lists the caller's OWN electronic inventory notes (电子库存单): note number,
-                    commodity, category, warehouse, total/available/frozen quantity and status.
-                    Use it for questions like "我有哪些库存", "某个库存单还剩多少", or "有多少被冻结了".
-                    It cannot return another company's inventory.""")
+                    列出调用方**自己**的电子库存单：库存单号、商品、品类、仓库、总量/可用量/
+                    冻结量以及状态。用于「我有哪些库存」「某个库存单还剩多少」「有多少被冻结了」
+                    这类问题。它无法返回别的企业的库存。""")
     public String queryMyInventory(
-            @ToolParam(description = "Only return notes whose commodity name contains this text. Optional.")
+            @ToolParam(description = "只返回商品名称包含这段文字的库存单。可选。")
             String commodityKeyword,
-            @ToolParam(description = "Only return notes with a non-zero frozen quantity. Defaults to false.")
+            @ToolParam(description = "只返回冻结量不为零的库存单。默认 false。")
             Boolean onlyFrozen) {
 
         Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();
@@ -92,9 +91,9 @@ public class InventoryAdvisorTools {
 
     @Tool(name = "summarise_my_inventory",
             description = """
-                    Summarises the caller's OWN inventory grouped by commodity category: how many
-                    notes and the total, available and frozen quantity per category. Use it for
-                    "我一共多少库存" or "按品类统计一下". It cannot return another company's inventory.""")
+                    按商品品类汇总调用方**自己**的库存：每个品类下有多少张库存单，以及总量、
+                    可用量和冻结量。用于「我一共多少库存」或「按品类统计一下」。
+                    它无法返回别的企业的库存。""")
     public String summariseMyInventory() {
 
         Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();

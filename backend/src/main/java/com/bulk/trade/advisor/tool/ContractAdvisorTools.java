@@ -13,17 +13,14 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * Tools that expose contracts for review.
+ * 把合同交出来供审阅的工具。
  *
- * <p><b>The tool fetches; the model reviews.</b> It would be easy to put the
- * rule-checking in Java — "tolerance above 5% is a warning" is an if-statement.
- * That would also make the review a fixed checklist that cannot notice anything
- * outside it, which is the opposite of what a review is for. The tool's job is
- * to hand over the document and the context; judgement is what the model is
- * there for.
+ * <p><b>工具负责取，模型负责审。</b>把规则检查直接写进 Java 很容易——「容差超过 5% 就是
+ * 警告」不过是一个 if 语句。但那也会让审阅变成一份固定的清单，清单之外的东西一概注意
+ * 不到，而这与审阅的目的正好相反。工具的职责是把文件与上下文交出去；判断，才是模型在
+ * 这里的意义。
  *
- * <p>Reading is scoped the same way everything else is: only contracts the
- * caller is a party to, selected by the caller's own enterprise.
+ * <p>读取范围和系统里其他一切一样：只有调用方身为当事人的合同，按调用方自己的企业筛选。
  */
 @Component
 @RequiredArgsConstructor
@@ -34,9 +31,8 @@ public class ContractAdvisorTools {
 
     @Tool(name = "list_my_contracts",
             description = """
-                    Lists contracts the caller is a party to: contract number, counterparty,
-                    commodity, amount and signing status. Use it to find the contract a user
-                    wants reviewed, or to answer "我有哪些合同".""")
+                    列出调用方作为当事人的合同：合同编号、对方、商品、金额和签署状态。
+                    用来找用户想审的那份合同，或回答「我有哪些合同」。""")
     public String listMyContracts() {
         Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();
         if (enterpriseId == null) {

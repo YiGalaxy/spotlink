@@ -38,13 +38,11 @@ public class AuthController {
     }
 
     /**
-     * Resolves the caller's address, honouring a proxy header when present.
+     * 解析调用方的地址，有代理头时以代理头为准。
      *
-     * <p>Only the first entry of {@code X-Forwarded-For} is trusted here because
-     * the deployment sits behind a single reverse proxy. With an untrusted
-     * client able to reach the app directly, this header is spoofable and must
-     * not be used for anything security-relevant — it is recorded for audit
-     * only.
+     * <p>这里只信任 {@code X-Forwarded-For} 的第一项，因为部署位于单个反向代理之后。
+     * 如果能被不受信任的客户端直连到应用，这个头就是可伪造的，不能用于任何与安全相关
+     * 的判断——它只用于留痕。
      */
     private String resolveClientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");

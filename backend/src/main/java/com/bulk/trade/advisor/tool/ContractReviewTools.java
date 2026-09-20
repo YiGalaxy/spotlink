@@ -15,31 +15,22 @@ import java.math.BigDecimal;
 import java.util.stream.Collectors;
 
 /**
- * Reads the full text of a contract — and is only handed to the model when the
- * caller has asked for a review.
+ * 读取一份合同的正文——而且只在调用方要求审查时，才交给模型。
  *
- * <p><b>Why this is a separate bean rather than a method on the list tools.</b>
- * Every tool result goes into the prompt and the prompt goes to an external
- * model provider. That makes the <em>tool list itself</em> the thing that
- * decides what leaves the platform, and Spring AI enables tools per bean — so
- * the capability that must be optional has to be its own bean. The split is
- * mechanical, but the reason for it is not: it is the only place in this
- * codebase where what the model may read is narrowed per request.
+ * <p><b>为什么这是一个独立的 bean，而不是列表工具上的一个方法。</b>每一个工具结果都会
+ * 进到提示词里，而提示词会发往一个外部模型服务商。这就使得<em>工具清单本身</em>成了决定
+ * 「什么离开平台」的东西，而 Spring AI 是按 bean 来启用工具的——所以这项必须可选的
+ * 能力，就只能是它自己的一个 bean。这个拆分是机械的，但拆分的理由不是：这里是整个代码
+ * 库里唯一一处、按请求收窄「模型能读到什么」的地方。
  *
- * <p><b>What is being protected, and what is not.</b> Listing contracts —
- * number, title, amount, status — stays available always, because answering
- * "我有哪些合同" is ordinary and the index carries no clauses. What waits for an
- * explicit request is the text of a legal document: parties, price, tolerance,
- * settlement basis, dispute terms. Sending a contract's terms to a third party
- * is a different act from sending "you have one contract worth 2,040,000", and
- * the two should not share a switch.
+ * <p><b>被保护的是什么，不被保护的又是什么。</b>合同列表——编号、标题、金额、状态——始终
+ * 可用，因为回答「我有哪些合同」是件寻常事，而这份索引里不含任何条款。等一个明确请求的，
+ * 是一份法律文件的正文：当事人、价格、公差、结算依据、争议条款。**把一份合同的条款发给
+ * 第三方，和发出「你有一份价值 204 万的合同」，是两个不同的动作**，它们不该共用一个开关。
  *
- * <p><b>This is minimisation, not access control.</b> The contract belongs to
- * the caller; a wrong guess here costs nothing in security and simply means the
- * text was sent when it need not have been. So the trigger is deliberately
- * simple and the failure mode is safe in both directions: a missed trigger
- * prompts the user to ask for a review, and a spurious one sends a document
- * they already own.
+ * <p><b>这是最小化，不是访问控制。</b>合同属于调用者自己；这里判断错了在安全上一无所失，
+ * 只意味着那份正文在本不需要的时候被发了出去。所以触发规则刻意做得简单，而它的失败方向
+ * 两头都是安全的：漏触发会让助手请用户明说要审查，误触发则发出一份本就属于他的文档。
  */
 @Component
 @RequiredArgsConstructor
@@ -50,17 +41,15 @@ public class ContractReviewTools {
 
     @Tool(name = "get_contract_detail",
             description = """
-                    Returns the full text of one contract the caller is a party to: all terms
-                    and both parties' signing status. Use it to review a contract or to answer
-                    questions about its specific clauses. Requires the contract number, which
-                    list_my_contracts provides.
+                    返回调用方作为当事人的某份合同的全文：所有条款和双方的签署状态。
+                    用来审阅一份合同，或回答关于它具体条款的问题。需要合同编号，
+                    合同编号由 list_my_contracts 提供。
 
-                    This tool is only available when the user has asked for a contract to be
-                    reviewed or explained. If it is not in your toolset and the question needs
-                    the clause text, ask the user to say they want the contract reviewed —
-                    do not guess at what the terms say.""")
+                    只有当用户要求审阅或解释某份合同时，这个工具才可用。如果它不在你的
+                    工具集里而问题又需要条款原文，请让用户说明他想审阅这份合同——
+                    不要猜测条款写了什么。""")
     public String getContractDetail(
-            @ToolParam(description = "Contract number, e.g. CT202609202025074559")
+            @ToolParam(description = "合同编号，例如 CT202609202025074559")
             String contractNo) {
 
         Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();
@@ -74,8 +63,8 @@ public class ContractReviewTools {
         Contract contract = contractMapper.selectOne(Wrappers.<Contract>lambdaQuery()
                 .eq(Contract::getContractNo, contractNo.trim()));
         if (contract == null || !contract.involves(enterpriseId)) {
-            // Same answer for "does not exist" and "not yours": a distinct
-            // message would confirm another company's contract number.
+            // 「不存在」和「不是你的」给同一个回答：只要措辞有一点差别，
+            // 这个差别本身就确认了另一家公司的合同编号存在。
             return "没有找到该编号的合同，或你不是该合同的当事人。";
         }
 
@@ -112,7 +101,7 @@ public class ContractReviewTools {
         return enterprise == null ? "—" : enterprise.getName();
     }
 
-    /** Stored JSON is one line; a model reads a line-per-term form more reliably. */
+    /** 存下来的 JSON 是一整行；模型读「一项一行」的形式更可靠。 */
     private String prettyTerms(String termsJson) {
         if (termsJson == null || termsJson.isBlank()) {
             return "（无条款正文）";

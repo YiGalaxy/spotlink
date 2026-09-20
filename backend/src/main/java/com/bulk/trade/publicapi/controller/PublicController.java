@@ -13,11 +13,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.math.BigDecimal;
 
 /**
- * The public face of the platform.
+ * 平台的公开门面。
  *
- * <p>Read-only, unauthenticated, and deliberately tiny. Everything here is a
- * statement about the venue as a whole; the moment a figure would describe one
- * member, it belongs behind the token.
+ * <p>只读、免鉴权，并且刻意很小。这里的一切都是关于整个市场的陈述；一旦某个数字会描述
+ * 到某一家的具体情况，它就属于令牌之后。
  */
 @Tag(name = "公开信息", description = "无需登录即可访问的平台数据")
 @RestController

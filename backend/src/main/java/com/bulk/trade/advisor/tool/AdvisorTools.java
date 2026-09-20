@@ -39,10 +39,9 @@ public class AdvisorTools {
 
     @Tool(name = "query_my_enterprise",
             description = """
-                    Returns the profile of the caller's OWN enterprise: company name, trading
-                    seat code, review status and contact details. Takes no arguments and always
-                    refers to the caller's own company. Use it for questions about the user's
-                    own account, company information, or registration/review status.""")
+                    返回调用方**自己企业**的资料：公司名称、交易席位编码、审核状态和联系方式。
+                    不接受参数，永远指调用方自己的公司。用于用户问自己的账号、公司信息，
+                    或注册与审核状态。""")
     public String queryMyEnterprise() {
         Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();
         if (enterpriseId == null) {
@@ -78,12 +77,10 @@ public class AdvisorTools {
 
     @Tool(name = "query_team_members",
             description = """
-                    Lists the accounts under the caller's OWN enterprise: username, real name,
-                    account type and enabled/disabled status. Use it for questions about company
-                    members, sub-accounts, or who has access. It cannot return another company's
-                    members.""")
+                    列出调用方**自己企业**下的账号：用户名、姓名、账号类型和启用/停用状态。
+                    用于公司成员、子账号、谁有权限这类问题。它无法返回别的企业的成员。""")
     public String queryTeamMembers(
-            @ToolParam(description = "Include disabled accounts. Defaults to false.")
+            @ToolParam(description = "包含已停用的账号。默认 false。")
             Boolean includeDisabled) {
 
         Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();

@@ -48,15 +48,14 @@ public class ListingAdvisorTools {
 
     @Tool(name = "list_my_listings",
             description = """
-                    Lists the listings this enterprise has published: direction, commodity,
-                    quantity and what remains, price, how the deal closes, status, and the
-                    validity deadline. Use it for "我挂牌了什么", "我的挂牌", "还有多少没卖掉",
-                    "挂牌价是多少". Covers the caller's own listings only — for what the whole
-                    market has on offer use query_market_listings.""")
+                    列出本企业已发布的挂牌：方向、商品、数量与剩余量、价格、成交方式、状态
+                    和有效期截止时间。用于「我挂牌了什么」「我的挂牌」「还有多少没卖掉」
+                    「挂牌价是多少」。只覆盖调用方自己的挂牌——想看整个市场有什么，
+                    用 query_market_listings。""")
     public String listMyListings(
             @ToolParam(description = """
-                    Optional filter: OPEN (anything still on offer), FILLED, CLOSED
-                    (withdrawn), EXPIRED, or ALL. Defaults to ALL.""")
+                    可选筛选：OPEN（仍在挂牌中）、FILLED、CLOSED（已撤销）、EXPIRED，
+                    或 ALL。默认 ALL。""")
             String status) {
 
         Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();
@@ -104,15 +103,14 @@ public class ListingAdvisorTools {
 
     @Tool(name = "query_market_listings",
             description = """
-                    What the whole platform currently has on offer — every enterprise's open
-                    listings, not just the caller's. Use it for "现在最便宜的货是什么", "市场上
-                    有没有人卖电解铜", "挂牌价大概多少", or to compare an offer against the
-                    market. Filterable by commodity name and by side. Each row names its
-                    seller, so the caller can see whose offer it is and whether it is theirs.""")
+                    整个平台当前在挂的货——所有企业的在挂挂牌，不只是调用方的。用于
+                    「现在最便宜的货是什么」「市场上有没有人卖电解铜」「挂牌价大概多少」，
+                    或把某个报价和市场比一比。可按商品名称和买卖方向筛选。每行都标出挂牌方，
+                    所以调用方看得出这是谁的报价、是不是自己的。""")
     public String queryMarketListings(
-            @ToolParam(description = "Only listings whose commodity name contains this text. Optional.")
+            @ToolParam(description = "只返回商品名称包含这段文字的挂牌。可选。")
             String keyword,
-            @ToolParam(description = "SELL for offers to sell, BUY for requests to buy. Leave empty for both.")
+            @ToolParam(description = "SELL 表示卖出的要约，BUY 表示买入的请求。留空表示两者都要。")
             String side) {
 
         Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();

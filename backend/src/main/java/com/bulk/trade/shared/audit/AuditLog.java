@@ -9,14 +9,12 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * One recorded action, written once and never touched again.
+ * 一条被记录下来的操作，写一次，之后永不被碰。
  *
- * <p><b>No {@code deleted} and no {@code updated_at}, deliberately.</b> Every
- * other entity in this schema is soft-deleted and has a trigger maintaining its
- * modification time. Neither belongs on a log: a row that can be updated is a
- * row whose testimony can be edited, and a row that can be deleted is one an
- * accused party would most like to remove. The soft-delete conventions used
- * elsewhere are exactly the wrong shape here.
+ * <p><b>刻意没有 {@code deleted}，也没有 {@code updated_at}。</b>这份 schema 里
+ * 其他每一个实体都是软删除的，都有触发器维护它的修改时间。**这两样都不属于一份日志**：
+ * 一行能被更新的日志，是证词能被编辑的日志；一行能被删除的日志，是被告最想删掉的那种。
+ * 别处那套软删除约定，在这里恰好是错的形状。
  */
 @Getter
 @Setter
@@ -26,22 +24,22 @@ public class AuditLog {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    /** The tenant the row is about; null for platform-level actions. */
+    /** 这一行说的是哪个租户；平台级动作为 null。 */
     private Long enterpriseId;
 
     private Long userId;
     private String username;
 
-    /** Which part of the platform, e.g. {@code enterprise}. */
+    /** 属于平台的哪一部分，例如 {@code enterprise}。 */
     private String module;
 
-    /** What was done, e.g. {@code approve}. */
+    /** 做了什么，例如 {@code approve}。 */
     private String action;
 
     private String targetType;
     private Long targetId;
 
-    /** Serialised before and after, when the caller knew them. */
+    /** 变更前后的序列化内容，调用方知道时才写。 */
     private String beforeData;
     private String afterData;
 

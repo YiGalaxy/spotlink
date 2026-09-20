@@ -12,10 +12,10 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * A platform account.
+ * 一个平台账号。
  *
- * <p>{@code enterpriseId} is null for platform operators, which is exactly how
- * the code distinguishes "sees all tenants" from "sees one tenant".
+ * <p>平台运营方的 {@code enterpriseId} 为 null，代码正是靠这一点区分「看得见所有租户」
+ * 和「只看得见一个租户」。
  */
 @Getter
 @Setter
@@ -28,17 +28,17 @@ public class User {
     private Long enterpriseId;
     private String username;
 
-    /** BCrypt hash. Never logged, never returned by an API. */
+    /** BCrypt 哈希。永不记入日志，永不通过接口返回。 */
     private String password;
 
     private String realName;
     private String phone;
     private String email;
 
-    /** 1=enterprise user, 2=platform operator, 3=super admin. */
+    /** 1=企业用户，2=平台运营，3=超级管理员。 */
     private Integer userType;
 
-    /** 0=disabled, 1=active, 2=locked. */
+    /** 0=已停用，1=正常，2=已锁定。 */
     private Integer status;
 
     private OffsetDateTime lastLoginAt;

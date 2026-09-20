@@ -6,12 +6,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
- * Access to the authenticated principal.
+ * 读取已认证主体的入口。
  *
- * <p>Business code must go through {@link #currentEnterpriseId()} rather than
- * accepting a tenant id as a method argument. That keeps the tenant boundary in
- * one place and makes cross-tenant access structurally impossible instead of
- * something every developer has to remember to check.
+ * <p>业务代码必须走 {@link #currentEnterpriseId()}，而不是把租户 id 当作方法参数
+ * 收进来。这让租户边界只存在于一个地方，也让跨租户访问变成**结构上不可能**，
+ * 而不是一件每个开发者都得记得去检查的事。
  */
 public final class SecurityUtils {
 
@@ -46,10 +45,10 @@ public final class SecurityUtils {
     }
 
     /**
-     * The tenant key for every business query.
+     * 每一条业务查询的租户键。
      *
-     * @throws BusinessException when the account is not bound to an enterprise
-     *                           (platform operators have no tenant scope).
+     * @throws BusinessException 当账号没有绑定企业时
+     *                           （平台运营账号没有租户范围）。
      */
     public static Long currentEnterpriseId() {
         Long enterpriseId = currentUser().getEnterpriseId();

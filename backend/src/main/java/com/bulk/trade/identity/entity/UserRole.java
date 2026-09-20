@@ -9,17 +9,14 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * Which roles an account holds.
+ * 一个账号持有哪些角色。
  *
- * <p><b>No soft-delete column, and that is not an oversight.</b> Every other
- * table in this schema carries {@code deleted} so history survives a deletion.
- * Here the deletion <em>is</em> the history: revoking a role is meant to remove
- * the grant, and a soft-deleted row would leave the account still holding it,
- * because every query would have to remember to filter. A grant that outlives
- * its revocation is a security bug, not a record.
+ * <p><b>没有软删除列，这不是疏漏。</b>这份 schema 里其他每一张表都带 {@code deleted}，
+ * 好让历史在一次删除之后活下来。在这里，**删除本身就是历史**：撤销一个角色，目的就是
+ * 拿走这项授权，而一条软删除的行会让账号仍然持有它——因为每一条查询都得记着去过滤，
+ * 忘记一次就等于没撤销。**一项活得比它的撤销更久的授权，是一个安全漏洞，不是一条记录。**
  *
- * <p>Unassigning is therefore a hard delete, and the audit log is where the
- * fact that it happened is kept.
+ * <p>所以解除分配是一次硬删除，而「这件事发生过」这个事实保存在审计日志里。
  */
 @Getter
 @Setter

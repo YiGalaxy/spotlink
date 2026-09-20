@@ -14,13 +14,11 @@ import java.time.Duration;
 import java.util.Date;
 
 /**
- * Issues and verifies JSON Web Tokens.
+ * 签发与校验 JSON Web Token。
  *
- * <p>The token carries identity claims only (who, which tenant, what kind of
- * account). It deliberately does NOT carry the permission list: permissions
- * change far more often than tokens expire, so they are looked up per request
- * from cache instead. Putting them in the token would leave a revoked
- * permission valid until the token expires.
+ * <p>令牌只携带身份声明（谁、哪个租户、什么类型的账号）。它**刻意不携带权限清单**：
+ * 权限变化的频率远高于令牌过期的频率，所以权限改为按请求从缓存里查。把权限放进令牌，
+ * 会让一个**已被收回的权限一直有效到令牌过期为止**。
  */
 @Slf4j
 @Component
@@ -67,10 +65,10 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Parses and verifies a token.
+     * 解析并校验一个令牌。
      *
-     * @return the claims, or {@code null} when the token is expired, tampered
-     *         with, or otherwise invalid — callers treat null as "not logged in".
+     * @return 声明；当令牌已过期、被篡改或其他原因无效时为 null——
+     *         调用方把 null 当作「未登录」处理。
      */
     public Claims parse(String token) {
         try {
@@ -98,11 +96,9 @@ public class JwtTokenProvider {
                 .username(claims.get(CLAIM_USERNAME, String.class))
                 .enterpriseId(enterpriseId)
                 .userType(userType)
-                // Placeholder, replaced by the filter with the account's real
-                // status. It used to be a hard-coded 1 and never replaced,
-                // which meant isEnabled() was always true: an account disabled
-                // after signing in kept working until its token expired, which
-                // is the opposite of what disabling it was for.
+                // 占位值，由过滤器替换成账号的真实状态。它过去被硬编码为 1 且从未
+                // 被替换，于是 isEnabled() 永远是 true：一个在登录之后被禁用的账号，
+                // 会一直工作到令牌过期——而这恰好与「禁用」这件事的目的相反。
                 .status(1)
                 .build();
     }

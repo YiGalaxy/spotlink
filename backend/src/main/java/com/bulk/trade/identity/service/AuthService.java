@@ -6,13 +6,12 @@ import com.bulk.trade.identity.dto.LoginResponse;
 public interface AuthService {
 
     /**
-     * Verifies credentials and issues a token pair.
+     * 校验凭据并签发一对令牌。
      *
-     * @param clientIp recorded on the account for audit purposes; taken from the
-     *                 request, not from the payload
+     * @param clientIp 记在账号上用于留痕；取自请求，而不是取自请求体
      */
     LoginResponse login(LoginRequest request, String clientIp);
 
-    /** Profile of the caller behind the current token. */
+    /** 当前令牌背后的调用方资料。 */
     LoginResponse.UserProfile currentUserProfile();
 }

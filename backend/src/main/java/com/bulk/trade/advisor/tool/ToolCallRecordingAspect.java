@@ -12,14 +12,12 @@ import org.springframework.stereotype.Component;
 import java.util.Arrays;
 
 /**
- * Records every {@code @Tool} invocation into {@link ToolCallRecorder}.
+ * 把每一次 {@code @Tool} 调用记录进 {@link ToolCallRecorder}。
  *
- * <p>An aspect rather than a call inside each tool: the recording is a property
- * of "being a tool", so it belongs with the annotation, not repeated in every
- * method body where one omission silently loses part of the trail.
+ * <p>做成切面，而不是在每个工具里调一次：记录是「身为一个工具」的属性，所以它该跟注解
+ * 待在一起，而不是在每个方法体里重复一遍——漏掉一处，轨迹就会悄无声息地缺一段。
  *
- * <p>Runs on the calling thread, so the recorder's thread-local slot is the same
- * one the turn opened.
+ * <p>在调用线程上运行，所以记录器的线程局部槽位，就是本次回合打开的那一个。
  */
 @Slf4j
 @Aspect
@@ -41,8 +39,8 @@ public class ToolCallRecordingAspect {
             ToolCallRecorder.record(name, input, String.valueOf(result));
             return result;
         } catch (Throwable failure) {
-            // Recorded before rethrowing so a failing tool is visible in the
-            // trail rather than appearing never to have run.
+            // 在重新抛出之前先记录，这样一个失败的工具在轨迹里是看得见的，
+            // 而不是显得从未运行过。
             ToolCallRecorder.record(name, input, "失败：" + failure.getMessage());
             throw failure;
         }

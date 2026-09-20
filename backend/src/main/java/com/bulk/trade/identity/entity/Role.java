@@ -12,10 +12,10 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * A role.
+ * 一个角色。
  *
- * <p>A null {@code enterpriseId} marks a platform-wide role shared by all
- * tenants; a non-null value scopes the role to one company.
+ * <p>{@code enterpriseId} 为 null 表示这是一个所有租户共用的平台级角色；有值则把这个
+ * 角色限定在一家企业内。
  */
 @Getter
 @Setter
@@ -30,7 +30,7 @@ public class Role {
     private String name;
     private String description;
 
-    /** System roles cannot be renamed or deleted by tenants. */
+    /** 系统角色不能被租户改名或删除。 */
     private Boolean isSystem;
 
     @TableField(fill = FieldFill.INSERT)

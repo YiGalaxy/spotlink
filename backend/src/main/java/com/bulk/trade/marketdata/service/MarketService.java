@@ -29,26 +29,22 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Aggregates trades, listings and inventory into series.
+ * 把成交、挂牌与库存聚合成曲线。
  *
- * <p><b>No time-series database.</b> A dedicated store earns its keep when the
- * data is tick-level — thousands of rows a second where an index scan per query
- * stops being viable. A spot platform with a handful of trades a day is not
- * that workload, and adding a second database to solve a problem the data does
- * not have would be its own kind of mistake. The queries below run against the
- * tables that already hold the facts, which also means the market board can
- * never disagree with the order book.
+ * <p><b>没有用时序数据库。</b>专用存储的价值出现在数据是 tick 级的时候——每秒几千行，
+ * 每个查询都做一次索引扫描已经撑不住。一个每天几笔成交的现货平台不是那种负载，为了解决
+ * 一个数据本身并不存在的问题而引入第二个数据库，会是另一种错误。下面的查询直接跑在本来
+ * 就存着事实的那几张表上，这也意味着行情看板永远不会和订单簿对不上。
  *
- * <p>Aggregation happens in memory after a bounded read rather than in SQL.
- * The row counts here are small and the logic is easier to read and to test in
- * Java; the day that stops being true, the aggregation moves into the query.
+ * <p>聚合发生在有界读取之后的内存里，而不是在 SQL 里。这里的行数很少，而逻辑在 Java 中
+ * 更容易读懂、也更容易测试；等到这句话不再成立的那天，聚合再挪进查询里。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class MarketService {
 
-    /** How far back a series may reach. Bounded so a client cannot ask for everything. */
+    /** 一条曲线最多能回溯多久。设上界，是为了避免客户端把全部历史一次要走。 */
     private static final int MAX_DAYS = 180;
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
@@ -59,15 +55,14 @@ public class MarketService {
     private final CommodityCategoryMapper categoryMapper;
 
     // ------------------------------------------------------------------
-    // Quotes
+    // 最新行情
     // ------------------------------------------------------------------
 
     /**
-     * Latest price per grade, with the change against the previous trade.
+     * 每个品种的最新价，以及与上一笔成交相比的变动。
      *
-     * <p>"Previous" means the trade before the latest one, not yesterday's
-     * close: on a market this thin a daily close is a fiction, and the honest
-     * comparison is against whatever traded last.
+     * <p>「上一笔」指的是最新一笔之前的那一笔，而不是昨收：在这么薄的市场上，
+     * 日收盘价是一种虚构，诚实的比较对象是上一笔实际成交。
      */
     public List<QuoteRow> quotes(int days) {
         List<Order> orders = recentOrders(days);
@@ -114,21 +109,21 @@ public class MarketService {
     }
 
     // ------------------------------------------------------------------
-    // Series
+    // 曲线
     // ------------------------------------------------------------------
 
-    /** Series keys the client may ask for. */
+    /** 客户端可以请求的曲线类型。 */
     public static final String SERIES_TRADE_PRICE = "TRADE_PRICE";
     public static final String SERIES_TRADE_VOLUME = "TRADE_VOLUME";
     public static final String SERIES_LISTING_VOLUME = "LISTING_VOLUME";
     public static final String SERIES_INVENTORY = "INVENTORY";
 
     /**
-     * Builds one series.
+     * 构建一条曲线。
      *
-     * @param seriesType one of the {@code SERIES_*} constants
-     * @param categoryId optional grade filter
-     * @param days       look-back window, clamped to {@link #MAX_DAYS}
+     * @param seriesType {@code SERIES_*} 常量之一
+     * @param categoryId 可选的品种筛选
+     * @param days       回溯窗口，会被夹到 {@link #MAX_DAYS} 以内
      */
     public SeriesData series(String seriesType, Long categoryId, int days) {
         int window = Math.min(Math.max(days, 1), MAX_DAYS);
@@ -143,12 +138,10 @@ public class MarketService {
     }
 
     /**
-     * Average traded price per day.
+     * 每日成交均价。
      *
-     * <p>An average is reported alongside the number of trades behind it. On a
-     * thin market an average of one trade and an average of forty look the same
-     * on a chart, and the difference is the entire question of how much the
-     * number can be trusted.
+     * <p>均价旁边始终跟着它背后的成交笔数。在薄市场上，一笔成交算出的均值和四十笔算出的
+     * 均值在图上长得一模一样，而这个差别恰恰是「这个数字能信几分」的全部答案。
      */
     private SeriesData tradeSeries(Long categoryId, LocalDate from, boolean volumeMode) {
         List<Order> orders = recentOrders(MAX_DAYS).stream()
@@ -167,8 +160,8 @@ public class MarketService {
         for (LocalDate day = from; !day.isAfter(LocalDate.now(ZONE)); day = day.plusDays(1)) {
             List<Order> dayOrders = byDay.get(day);
             if (dayOrders == null || dayOrders.isEmpty()) {
-                // Gaps are emitted as null-valued points so the chart shows a
-                // break in trading rather than a straight line through it.
+                // 没有成交的日期发一个值为 null 的点，这样图上是断开的一截，
+                // 而不是一条直直穿过去的线。
                 points.add(new SeriesPoint(
                         day.atStartOfDay(ZONE).toOffsetDateTime(), null, 0, BigDecimal.ZERO));
                 continue;
@@ -202,7 +195,7 @@ public class MarketService {
                 points);
     }
 
-    /** Total quantity offered per day, across open listings. */
+    /** 每日在挂挂牌的报盘总量。 */
     private SeriesData listingSeries(Long categoryId, LocalDate from) {
         List<Listing> listings = listingMapper.selectList(Wrappers.<Listing>lambdaQuery()
                 .eq(categoryId != null, Listing::getCategoryId, categoryId));
@@ -217,7 +210,7 @@ public class MarketService {
         return buildDatedSeries(SERIES_LISTING_VOLUME, "挂牌量", "吨", "bar", from, byDay);
     }
 
-    /** Total goods held in stock per day, by registration date. */
+    /** 每日在库总量，按入库日期归集。 */
     private SeriesData inventorySeries(Long categoryId, LocalDate from) {
         List<InventoryNote> notes = inventoryNoteMapper.selectList(
                 Wrappers.<InventoryNote>lambdaQuery()

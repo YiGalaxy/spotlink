@@ -11,36 +11,31 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Pushes "your pending work changed" to the browsers of one enterprise.
+ * 把「你的待办变了」推送到某一家企业的浏览器。
  *
- * <p><b>Keyed by tenant, and that is the whole design.</b> The market feed in
- * {@code marketdata} broadcasts to everyone because prices are public. This one
- * cannot: an acceptance waiting for a named company's answer is that company's
- * business, and a stream that leaked one enterprise's events to another would
- * undo the tenant boundary everywhere else in the system at a stroke. The key
- * comes from the caller's token, never from a parameter, so there is nothing to
- * get wrong at the call site.
+ * <p><b>按租户分键，这就是整个设计。</b>{@code marketdata} 里的行情推送是发给所有人的，
+ * 因为价格本来就是公开的。这一条不能这么做：一笔等待某家具名公司答复的摘牌，是那家公司
+ * 自己的事，而一条把某企业的泄露给另一家企业的流，会一举抵消系统里其他所有地方的租户
+ * 边界。分键取自调用方的令牌，绝不取自参数，所以在调用点上没有任何可以写错的地方。
  *
- * <p><b>The event carries no data — only the news that something changed.</b>
- * Sending the task itself would mean computing it here, and then there would be
- * two places that decide what counts as pending. The client refetches instead,
- * so the rules stay in {@code TaskService} where they can be tested.
+ * <p><b>事件不携带任何数据——只携带「有东西变了」这条消息。</b>把待办本身发过去，就意味着
+ * 要在这里把它算出来，于是「什么算作待办」就有了两个判断的地方。客户端改为重新拉取，
+ * 规则因此留在可被测试的 {@code TaskService} 里。
  *
- * <p>SSE rather than WebSocket, for the same reason as the market feed: this is
- * one-directional, it reconnects on its own, and it needs no protocol upgrade.
+ * <p>用 SSE 而不是 WebSocket，理由与行情推送相同：这是单向的，它自己会重连，也不需要
+ * 协议升级。
  */
 @Slf4j
 @Component
 public class TaskBroadcaster {
 
-    /** Enterprise id to that enterprise's open connections. */
+    /** 企业 id 映射到该企业已打开的连接。 */
     private final Map<Long, List<SseEmitter>> byEnterprise = new ConcurrentHashMap<>();
 
     /**
-     * Opens a stream for one enterprise.
+     * 为一家企业打开一条流。
      *
-     * <p>No timeout: a notification channel is meant to stay open, and the
-     * browser reconnects on its own if it drops.
+     * <p>不设超时：通知通道本就该一直开着，断了浏览器会自己重连。
      */
     public SseEmitter register(Long enterpriseId) {
         SseEmitter emitter = new SseEmitter(0L);
@@ -49,8 +44,8 @@ public class TaskBroadcaster {
 
         Runnable drop = () -> {
             connections.remove(emitter);
-            // Remove the empty list too, or a long-running process accumulates
-            // one entry per enterprise that ever connected and never frees it.
+            // 空列表也要一并移除，否则长跑的进程会为每一家曾经连过的企业
+            // 留下一条记录，并且永远不释放。
             byEnterprise.computeIfPresent(enterpriseId, (key, list) -> list.isEmpty() ? null : list);
         };
 
@@ -64,8 +59,8 @@ public class TaskBroadcaster {
         connections.add(emitter);
 
         try {
-            // An immediate event tells the client the stream is live, rather
-            // than leaving it guessing until the first change.
+            // 立刻发一个事件，是告诉客户端这条流已经通了，而不是让它一直
+            // 猜到第一次变更发生为止。
             emitter.send(SseEmitter.event()
                     .name("connected")
                     .data(Map.of("message", "待办推送已连接")));
@@ -78,15 +73,14 @@ public class TaskBroadcaster {
     }
 
     /**
-     * Tells one enterprise that its pending work changed.
+     * 告诉某一家企业：它的待办变了。
      *
-     * <p>A failing send is a closed browser, not an error worth surfacing: the
-     * connection is dropped and the others are unaffected. One dead tab must
-     * not stop the company's other tabs from being told.
+     * <p>发送失败意味着浏览器已经关了，而不是一个值得上报的错误：丢掉这条连接，其余
+     * 连接不受影响。**一个死掉的标签页，不能阻止这家公司其他标签页收到通知。**
      */
     public void notify(Long enterpriseId, String reason) {
         if (enterpriseId == null) {
-            // Platform accounts have no tenant and therefore no tasks.
+            // 平台账号没有租户，因此也没有待办。
             return;
         }
         List<SseEmitter> connections = byEnterprise.get(enterpriseId);
@@ -105,7 +99,7 @@ public class TaskBroadcaster {
         }
     }
 
-    /** Notifies several enterprises at once, skipping nulls. */
+    /** 一次通知多家企业，跳过 null。 */
     public void notifyAll(String reason, Long... enterpriseIds) {
         for (Long id : enterpriseIds) {
             notify(id, reason);
@@ -113,13 +107,11 @@ public class TaskBroadcaster {
     }
 
     /**
-     * Open connections for one enterprise; for the health endpoint.
+     * 某一家企业当前的连接数；供健康检查端点使用。
      *
-     * <p>Guards against a null tenant because a platform operator has none, and
-     * {@link ConcurrentHashMap#get} throws on a null key rather than returning
-     * null. The same guard appears in {@link #notify}, which had it from the
-     * start — this method did not, and the health endpoint answered 500 to the
-     * one account most likely to call it.
+     * <p>要对空租户做防护，因为平台运营方没有租户，而 {@link ConcurrentHashMap#get} 遇到
+     * null 键会抛异常，而不是返回 null。同样的防护也出现在 {@link #notify} 里，它从一开始
+     * 就有——这个方法没有，于是健康检查端点对那个最可能调用它的账号返回了 500。
      */
     public int connectionCount(Long enterpriseId) {
         if (enterpriseId == null) {
@@ -129,7 +121,7 @@ public class TaskBroadcaster {
         return connections == null ? 0 : connections.size();
     }
 
-    /** Total open connections across every enterprise; for the health endpoint. */
+    /** 全部企业的连接总数；供健康检查端点使用。 */
     public int connectionCount() {
         return byEnterprise.values().stream().mapToInt(List::size).sum();
     }

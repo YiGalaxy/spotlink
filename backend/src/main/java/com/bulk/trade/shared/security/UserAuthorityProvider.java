@@ -3,30 +3,28 @@ package com.bulk.trade.shared.security;
 import java.util.Set;
 
 /**
- * Loads an account's live authority.
+ * 加载一个账号当前的权限。
  *
- * <p>An interface in {@code shared} with its implementation in {@code identity},
- * because {@code shared} is the package everything else depends on and must not
- * depend on any of them. The JWT filter lives here and needs this; the tables it
- * reads live there.
+ * <p>接口放在 {@code shared}，实现在 {@code identity}，因为 {@code shared} 是所有
+ * 其他包都依赖的那个包，它自己绝不能反过来依赖其中任何一个。JWT 过滤器住在这里、
+ * 需要这个东西，而它要读的那几张表住在那边。
  */
 public interface UserAuthorityProvider {
 
     /**
-     * The account's current status and permissions.
+     * 该账号当前的状态与权限。
      *
-     * @return null when the account no longer exists — a token naming a deleted
-     *         user is not a session, and the caller should treat it as no
-     *         session at all
+     * @return 账号已不存在时为 null——一个指向已删除用户的令牌算不上会话，
+     *         调用方应当把它当作**根本没有会话**来处理
      */
     UserAuthority load(Long userId);
 
-    /** Drops the cached copy after a change, so the next request sees it. */
+    /** 变更后丢掉缓存的那一份，让下一个请求看得见。 */
     void evict(Long userId);
 
-    /** Drops every cached copy, for changes that affect many accounts at once. */
+    /** 丢掉所有缓存的那一份，用于一次影响很多账号的变更。 */
     void evictAll();
 
-    /** Role codes the account holds. For display; authority comes from permissions. */
+    /** 账号持有的角色码。用于展示；权限才管授权。 */
     Set<String> rolesOf(Long userId);
 }

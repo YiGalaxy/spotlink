@@ -3,17 +3,17 @@ package com.bulk.trade.shared.web;
 import lombok.Getter;
 
 /**
- * Uniform response envelope returned by every REST endpoint.
+ * 每个 REST 接口都返回的统一响应包。
  *
- * <p>Having one shape for all responses means the frontend needs exactly one
- * interceptor: it checks {@code code == 0}, shows {@code message} otherwise.
+ * <p>所有响应共用一个形状，前端就只需要一个拦截器：它检查 {@code code == 0}，
+ * 否则把 {@code message} 显示出来。
  *
- * @param <T> payload type
+ * @param <T> 载荷类型
  */
 @Getter
 public class ApiResponse<T> {
 
-    /** 0 means success; anything else is a business or system error. */
+    /** 0 表示成功；其他任何值都是业务或系统错误。 */
     private final int code;
     private final String message;
     private final T data;

@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 import java.time.OffsetDateTime;
 
 /**
- * MyBatis-Plus configuration.
+ * MyBatis-Plus 配置。
  */
 @Configuration
 public class MybatisPlusConfig {
@@ -24,31 +24,30 @@ public class MybatisPlusConfig {
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
 
-        // Pagination. The dbType must be set or MyBatis-Plus cannot pick the
-        // right dialect for the LIMIT clause.
+        // 分页。dbType 必须设置，否则 MyBatis-Plus 无法为 LIMIT 子句挑出
+        // 正确的方言。
         PaginationInnerInterceptor pagination = new PaginationInnerInterceptor(DbType.MYSQL);
         pagination.setMaxLimit(500L);
         pagination.setOverflow(false);
         interceptor.addInnerInterceptor(pagination);
 
-        // Turns @Version into an optimistic-lock UPDATE ... WHERE version = ?.
-        // This is the mechanism the inventory freeze logic relies on.
+        // 把 @Version 变成乐观锁的 UPDATE ... WHERE version = ?。
+        // 库存冻结那套逻辑依赖的正是这个机制。
         interceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
 
-        // Blocks UPDATE/DELETE statements that carry no WHERE clause, which is
-        // almost always a bug rather than an intention.
+        // 拦截不带 WHERE 子句的 UPDATE/DELETE。那几乎总是一个 bug，
+        // 而不是一个意图。
         interceptor.addInnerInterceptor(new BlockAttackInnerInterceptor());
 
         return interceptor;
     }
 
     /**
-     * Fills audit columns on insert and update.
+     * 在插入与更新时填充审计列。
      *
-     * <p>{@code createdAt} / {@code updatedAt} are also backed by database
-     * defaults and a trigger, so rows written by migrations or manual SQL stay
-     * consistent. The handler fills them for the normal application path, and
-     * the database guarantees they can never be left null.
+     * <p>{@code createdAt} / {@code updatedAt} 同时也有数据库默认值和触发器兜底，这样由
+     * 迁移脚本或手工 SQL 写入的行也保持一致。这个处理器负责正常的应用写入路径，
+     * 而数据库保证它们永远不会是空。
      */
     @Component
     public static class AuditMetaObjectHandler implements MetaObjectHandler {

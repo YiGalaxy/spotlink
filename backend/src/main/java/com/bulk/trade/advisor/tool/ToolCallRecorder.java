@@ -4,23 +4,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Collects the tool calls made during one advisor turn.
+ * 收集一次顾问回合中发生的全部工具调用。
  *
- * <p><b>Why this exists.</b> Spring AI runs the tool-calling loop internally and
- * returns only the final answer — the trail of which tools ran, with what
- * arguments, returning what, is not part of the response. That trail is not
- * decoration: it is what lets a user check the figure they were given, and it
- * is the first thing to look at when an answer is wrong. So it is captured
- * separately, by {@link ToolCallRecordingAspect}, and re-attached to the answer.
+ * <p><b>为什么需要它。</b>Spring AI 在内部跑完了整个工具调用循环，而它只返回最终答案：
+ * 哪些工具跑过、带着什么参数、返回了什么，这一整条轨迹并不在响应里。而这条轨迹不是
+ * 装饰——它让用户得以核对拿到的数字，也是答案出错时第一个要看的地方。所以它由
+ * {@link ToolCallRecordingAspect} 单独采集，再挂回答案上。
  *
- * <p>Thread-scoped because a tool runs on the same thread as the request that
- * triggered it, and concurrent conversations must not see each other's calls.
- * {@link #drain()} clears the slot, so a pooled thread cannot leak a previous
- * conversation's trail into the next one.
+ * <p>作用域是线程，因为工具跑在触发它的那个请求的同一条线程上，而并发的会话绝不能看见
+ * 彼此的工具调用。{@link #drain()} 会清空槽位，所以一条被复用的线程不可能把上一段
+ * 会话的轨迹泄漏到下一段。
  */
 public final class ToolCallRecorder {
 
-    /** One tool invocation, as shown under an answer. */
+    /** 一次工具调用，就是显示在回答下方的那条。 */
     public record Invocation(String name, String input, String output) {
     }
 
@@ -29,7 +26,7 @@ public final class ToolCallRecorder {
     private ToolCallRecorder() {
     }
 
-    /** Starts a fresh collection, discarding anything left behind. */
+    /** 开一份新的收集，之前留下的东西一并丢掉。 */
     public static void begin() {
         CURRENT.set(new ArrayList<>());
     }
@@ -37,14 +34,14 @@ public final class ToolCallRecorder {
     public static void record(String name, String input, String output) {
         List<Invocation> invocations = CURRENT.get();
         if (invocations == null) {
-            // Recording outside a turn would mean a tool ran without a
-            // conversation around it; nothing to attach the trail to.
+            // 在一次回合之外记录，意味着某个工具在没有会话包围的情况下跑了；
+            // 那条轨迹没有东西可以挂。
             return;
         }
         invocations.add(new Invocation(name, summarize(input), summarize(output)));
     }
 
-    /** Returns what was collected and clears the slot. Always call this. */
+    /** 返回已收集的内容并清空槽位。**总要调用它。** */
     public static List<Invocation> drain() {
         List<Invocation> invocations = CURRENT.get();
         CURRENT.remove();
@@ -52,8 +49,8 @@ public final class ToolCallRecorder {
     }
 
     /**
-     * Caps one entry so a runaway result cannot bloat the stored transcript.
-     * The full value is irrelevant once it has been shown once.
+     * 给单条记录设上界，这样一个失控的返回值不会把存下来的对话撑爆。
+     * 完整值在被展示过一次之后就无关紧要了。
      */
     private static String summarize(String value) {
         if (value == null) {

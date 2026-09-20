@@ -32,7 +32,7 @@ const SAMPLE_QUESTIONS = [
   '平台支持哪几种交易方式？',
 ]
 
-/** Placeholder turn shown while waiting, and on failure. Never persisted. */
+  /** 等待期间和失败时显示的占位回合。永不落库。 */
 function localTurn(role: 'user' | 'assistant', content: string): MessageView {
   return {
     id: null,
@@ -55,17 +55,15 @@ export default function AdvisorPage() {
   const queryClient = useQueryClient()
 
   /**
-   * Guards against a second submission arriving before React has re-rendered
-   * with the new `sending` state.
+   * 防止在 React 用新的 `sending` 状态重新渲染之前，第二次提交挤进来。
    *
-   * <p>State updates are asynchronous, so during `await createConversation()`
-   * the `sending` flag is still false and a second click passes the check. Two
-   * conversations get created and the same question is asked twice. A ref
-   * changes synchronously, so it closes the window entirely.
+   * <p>状态更新是异步的，所以在 `await createConversation()` 期间 `sending` 仍是
+   * false，第二次点击会通过检查。结果就是创建出两个会话、同一个问题被问了两次。
+   * ref 是同步变更的，所以它把这个窗口彻底关上。
    */
   const sendingRef = useRef(false)
 
-  /** Mirrors activeId for callbacks that outlive the render they started in. */
+  /** 镜像 activeId，供那些活得比发起它们的那次渲染更久的回调使用。 */
   const activeIdRef = useRef<EntityId | null>(null)
 
   const { data: conversations = [] } = useQuery({
@@ -102,9 +100,8 @@ export default function AdvisorPage() {
   }
 
   /**
-   * Clears the view instead of creating a row. The conversation is created on
-   * the first question, so clicking here and then changing your mind leaves
-   * nothing behind in the list.
+   * 清空视图，而不是建一行记录。会话是在第一个问题时才创建的，所以在这里点一下又
+   * 改主意，列表里什么都不会留下。
    */
   const handleNewConversation = () => {
     setActiveId(null)
@@ -124,7 +121,7 @@ export default function AdvisorPage() {
   }
 
   const send = async (text?: string) => {
-    // The synchronous guard, checked before anything else can happen.
+    // 那道同步守卫，在任何其他事情发生之前先检查。
     if (sendingRef.current) return
 
     const content = (text ?? input).trim()
@@ -135,8 +132,7 @@ export default function AdvisorPage() {
 
     let conversationId = activeId
     try {
-      // A conversation is created lazily on the first question, so clicking
-      // "新建对话" does not litter the list with empty sessions.
+      // 会话是在第一个问题时才懒创建的，所以点「新建对话」不会往列表里塞一堆空会话。
       if (conversationId === null) {
         const detail = await createConversation()
         conversationId = detail.id
@@ -150,19 +146,16 @@ export default function AdvisorPage() {
       await sendMessage(conversationId, content)
       await refreshList()
 
-      // Reload the transcript from the server instead of appending the reply
-      // locally. The list then always matches what was actually stored, and a
-      // reply that arrives after the user switched away is not appended to a
-      // different conversation's messages.
+      // 从服务端重新拉取对话记录，而不是在本地把回复追加进去。这样列表永远和实际
+      // 存储的内容一致，而且用户切走之后才到达的回复不会追加到另一个会话的消息里。
       if (activeIdRef.current === conversationId) {
         const detail = await getConversation(conversationId)
         setMessages(detail.messages)
       }
     } catch {
       if (conversationId !== null && activeIdRef.current === conversationId) {
-        // The turn failed, so nothing was stored and no answer is coming.
-        // Drop the optimistic question (the entry just appended) and say so,
-        // rather than leaving a question that will never be answered.
+        // 这个回合失败了，所以什么都没存下，也不会有答案来了。把那句乐观追加的问题
+        // 删掉并说明原因，而不是留下一个永远不会被回答的问题。
         setMessages((prev) => [
           ...prev.slice(0, -1),
           localTurn('assistant', '本轮请求失败，请稍后重试。'),
@@ -176,7 +169,7 @@ export default function AdvisorPage() {
 
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
-      {/* ---------- conversation list ---------- */}
+      {/* ---------- 会话列表 ---------- */}
       <div className="conv-sidebar">
         <div style={{ padding: 12 }}>
           <Button type="primary" block icon={<PlusOutlined />} onClick={handleNewConversation}>

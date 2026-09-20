@@ -7,16 +7,14 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Turns "something changed" domain events into pushes.
+ * 把「有东西变了」这类领域事件变成推送。
  *
- * <p>The only thing that knows a notification channel exists. Everything else
- * publishes an event and moves on, which is what lets the channel be replaced —
- * a websocket, an email digest, a mobile push — without any business code
- * changing.
+ * <p>它是唯一知道存在一条通知渠道的东西。其余一切只负责发出事件然后继续往前走，
+ * **正是这一点让这条渠道可以被替换掉**——换成 WebSocket、邮件摘要、移动推送——
+ * 而业务代码一行都不用改。
  *
- * <p>Handled synchronously on the publishing thread, like the market feed, so
- * the push happens inside the transaction's success path. An event fired for a
- * change that then rolled back would be worse than a slightly slower commit.
+ * <p>与行情推送一样，在发布线程上同步处理，所以推送发生在事务的成功路径之内。
+ * **为一个随后被回滚的改动发出事件，比提交稍微慢一点更糟。**
  */
 @Slf4j
 @Component

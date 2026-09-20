@@ -12,10 +12,10 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * A trading company on the platform — the tenant root.
+ * 平台上的一家贸易企业——租户的根。
  *
- * <p>Every other business table eventually points back here, which is what
- * makes {@code enterpriseId} the single tenant key used throughout the system.
+ * <p>其他每一张业务表最终都指回这里，这正是 {@code enterpriseId} 能成为贯穿整个
+ * 系统的唯一租户键的原因。
  */
 @Getter
 @Setter
@@ -25,7 +25,7 @@ public class Enterprise {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    /** Human-readable business code, e.g. {@code ENT20260920001}. */
+    /** 人类可读的业务编号，例如 {@code ENT20260920001}。 */
     private String enterpriseCode;
 
     private String name;
@@ -39,13 +39,13 @@ public class Enterprise {
     private String city;
     private String address;
 
-    /** Trading seat code issued by the platform after approval. */
+    /** 审核通过后由平台签发的交易席位编码。 */
     private String traderCode;
 
-    /** 0=pending review, 1=approved, 2=rejected, 3=frozen, 4=closed. */
+    /** 0=待审核，1=已通过，2=已驳回，3=已冻结，4=已注销。 */
     private Integer status;
 
-    /** Qualification documents as a JSON array: [{type,name,objectKey,uploadedAt}]. */
+    /** 资质文件，JSON 数组：[{type,name,objectKey,uploadedAt}]。 */
     private String qualifications;
 
     private Long marginAccountId;
@@ -53,14 +53,12 @@ public class Enterprise {
     private OffsetDateTime approvedAt;
     private Long approvedBy;
     /**
-     * Why an application was refused.
+     * 一份申请为什么被驳回。
      *
-     * <p><b>{@code updateStrategy = ALWAYS} is load-bearing.</b> Approving an
-     * enterprise that was previously rejected has to clear this, and
-     * MyBatis-Plus omits null fields from generated updates by default — so the
-     * old reason would survive an approval and the console would show an
-     * approved enterprise carrying a rejection. This bit the project once
-     * already, on the order's confirm deadline.
+     * <p><b>{@code updateStrategy = ALWAYS} 是关键所在。</b>通过一家曾被驳回的企业
+     * 审核时，必须把这个字段清空，而 MyBatis-Plus 默认会把 null 字段从生成的更新语句里
+     * 略去——所以那条旧理由就会熬过一次审核活下来，运营后台会显示一家「已通过」的企业
+     * 却挂着一条驳回理由。这个坑项目已经踩过一次了，在订单的确认截止时间上。
      */
     @com.baomidou.mybatisplus.annotation.TableField(
             updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.ALWAYS)
@@ -82,7 +80,7 @@ public class Enterprise {
     @TableLogic
     private Integer deleted;
 
-    /** Enterprise status values, kept next to the field they describe. */
+    /** 企业状态取值，放在它们所描述的字段旁边。 */
     public static final class Status {
         public static final int PENDING = 0;
         public static final int APPROVED = 1;

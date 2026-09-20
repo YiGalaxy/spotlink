@@ -6,10 +6,9 @@ import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.OffsetDateTime;
 
 /**
- * A row in the conversation list. Deliberately excludes the messages.
+ * 会话列表里的一行。刻意不含消息内容。
  *
- * <p>The id is serialised as a string — see {@code LoginResponse} for why a
- * snowflake id must not travel as a JSON number.
+ * <p>id 序列化为字符串——为什么雪花 ID 不能以 JSON 数字传输，见 {@code LoginResponse}。
  */
 public record ConversationSummary(
         @JsonSerialize(using = ToStringSerializer.class) Long id,

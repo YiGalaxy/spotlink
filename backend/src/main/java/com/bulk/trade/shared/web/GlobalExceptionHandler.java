@@ -18,12 +18,11 @@ import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 
 /**
- * Translates exceptions into {@link ApiResponse}.
+ * 把异常翻译成 {@link ApiResponse}。
  *
- * <p>Business failures return HTTP 200 with a non-zero {@code code} so the
- * frontend interceptor has a single place to handle them. Only authentication
- * and authorisation failures keep their HTTP status, because the frontend needs
- * to distinguish "show a message" from "redirect to login".
+ * <p>业务失败返回 HTTP 200 加一个非零的 {@code code}，这样前端的拦截器就只有一个地方
+ * 需要处理它们。**只有认证和授权失败保留各自的 HTTP 状态码**，因为前端必须能区分
+ * 「弹一条提示」和「跳转到登录页」。
  */
 @Slf4j
 @RestControllerAdvice
@@ -35,7 +34,7 @@ public class GlobalExceptionHandler {
         return ApiResponse.failure(e.getResultCode(), e.getMessage());
     }
 
-    /** @Valid failure on a request body. Reports every offending field at once. */
+    /** 请求体上的 @Valid 失败。一次报出所有有问题的字段。 */
     @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class})
     public ApiResponse<Void> handleValidation(BindException e) {
         String detail = e.getBindingResult().getFieldErrors().stream()
@@ -45,7 +44,7 @@ public class GlobalExceptionHandler {
         return ApiResponse.failure(ResultCode.BAD_REQUEST, detail);
     }
 
-    /** @Validated failure on a method parameter (path / query variable). */
+    /** 方法参数（路径 / 查询变量）上的 @Validated 失败。 */
     @ExceptionHandler(ConstraintViolationException.class)
     public ApiResponse<Void> handleConstraintViolation(ConstraintViolationException e) {
         String detail = e.getConstraintViolations().stream()
@@ -71,22 +70,20 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Rethrown as a 403 so the security filter chain and the frontend both see a
-     * genuine authorisation failure rather than a 200 with an error code.
+     * 重新抛出去，让它成为一个 403，这样安全过滤器链和前端看到的都是一个真正的授权
+     * 失败，而不是一个带着错误码的 200。
      */
     @ExceptionHandler(AccessDeniedException.class)
     public void handleAccessDenied(AccessDeniedException e) {
         log.warn("Access denied: {}", e.getMessage());
-        // Rethrown, not converted. Returning the envelope here would make a
-        // refused request indistinguishable from a successful one at the HTTP
-        // level — 200 with an error code inside — and the client's 403 branch
-        // would never run. Bucket permissions and the security filter chain
-        // should fail the same way, and this way is the one that carries the
-        // status.
+        // 抛出，而不是转换。在这里返回那个响应包，会让一个被拒绝的请求在 HTTP 层面上
+        // 和一个成功的请求无从区分——200，里面裹着一个错误码——而客户端那个 403 分支
+        // 永远不会被执行。方法级权限和安全过滤器链应该以同一种方式失败，
+        // 而这一种是带着状态码的那种。
         throw e;
     }
 
-    /** Last resort. Logs the full trace and hides internals from the caller. */
+    /** 最后一道兜底。记下完整堆栈，对调用方隐藏内部细节。 */
     @ExceptionHandler(Exception.class)
     public ApiResponse<Void> handleUnexpected(Exception e) {
         log.error("Unhandled exception", e);

@@ -68,7 +68,7 @@ function flattenLeaves(nodes: CategoryNode[], depth = 0): { id: EntityId; label:
 
 const ORDER_STEPS = ['PENDING_CONFIRM', 'CONFIRMED', 'CONTRACTED', 'DELIVERING', 'COMPLETED']
 
-/** Mirrors OrderStatus.text on the server; used for the filter chips. */
+/** 与服务端 OrderStatus.text 保持一致；用于筛选标签。 */
 const ORDER_STAGE_TEXT: Record<string, string> = {
   PENDING_CONFIRM: '待挂牌方确认',
   CONFIRMED: '已确认',
@@ -94,12 +94,11 @@ export default function TradingPage() {
   const signedIn = Boolean(accessToken)
 
   /**
-   * Whether this account has an enterprise to trade as.
+   * 这个账号有没有可以用来交易的企业。
    *
-   * <p>Distinct from being signed in. A platform operator is a legitimate
-   * account with no tenant, so every tenant-scoped query returns "未绑定企业" —
-   * which meant the member tabs appeared, and then errored when opened. Gate
-   * on what the tabs need, not on the looser thing that happens to correlate.
+   * <p>与「已登录」是两回事。平台运营是一个合法的账号类型，只是没有租户，所以每一个按
+   * 租户划分的查询都会返回「未绑定企业」——结果就是那两个会员标签页出现了，一点开却
+   * 报错。**按标签页真正需要的东西来把关，而不是按碰巧相关的那件更宽松的事。**
    */
   const isMember = signedIn && Boolean(user?.enterpriseId)
   const [acceptTarget, setAcceptTarget] = useState<ListingView | null>(null)
@@ -109,7 +108,7 @@ export default function TradingPage() {
   const [keyword, setKeyword] = useState('')
   /** 'ACTIVE' | 'FINISHED' | 'ALL' — the top-level split on 我的订单. */
   const [orderPhase, setOrderPhase] = useState<'ACTIVE' | 'FINISHED' | 'ALL'>('ACTIVE')
-  /** '' means every status within the chosen phase. */
+  /** 空字符串表示所选层级下的全部状态。 */
   const [orderStage, setOrderStage] = useState('')
   const [acceptForm] = Form.useForm()
   const [publishForm] = Form.useForm()
@@ -125,17 +124,14 @@ export default function TradingPage() {
 
   const { data: market = [], isLoading: marketLoading } = useQuery({
     queryKey: ['market', sideFilter, keyword],
-    // The server has always supported keyword search — browse() has taken one
-    // since it was written — but nothing asked for it. With a hall that only
-    // grows, filtering is the difference between a list and a haystack.
+    // 服务端一直支持关键词搜索——browse() 从写出来那天就接受这个参数——
+    // 却从来没有人传过。在一个只会越来越大的大厅里，筛选就是清单和草堆的区别。
     queryFn: () => fetchMarket(undefined, sideFilter, keyword || undefined),
   })
 
-  // The marketplace is public; everything below is one enterprise's own
-  // business, so a visitor must not even ask. Firing these unauthenticated
-  // would 401, and the client's 401 handler treats that as an expired session
-  // and bounces the visitor to the login page — turning "browsing" into
-  // "ejected".
+  // 挂牌大厅是公开的；下面这些每一件都是某一家企业自己的事，所以访客连问都不该问。
+  // 不带登录态去发这些请求会拿到 401，而客户端的 401 处理把它当作会话过期，
+  // 会把访客弹到登录页——于是「浏览」就变成了「被赶出去」。
   const { data: myListings = [] } = useQuery({
     queryKey: ['my-listings'],
     queryFn: fetchMyListings,
@@ -166,12 +162,11 @@ export default function TradingPage() {
   })
 
   /**
-   * How many of this enterprise's orders are waiting on it.
+   * 这家企业有多少订单在等他动。
    *
-   * <p>Derived from `allowedActions`, the same field the server enforces, so
-   * the number on the tab and the buttons inside it cannot disagree. A count
-   * computed any other way — by status, say — would be a second opinion about
-   * what "pending" means.
+   * <p>从 `allowedActions` 推导，也就是服务端真正据以执行的那个字段，所以页签上的数字
+   * 和点进去之后的按钮不可能对不上。用任何别的方式算出来的数字——比如按状态算——都会
+   * 变成对「待办」是什么的第二种说法。
    */
   const pendingOrderCount = useMemo(
     () => myOrders.filter((o) => o.allowedActions.length > 0).length,
@@ -179,13 +174,11 @@ export default function TradingPage() {
   )
 
   /**
-   * The unfinished statuses, in the order the trade flow goes through them.
+   * 未完结的状态，按交易流程走过的顺序排列。
    *
-   * <p>Written out rather than derived from the data, because the order is the
-   * point: 待确认 → 已确认 → 已签约 → 交收中 is the sequence a deal moves
-   * through, and a list sorted by whatever statuses happen to be present would
-   * put them in an order that means nothing. A stage nobody is in is still
-   * shown, with a zero, so the reader can see it was considered.
+   * <p>写死而不是从数据里推导，因为顺序才是重点：待确认 → 已确认 → 已签约 → 交收中
+   * 是一笔交易走完的次序，而按「数据里恰好存在哪些状态」排序，会得出一个毫无意义的
+   * 顺序。没人在的阶段也会以零显示出来，让读者看见它被考虑过。
    */
   const ACTIVE_STAGES = ['PENDING_CONFIRM', 'CONFIRMED', 'CONTRACTED', 'DELIVERING']
   const FINISHED_STAGES = ['COMPLETED', 'CANCELLED']
@@ -201,13 +194,11 @@ export default function TradingPage() {
   }, [myOrders, orderPhase])
 
   /**
-   * Counts per status, then the rows to show.
+   * 各状态的计数，以及要展示的行。
    *
-   * <p>Two levels on purpose. 「已结束」 and 「进行中」 answer "is this deal still
-   * mine to worry about", and the individual statuses answer "which step is it
-   * on" — mixing them into one flat list of seven chips is a filter nobody
-   * reads. Which statuses belong to which phase comes from the server's own
-   * lifecycle rather than from a guess about the sort order.
+   * <p>刻意做成两级。「已结束」和「进行中」回答的是「这一笔还归我操心吗」，具体的状态
+   * 回答的是「走到哪一步了」——把它们混成一行七个标签，就是一个没人会看的筛选器。
+   * 哪些状态属于哪一级，取自服务端自己的生命周期，而不是对排序顺序的猜测。
    */
   const stageCounts = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -228,13 +219,13 @@ export default function TradingPage() {
   )
 
   const categoryOptions = useMemo(() => flattenLeaves(categories), [categories])
-  /** Only notes with something free can back a SELL listing. */
+  /** 只有还有空闲数量的库存单，才能给卖方挂牌做背书。 */
   const sellableNotes = useMemo(
     () => notes.filter((n) => Number(n.availableQuantity) > 0 && [2, 3, 4].includes(n.status)),
     [notes],
   )
 
-  // ---- mutations ----
+  // ---- 写操作 ----
 
   const { mutateAsync: doAccept, isPending: accepting } = useMutation({
     mutationFn: (vars: { id: EntityId; quantity: number; remark?: string }) =>
@@ -298,8 +289,8 @@ export default function TradingPage() {
       unit: values.unit as string | undefined,
       price: values.priceType === 'FIXED' ? (values.price as number) : undefined,
       priceType: values.priceType as 'FIXED' | 'NEGOTIABLE',
-      // The server refuses MANUAL on a BUY listing, so the form does not offer
-      // it there rather than letting the request fail.
+      // 服务端会拒绝买方挂牌上的 MANUAL，所以表单干脆不提供它，
+      // 而不是让请求去失败一次。
       confirmMode: values.side === 'SELL'
         ? (values.confirmMode as 'AUTO' | 'MANUAL' | undefined)
         : undefined,
@@ -310,12 +301,12 @@ export default function TradingPage() {
     })
   }
 
-  // ---- columns ----
+  // ---- 表格列 ----
 
   const marketColumns: TableColumnsType<ListingView> = [
     { title: '方向', dataIndex: 'sideText', width: 96,
-      // Sorts by the code, not the label, so the order is stable regardless of
-      // how the two sides happen to be worded.
+      // 按代码排序，而不是按标签，这样无论两侧的措辞将来怎么改，
+      // 顺序都是稳定的。
       sorter: (a: ListingView, b: ListingView) => a.side.localeCompare(b.side),
       render: (v: string, r: ListingView) => (
         <Tag color={r.side === 'SELL' ? 'green' : 'blue'}>{v}</Tag>) },
@@ -343,8 +334,8 @@ export default function TradingPage() {
     {
       title: '价格 / 成交方式',
       width: 170,
-      // 面议 rows have no price; byNumberNullsLast keeps them from sorting as
-      // zeros and burying the real figures.
+      // 「面议」的行没有价格；byNumberNullsLast 让它们不至于被当成 0 参与排序，
+      // 把真正的数字埋掉。
       sorter: byNumberNullsLast<ListingView>((r) => (r.price == null ? null : Number(r.price))),
       render: (_: unknown, r: ListingView) => (
         <Space direction="vertical" size={2}>
@@ -356,9 +347,8 @@ export default function TradingPage() {
               <Typography.Text type="secondary" style={{ fontSize: 11 }}>元/{r.unit}</Typography.Text>
             </Space>
           )}
-          {/* Which of the two conventions applies is the fact a buyer most
-              needs before pressing 摘牌, so it is shown on the market row
-              rather than discovered afterwards. */}
+          {/* 两种约定里适用哪一种，是买方按下「摘牌」之前最需要知道的事，
+              所以它显示在行情行上，而不是事后才发现。 */}
           <Tag color={r.confirmMode === 'MANUAL' ? 'orange' : 'default'}
             style={{ fontSize: 11, marginInlineEnd: 0 }}>
             {r.confirmModeText}
@@ -397,9 +387,8 @@ export default function TradingPage() {
       title: '发布时间',
       dataIndex: 'createdAt',
       width: 140,
-      // The default sort, and the reason the column exists: without a visible
-      // timestamp the only thing a long list can be ordered by is the order the
-      // server happened to return.
+      // 默认排序列，也是这一列存在的原因：没有一个可见的时间戳，一长串列表唯一
+      // 能依据的顺序，就是服务端碰巧返回的那个顺序。
       sorter: byTime,
       defaultSortOrder: 'descend',
       render: (v: string) => (
@@ -414,8 +403,8 @@ export default function TradingPage() {
         r.mine ? (
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>自己的挂牌</Typography.Text>
         ) : !signedIn ? (
-          // Not a disabled button: a disabled button says "you cannot", and the
-          // visitor can — after logging in. So it says that instead.
+          // 这里不是一个禁用按钮：禁用按钮说的是「你不能」，而访客其实能——
+          // 登录之后就能。所以按钮直接把这句话说出来。
           <Button size="small" onClick={() => navigate('/login')}>登录后摘牌</Button>
         ) : (
           <Button type="primary" size="small" disabled={Number(r.remainingQuantity) <= 0}
@@ -464,15 +453,12 @@ export default function TradingPage() {
     {
       title: '状态',
       width: 150,
-      // Three tiers, and the middle one is the point: your move first, then
-      // orders still in flight that are waiting on the other party, then
-      // everything finished. Two tiers was not enough — an order the
-      // counterparty is sitting on is not done, and burying it under the
-      // finished ones hides exactly the deal that is going stale.
+      // 三档，中间那档才是重点：先是你该动的，然后是还在流程里、等着对方动的，最后是
+      // 已完结的。两档不够——对方压着不办的订单并没有结束，把它埋进已完结里面，恰恰
+      // 藏起了那笔正在变馊的交易。
       //
-      // Sorted on `statusHint`, not on the status code, because "pending" is
-      // not a status: the same 已确认 order is your move while its contract is
-      // undrafted and nobody's move once it exists.
+      // 按 `statusHint` 排序，而不是按状态码，因为「待办」不是一个状态：同一笔「已确认」
+      // 的订单，在它的合同还没起草时是你该动的，合同一出现就谁都不用动了。
       sorter: (a: OrderView, b: OrderView) => {
         const tier = (o: OrderView) =>
           o.statusHintMine ? 0 : o.statusHint ? 1 : 2
@@ -481,11 +467,9 @@ export default function TradingPage() {
         return a.status.localeCompare(b.status)
       },
       defaultSortOrder: 'ascend' as const,
-      // The tag is the state; the line under it is whose move it is. One tag
-      // still — a second tag beside it read as a second status, and a row has
-      // exactly one. But "已签约" alone does not say whether the seller or the
-      // buyer is being waited on, and that is the question someone scanning
-      // their orders is actually asking.
+      // 标签是状态；它下面那行才是「该谁动」。仍然只有一个标签——旁边再放一个会被读成
+      // 第二个状态，而一行订单恰好只有一个状态。但光有「已签约」说不清等的是卖方还是
+      // 买方，而正翻着自己订单的人问的就是这个。
       render: (_: unknown, r: OrderView) => (
         <Space direction="vertical" size={2}>
           <Tag color={ORDER_COLOURS[r.status]} style={{ marginInlineEnd: 0 }}>
@@ -503,9 +487,8 @@ export default function TradingPage() {
         </Space>
       ),
     },
-    // Deliberately not the default sort: Ant Design applies only one, and
-    // pending-first is the more useful opening view. Newest-first is one click
-    // away.
+    // 刻意不作为默认排序：Ant Design 只应用一个排序，而「待办优先」是更有用的初始
+    // 视图。最新优先只差一次点击。
     { title: '创建时间', dataIndex: 'createdAt', width: 140,
       sorter: byTime,
       render: (v: string) => (
@@ -531,10 +514,8 @@ export default function TradingPage() {
 
       <Tabs
         defaultActiveKey="market"
-        // A visitor gets the hall and nothing else. "我的挂牌" and "我的订单"
-        // have no "my" to speak of without an enterprise, and rendering them
-        // empty would look like a broken page rather than an unauthenticated
-        // one.
+        // 未登录的访客只看得到大厅。「我的挂牌」和「我的订单」在没有企业时无所谓
+        // 「我的」，把它们渲染成空表，看起来会像一个坏掉的页面，而不是未登录的页面。
         items={[
           {
             key: 'market',
@@ -638,9 +619,8 @@ export default function TradingPage() {
                 },
                 {
                   key: 'orders',
-                  // The count people actually scan for. A tab that says "21"
-                  // when eleven of them are waiting on you is a number that
-                  // hides the only thing worth knowing.
+                  // 人们真正会扫视的那个数字。一个显示「21」的页签，其中十一个其实在
+                  // 等你动，这个数字就藏起了唯一值得知道的事。
                   label: (
                     <Space size={6}>
                       <span>{`我的订单 (${myOrders.length})`}</span>
@@ -658,9 +638,8 @@ export default function TradingPage() {
                             value={orderPhase}
                             onChange={(v) => {
                               setOrderPhase(v as 'ACTIVE' | 'FINISHED' | 'ALL')
-                              // The stage filter belongs to a phase; carrying it
-                              // across would show an empty table under a chip
-                              // that is no longer on screen.
+                              // 阶段筛选属于某个阶段分组；把它带过去，会在一个已经不在
+                              // 屏幕上的筛选项下面显示一张空表。
                               setOrderStage('')
                             }}
                             options={[
@@ -887,7 +866,7 @@ export default function TradingPage() {
         </Form>
       </Modal>
 
-      {/* ---------- order detail ---------- */}
+      {/* ---------- 订单详情 ---------- */}
       <OrderDetailModal
         order={detailOrder}
         onClose={() => setDetailOrder(null)}
@@ -898,7 +877,7 @@ export default function TradingPage() {
   )
 }
 
-/** Order detail: lifecycle rail, actions, contract signing and transition history. */
+/** 订单详情：生命周期步骤条、可执行操作、合同签署与状态轨迹。 */
 function OrderDetailModal({
   order,
   onClose,
@@ -1054,9 +1033,8 @@ function OrderDetailModal({
               {order.allowedActions.includes('CONFIRMED') && (
                 <Button type="primary" onClick={() => void onAction('confirm', order)}>确认成交</Button>
               )}
-              {/* Only the lister ever reaches this: the server strips CONFIRMED
-                  from the counterparty's action list, so the button they must
-                  not press is never rendered for them. */}
+              {/* 只有挂牌方会走到这里：服务端已经把 CONFIRMED 从对方的可执行动作里
+                  剥掉了，所以他绝不该按的那个按钮，永远不会为他渲染出来。 */}
               {order.status === 'PENDING_CONFIRM' && order.myRole === 'SELLER' && (
                 <Popconfirm title="拒绝这笔摘牌？" description="货权尚未转移，拒绝后挂牌数量原样恢复。"
                   okText="拒绝" cancelText="再想想" okButtonProps={{ danger: true }}
@@ -1064,11 +1042,9 @@ function OrderDetailModal({
                   <Button danger>拒绝摘牌</Button>
                 </Popconfirm>
               )}
-              {/* Labels come from the server rather than being written here.
-                  Who starts delivery and who finishes it depends on the
-                  delivery term and on which party is reading, and a second copy
-                  of that rule in the client is one that can disagree with the
-                  button the server would accept. */}
+              {/* 文案来自服务端，而不是写在这里。谁发起交收、谁完成交收，取决于交收
+                  条款和读它的是哪一方，而这条规则在客户端再存一份，就可能和服务端会
+                  接受的那个按钮对不上。 */}
               {order.allowedActions.includes('DELIVERING') && (
                 <Button type="primary" onClick={() => void onAction('deliver', order)}>
                   {order.nextAction ?? '发起交收'}

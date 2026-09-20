@@ -19,11 +19,10 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * Reads the bearer token and populates the security context.
+ * 读取持有者令牌并填充安全上下文。
  *
- * <p>An invalid or missing token is not an error here: the filter simply leaves
- * the context empty and lets the authorization rules reject the request later.
- * That keeps a single place responsible for "is this request allowed".
+ * <p>令牌无效或缺失在这里不算错误：过滤器只是让上下文保持为空，留给后面的授权规则去
+ * 拒绝这个请求。这样「这个请求是否被允许」就只有一处负责。
  */
 @Slf4j
 @Component
@@ -47,9 +46,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Claims claims = tokenProvider.parse(token);
             if (claims != null) {
                 LoginUser identity = tokenProvider.toLoginUser(claims);
-                // Who the caller is comes from the token; what they may do comes
-                // from the database, because a token cannot be un-issued when a
-                // permission is withdrawn.
+                // 调用方是谁来自令牌；能做什么来自数据库，因为权限被收回时，
+                // 令牌是无法被撤回的。
                 if (identity != null) {
                     authenticate(identity, request);
                 }
@@ -59,29 +57,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Populates the security context, or declines to.
+     * 填充安全上下文，或者决定不填。
      *
-     * <p><b>A token is a claim about identity, not about authority.</b> Two
-     * things can have changed since it was signed, and neither is knowable from
-     * the token: the account may have been disabled, and its permissions may
-     * have been changed. Both are read now, per request.
+     * <p><b>令牌是对身份的声明，不是对权限的声明。</b>从它签发到现在，有两件事可能已经变了，
+     * 而这两件都无法从令牌本身得知：账号可能已被禁用，权限可能已被改动。现在这两者都按请求
+     * 实时读取。
      *
-     * <p>When either says stop, the context is left empty — the request is not
-     * "logged in but forbidden", it is not logged in, and the caller gets 401
-     * and a fresh login. For a disabled account that distinction is the whole
-     * point: it should stop working now, not in two hours.
+     * <p>只要其中任何一项说不，上下文就保持为空——这个请求不是「已登录但被禁止」，而是
+     * **根本没有登录**，调用方拿到 401 并重新登录。对一个被禁用的账号来说，这个区别就是
+     * 全部意义所在：它应当**现在**就失效，而不是两小时后。
      *
-     * @return whether the context was populated
+     * @return 上下文是否已被填充
      */
     private boolean authenticate(LoginUser identity, HttpServletRequest request) {
         UserAuthority authority;
         try {
             authority = authorityProvider.load(identity.getUserId());
         } catch (RuntimeException e) {
-            // Reading authority must not be able to fail a request into an
-            // unauthenticated state. If it throws, the safer reading is "no
-            // session", which is what the caller gets — a 401 they can act on,
-            // rather than a 500 they cannot.
+            // 读取权限这件事，绝不能把一个请求失败成未认证状态。它若抛异常，
+            // 更安全的解读是「没有会话」，调用方拿到的也正是这个——一个他能
+            // 据此行动的 401，而不是一个他无法行动的 500。
             log.error("Could not resolve authority for user {}", identity.getUserId(), e);
             return false;
         }
@@ -101,18 +96,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Finds the bearer token.
+     * 找出持有者令牌。
      *
-     * <p>Normally the Authorization header. The streaming endpoints are the
-     * exception: the browser's EventSource API cannot set headers, so those
-     * also accept the token as a query parameter.
+     * <p>通常来自 Authorization 请求头。流式端点是例外：浏览器的 EventSource API 无法设置
+     * 请求头，所以那些端点也接受把令牌放在查询参数里。
      *
-     * <p>This is a real trade-off and not a free one — a token in a URL can end
-     * up in access logs, browser history and proxy logs. So the exception is a
-     * <b>named list of paths</b>, never a rule like "anything containing
-     * stream": widening it by accident is exactly how the token ends up in a
-     * log line nobody thought about. The proper fix (a short-lived, single-use
-     * stream ticket) is noted rather than pretended away.
+     * <p>这是一个真实的取舍，不是免费的——URL 里的令牌可能落进访问日志、浏览器历史和代理
+     * 日志。所以例外是一份<b>具名的路径清单</b>，绝不是「任何包含 stream 的路径」这类规则：
+     * 一次意外的放宽，正是令牌出现在某条谁也没想过的日志行里的方式。真正的修法（短时效、
+     * 一次性的流票据）被记下来，而不是被装作不存在。
      */
     private static final List<String> TOKEN_IN_QUERY_PATHS = List.of(
             "/market/stream",

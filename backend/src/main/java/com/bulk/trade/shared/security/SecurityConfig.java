@@ -24,18 +24,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * Stateless JWT security.
+ * 无状态的 JWT 安全。
  *
- * <p>CSRF protection is disabled because there is no session cookie to forge:
- * the credential is a bearer token that the browser never attaches
- * automatically. Re-enabling CSRF would break the API without adding safety.
+ * <p>关闭 CSRF 防护，是因为没有任何会话 cookie 可以被伪造：凭证是一个持有者令牌，
+ * 浏览器永远不会自动带上它。重新打开 CSRF 只会弄坏 API，换不来任何安全。
  */
 @Configuration
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    /** Endpoints reachable without a token. */
+    /** 不带令牌也能访问的端点。 */
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/auth/login",
             "/api/auth/register",
@@ -48,26 +47,21 @@ public class SecurityConfig {
     };
 
     /**
-     * The shop window: reads a visitor may make before identifying.
+     * 橱窗：访客在表明身份之前可以做的读取。
      *
-     * <p><b>Scoped to GET, and that is the point.</b> Authenticated writes sit
-     * one segment away from these paths: {@code /api/listings/mine} is beside
-     * {@code /api/listings/market}, and {@code POST /api/listings} is the same
-     * prefix again. Permitting the prefix rather than the read would open all
-     * three.
+     * <p><b>限定在 GET 上，而这一点就是全部要点。</b>需要认证的写操作，就贴在这些路径
+     * 隔壁：{@code /api/listings/mine} 挨着 {@code /api/listings/market}，而
+     * {@code POST /api/listings} 又是同一个前缀。**放开前缀而不是放开这个读取，
+     * 等于把这三个一起放开。**
      *
-     * <p>What is here is what a commodity venue publishes to the street: what
-     * is on offer and what it last traded at. What is absent — inventory,
-     * orders, contracts, funds, the advisor — is everything scoped to one
-     * enterprise, and a visitor has no enterprise to scope it to.
+     * <p>这里放的是一个大宗商品交易场所向街面公布的东西：在挂的是什么，最近成交在
+     * 什么价位。不在这里的——库存、订单、合同、资金、AI 顾问——全部是按企业划分的，
+     * 而访客没有企业可以用来划分。
      *
-     * <p>The rulebook used to be here on the grounds that a venue's rules are
-     * published. That is true of the rules and was never true of the retrieval
-     * corpus: those endpoints also served the operator's view of the knowledge
-     * base, which is a maintenance surface rather than a public one. It moved
-     * to the console, and its entries left this list in the same change —
-     * hiding a page while leaving its API open is not a smaller version of the
-     * change, it is a different and worse one.
+     * <p>规则手册原先也在这里，理由是「交易场所会公开自己的规则」。这句话对规则本身成立，
+     * 对那些接口却从来不成立：它们同时还提供运营视角下的知识库，那是一个运维面而不是
+     * 公开面。它挪进了运营后台，而它的条目也在同一次改动里从这份清单上移除了——
+     * **藏起一个页面却把它的接口敞着，不是同一改动的缩小版，而是另一个更糟的版本。**
      */
     private static final String[] PUBLIC_READS = {
             "/api/public/**",
@@ -106,8 +100,8 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // Strength 10 is the BCrypt default: roughly 50-100ms per hash on
-        // commodity hardware, which is the intended cost factor.
+        // 强度 10 是 BCrypt 的默认值：在普通硬件上大约每次哈希 50-100 毫秒，
+        // 这正是它想要的代价因子。
         return new BCryptPasswordEncoder();
     }
 

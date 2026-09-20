@@ -9,28 +9,25 @@ spring:
   application:
     name: spotlink
 
-  # Defaults to the local profile for developer machines; any other
-  # environment must set SPRING_PROFILES_ACTIVE explicitly.
+  # 开发者机器上默认使用 local profile；其他任何环境都必须显式设置
+  # SPRING_PROFILES_ACTIVE。
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
 
   datasource:
-    # allowPublicKeyRetrieval + useSSL=false are for local Docker only. MySQL 8
-    # defaults to caching_sha2_password over TLS; a scratch container has no
-    # certificate worth validating, and requiring one would make `docker compose
-    # up` fail on a fresh machine for no security gain.
+    # allowPublicKeyRetrieval + useSSL=false 只用于本地 Docker。MySQL 8 默认走 TLS
+    # 加 caching_sha2_password；一次性容器里没有值得验证的证书，而要求证书只会让
+    # `docker compose up` 在一台全新机器上失败，换不来任何安全收益。
     #
-    # connectionTimeZone=Asia/Shanghai with forceConnectionTimeZoneToSession
-    # pins the JDBC session so a DATETIME written as OffsetDateTime comes back
-    # the same instant it went in. MySQL has no timezone-aware type, so this
-    # setting is what carries the meaning PostgreSQL kept in TIMESTAMPTZ.
+    # connectionTimeZone=Asia/Shanghai 配上 forceConnectionTimeZoneToSession，把
+    # JDBC 会话钉住，这样一个以 OffsetDateTime 写入的 DATETIME 取回来还是写入时的
+    # 那个时刻。MySQL 没有带时区的时间类型，所以正是这项设置承接了 PostgreSQL 用
+    # TIMESTAMPTZ 保住的含义。
     url: ${BULK_DB_URL:jdbc:mysql://localhost:13306/bulk_trade?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&connectionTimeZone=Asia/Shanghai&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true}
     username: ${BULK_DB_USER:bulk}
-    # The default matches the container in docker-compose.yml and is for local
-    # development. Any deployment reachable from outside this machine must set
-    # it: a committed password is a published password, and the whole point of
-    # reading it here is that changing it is configuration rather than an edit
-    # to a file that is already in the repository.
+    # 默认值与 docker-compose.yml 里的容器一致，只用于本地开发。任何能从本机之外
+    # 访问到的部署都必须改掉它：写进仓库的密码就是公开的密码，而之所以在这里从环境
+    # 里读，恰恰是为了让改密码成为一次配置，而不是去编辑一个已经在仓库里的文件。
     password: ${BULK_DB_PASSWORD:bulk_trade_2026}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
@@ -49,7 +46,7 @@ spring:
     redis:
       host: ${BULK_REDIS_HOST:localhost}
       port: ${BULK_REDIS_PORT:16379}
-      # Same reasoning as the database password above.
+      # 理由与上面数据库密码那一处相同。
       password: ${BULK_REDIS_PASSWORD:bulk_trade_2026}
       database: 0
       timeout: 3000ms
@@ -68,21 +65,19 @@ spring:
 
   ai:
     anthropic:
-      # Auto-configuration requires a non-empty key at startup. A placeholder
-      # keeps the platform bootable without an advisor key; the advisor reports
-      # itself unavailable instead of the whole application refusing to start.
+      # 自动配置要求启动时 key 非空。占位值让平台在没有顾问 key 时也能启动，
+      # 顾问会报告自己不可用，而不是让整个应用拒绝启动。
       api-key: ${BULK_ADVISOR_API_KEY:not-configured}
       base-url: ${BULK_ADVISOR_BASE_URL:https://api.anthropic.com}
       chat:
         model: ${BULK_ADVISOR_MODEL:claude-opus-5}
         max-tokens: 8192
         cache-options:
-          # Cache the system prompt. The stable half of it is identical for
-          # every tenant, so one cache entry serves all callers.
+          # 缓存系统提示词。它稳定不变的那一半对每个租户都相同，
+          # 所以一条缓存就能服务所有调用方。
           strategy: SYSTEM_ONLY
-          # Send each system message as its own block. Without this the stable
-          # and caller-specific halves are merged and the prefix changes per
-          # user, which misses the cache on every request.
+          # 每条 system 消息各成一个块。否则稳定的那一半和随调用方变化的那一半会被
+          # 合并，前缀随用户改变，于是每个请求都命中不了缓存。
           multi-block-system-caching: true
 
 mybatis-plus:
@@ -112,48 +107,45 @@ springdoc:
   api-docs:
     path: /v3/api-docs
 
-# Application-specific settings
+# 本应用自己的设置
 bulk:
   security:
     jwt:
-      # Base64-encoded 256-bit secret. Override in every non-local environment.
+      # Base64 编码的 256 位密钥。任何非本地环境都必须覆盖它。
       secret: ${BULK_JWT_SECRET:YnVsay10cmFkZS1kZXYtc2VjcmV0LWtleS1jaGFuZ2UtbWUtMjAyNg==}
       access-token-ttl: 2h
       refresh-token-ttl: 7d
 
   init:
-    # Seeds development accounts (admin / seller01 / buyer01 / pending01).
-    # MUST be false in any environment real users can reach.
+    # 写入开发账号（admin / seller01 / buyer01 / pending01）。
+    # 任何真实用户能访问到的环境都必须设为 false。
     enabled: true
 
   trading:
-    # How often the background sweep runs. It answers acceptances whose lister
-    # never replied, and expires listings past their validity — the work nobody
-    # triggers by hand, so this interval bounds how long a stalled offer sits.
+    # 后台扫描多久跑一次。它负责答复挂牌方始终未回复的摘牌请求，并让超过有效期的
+    # 挂牌过期——这些活没人会手动触发，所以这个间隔决定了一个停滞的要约能滞留多久。
     sweep-interval-ms: 300000
-    # Let the application finish starting before the first sweep.
+    # 让应用先启动完，再跑第一次扫描。
     sweep-initial-delay-ms: 60000
-    # How long a lister has to answer an acceptance on a 「需挂牌方确认」 listing.
-    # Capped by each listing's own validity, so it can only ever shorten the
-    # wait. Set this to PT1M to watch the auto-expiry path without waiting a day.
+    # 「需挂牌方确认」的挂牌，挂牌方答复一次摘牌的时间上限。受每张挂牌自身的有效期
+    # 封顶，所以它只会缩短等待。把它设成 PT1M，就能不必等一天而观察到自动过期的路径。
     confirm-window: ${BULK_CONFIRM_WINDOW:PT24H}
 
   rag:
     embedding:
-      # Claude has no embedding endpoint, so this is the one non-Anthropic
-      # piece of the advisor stack. BGE-M3 served by Ollama: strong in Chinese,
-      # free per call, and runs without network access.
+      # Claude 没有嵌入接口，所以这是顾问技术栈里唯一不属于 Anthropic 的一块。
+      # 由 Ollama 提供 BGE-M3：中文强、每次调用免费，而且无需联网即可运行。
       enabled: ${BULK_EMBEDDING_ENABLED:true}
       base-url: ${BULK_EMBEDDING_URL:http://localhost:11434}
       model: ${BULK_EMBEDDING_MODEL:bge-m3}
 
   advisor:
     enabled: true
-    # Upper bound on agent-loop iterations. A tool-calling loop with no ceiling
-    # can spin forever, and every turn is billed.
+    # 智能体循环的迭代次数上限。没有上限的工具调用循环可以一直转下去，
+    # 而每一轮都是要计费的。
     max-iterations: 8
-    # Endpoint, key, model and token ceiling live under spring.ai.anthropic so
-    # there is exactly one place to configure the model connection.
+    # 端点、密钥、模型和令牌上限都在 spring.ai.anthropic 下，
+    # 这样模型连接只有一个地方需要配置。
 
 logging:
   level:

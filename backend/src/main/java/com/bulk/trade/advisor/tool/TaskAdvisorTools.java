@@ -12,20 +12,17 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * Tells the caller what they have to act on, across every module at once.
+ * 一次就告诉调用方，跨所有模块，有哪些事等着他做。
  *
- * <p><b>Why one tool and not four.</b> "我还有什么要处理的" is the question people
- * actually ask, and it does not know which module the answer lives in.
- * Answering it by hand means the model must remember to check orders, then
- * contracts, then listings — and a model that forgets one step produces a
- * confident, complete-sounding, wrong answer. That is the worst failure mode
- * available here, so the gathering is one call that cannot forget.
+ * <p><b>为什么是一个工具，而不是四个。</b>「我还有什么要办的」是人们真正会问的问题，
+ * 而这个问题并不知道答案住在哪个模块里。手工回答它，就意味着模型必须记得先查订单、
+ * 再查合同、再查挂牌——而一个漏掉某一步的模型，会给出一个自信、听起来完整、却是错的
+ * 答案。这是这里最糟的失败模式，所以收集做成了一次调用，忘不掉。
  *
- * <p><b>It also does not decide anything.</b> Which party owes the next move is
- * a rule, and rules belong in code that can be tested rather than in a prompt
- * that can be paraphrased — so {@link TaskService} owns the judgement and this
- * class only renders it. The web console reads the same service, which is what
- * keeps the assistant and the screen from disagreeing about what is pending.
+ * <p><b>它什么也不判断。</b>下一步该谁动是一条规则，规则应该待在能被测试的代码里，
+ * 而不是待在一段可以被转述的提示词里——所以判断归 {@link TaskService}，这个类只负责
+ * 把它渲染出来。Web 后台读的是同一个 service，这正是助手和页面不会对「什么是待办」
+ * 各说各话的原因。
  */
 @Component
 @RequiredArgsConstructor
@@ -37,12 +34,11 @@ public class TaskAdvisorTools {
 
     @Tool(name = "list_my_tasks",
             description = """
-                    Everything the caller currently has to act on, gathered from every module:
-                    acceptances waiting for their answer, contracts waiting for their signature,
-                    orders ready to be contracted, delivered or completed. Each item names what
-                    to do next. Use this — not the per-module list tools — for anything like
-                    "我有什么要处理的", "还有多少订单没处理", "有什么待办", "有什么等我做".
-                    Returns an empty-handed answer when there is genuinely nothing pending.""")
+                    调用方当前需要处理的一切，从每个模块汇总而来：等他答复的摘牌、
+                    等他签署的合同、可以签约、交收或完成的订单。每一项都写明下一步做什么。
+                    凡是「我有什么要处理的」「还有多少订单没处理」「有什么待办」
+                    「有什么等我做」这类问题，都用这个——不要用各模块的列表工具。
+                    确实没有待办时，它会给出一个空手而归的回答。""")
     public String listMyTasks() {
         Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();
         if (enterpriseId == null) {

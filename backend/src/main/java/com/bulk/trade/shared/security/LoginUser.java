@@ -10,11 +10,10 @@ import java.util.Collection;
 import java.util.Set;
 
 /**
- * Authenticated principal held in the Spring Security context.
+ * 保存在 Spring Security 上下文中的已认证主体。
  *
- * <p>{@code enterpriseId} is the tenant key. Every business query derives it
- * from here, never from a request parameter — that is the whole point of
- * carrying it on the principal.
+ * <p>{@code enterpriseId} 就是租户键。每一条业务查询都从这里取它，<b>绝不从请求参数取</b>
+ * ——把它挂在主体上，全部意义就在于此。
  */
 @Getter
 @Builder
@@ -29,19 +28,17 @@ public class LoginUser implements UserDetails {
     private final Integer status;
     private final Set<String> permissions;
 
-    /** Platform-side accounts are not scoped to a tenant. */
+    /** 平台侧账号不隶属于任何租户。 */
     public boolean isPlatformOperator() {
         return enterpriseId == null;
     }
 
     /**
-     * The same identity, with what it may do filled in.
+     * 同一个身份，但把「它能做什么」填了进去。
      *
-     * <p>Identity comes from the token and authority comes from the database,
-     * and they are joined here rather than at either end. The token is the only
-     * thing that can say who the caller is; the database is the only thing that
-     * can say what they may currently do, because a token cannot be un-issued
-     * when a permission is taken away.
+     * <p>身份来自令牌，权限来自数据库，两者在这里合流，而不是在任意一端合流。<b>令牌是
+     * 唯一能说明调用方是谁的东西</b>；数据库是唯一能说明他们<em>此刻</em>能做什么的东西，
+     * 因为权限被收回时，令牌是无法撤回的。
      */
     public LoginUser withAuthority(UserAuthority authority) {
         return LoginUser.builder()
