@@ -208,6 +208,12 @@ export interface OrderView {
   statusHint: string | null
   /** True when the next move is this caller's. */
   statusHintMine: boolean
+  /**
+   * Label for the button performing the next move, or null when it is not this
+   * caller's. Distinct from statusHint — that describes a situation ("待我发货"),
+   * this performs an act ("确认发货").
+   */
+  nextAction: string | null
   /** Transitions this caller may actually perform — the same table the server enforces. */
   allowedActions: string[]
   /** 挂牌方的答复截止时间；只有「待挂牌方确认」的订单有值。 */

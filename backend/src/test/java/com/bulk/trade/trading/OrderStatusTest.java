@@ -74,8 +74,8 @@ class OrderStatusTest {
     @Test
     @DisplayName("only the lister may answer a waiting acceptance")
     void answeringIsOnePartysMove() {
-        Set<String> lister = OrderStatus.allowedFrom(OrderStatus.PENDING_CONFIRM, true);
-        Set<String> counterparty = OrderStatus.allowedFrom(OrderStatus.PENDING_CONFIRM, false);
+        Set<String> lister = OrderStatus.allowedFrom(OrderStatus.PENDING_CONFIRM, true, true);
+        Set<String> counterparty = OrderStatus.allowedFrom(OrderStatus.PENDING_CONFIRM, false, true);
 
         assertThat(lister).containsExactlyInAnyOrder(OrderStatus.CONFIRMED, OrderStatus.CANCELLED);
         // Declining your own offer is not something anyone needs protecting
@@ -84,15 +84,39 @@ class OrderStatusTest {
     }
 
     @Test
-    @DisplayName("only PENDING_CONFIRM is role-sensitive")
-    void otherStatusesIgnoreTheCaller() {
+    @DisplayName("卖方放货，买方收货，各管一步")
+    void deliveryIsTwoStepsWithDifferentOwners() {
+        // 交收 is not one act either party performs: the seller releases the
+        // goods and the buyer receives them. If both could do both, then
+        // DELIVERING would stop meaning "the goods are out" and COMPLETED would
+        // stop meaning "and they arrived" — the two states would collapse into
+        // one.
+        Set<String> sellerStarts = OrderStatus.allowedFrom(OrderStatus.CONTRACTED, false, true);
+        Set<String> buyerStarts = OrderStatus.allowedFrom(OrderStatus.CONTRACTED, false, false);
+        assertThat(sellerStarts).contains(OrderStatus.DELIVERING);
+        assertThat(buyerStarts).doesNotContain(OrderStatus.DELIVERING);
+
+        Set<String> buyerFinishes = OrderStatus.allowedFrom(OrderStatus.DELIVERING, false, false);
+        Set<String> sellerFinishes = OrderStatus.allowedFrom(OrderStatus.DELIVERING, false, true);
+        assertThat(buyerFinishes).contains(OrderStatus.COMPLETED);
+        // Nothing at all for the seller here: the goods are out and the next
+        // move is the receiver's. An empty set is the honest answer, and the
+        // screen shows a wait rather than a button that would fail.
+        assertThat(sellerFinishes).isEmpty();
+    }
+
+    @Test
+    @DisplayName("三个阶段按调用者区分，其余一律不区分")
+    void onlyThreeStatusesAreRoleSensitive() {
         for (String status : ALL) {
-            if (OrderStatus.PENDING_CONFIRM.equals(status)) {
+            if (OrderStatus.PENDING_CONFIRM.equals(status)
+                    || OrderStatus.CONTRACTED.equals(status)
+                    || OrderStatus.DELIVERING.equals(status)) {
                 continue;
             }
-            assertThat(OrderStatus.allowedFrom(status, false))
-                    .as("actions as counterparty from %s", status)
-                    .isEqualTo(OrderStatus.allowedFrom(status, true));
+            assertThat(OrderStatus.allowedFrom(status, false, false))
+                    .as("actions as the other party from %s", status)
+                    .isEqualTo(OrderStatus.allowedFrom(status, true, true));
         }
     }
 

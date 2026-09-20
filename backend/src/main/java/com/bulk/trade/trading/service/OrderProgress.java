@@ -28,13 +28,17 @@ import com.bulk.trade.trading.entity.OrderStatus;
  * to decide whether to highlight a row would be one rephrasing away from
  * silently breaking, and the wording is the part most likely to be rephrased.
  *
- * @param text   the sentence to show, or null when the order is finished and
- *               nothing is pending from anyone
- * @param mine   true when the next move belongs to the viewer
+ * @param text       the sentence to show, or null when the order is finished
+ *                   and nothing is pending from anyone
+ * @param mine       true when the next move belongs to the viewer
+ * @param nextAction the label for the button that performs the move, or null
+ *                   when the move is not the viewer's. Separate from
+ *                   {@code text} because the two say different things: 待我发货
+ *                   describes a situation, 确认发货 performs an act
  */
-public record OrderProgress(String text, boolean mine) {
+public record OrderProgress(String text, boolean mine, String nextAction) {
 
-    private static final OrderProgress NOTHING_PENDING = new OrderProgress(null, false);
+    private static final OrderProgress NOTHING_PENDING = new OrderProgress(null, false, null);
 
     /**
      * Works out the hint for one order and one viewer.
@@ -51,24 +55,32 @@ public record OrderProgress(String text, boolean mine) {
         boolean iAmBuyer = viewerEnterpriseId.equals(order.getBuyerId());
         String status = order.getStatus();
 
+        boolean arrives = Listing.DeliveryMethod.DELIVERED.equals(order.getDeliveryMethod());
+
         return switch (status) {
             case OrderStatus.PENDING_CONFIRM ->
                     // Only the lister answers, and only a MANUAL listing ever
                     // leaves an order here, so the lister is the seller.
                     iAmBuyer
-                            ? new OrderProgress("等对方确认摘牌", false)
-                            : new OrderProgress("待我确认摘牌", true);
+                            ? new OrderProgress("等对方确认摘牌", false, null)
+                            : new OrderProgress("待我确认摘牌", true, "确认成交");
 
             case OrderStatus.CONFIRMED -> contractHint(contract, viewerEnterpriseId);
 
-            case OrderStatus.CONTRACTED -> deliveryHint(order, iAmBuyer);
+            // The seller releases the goods, whichever way they then travel.
+            // 送到 means shipping them; 自提 means making them available for
+            // collection — the seller's act either way, and the buyer waits.
+            case OrderStatus.CONTRACTED -> iAmBuyer
+                    ? new OrderProgress(arrives ? "等对方发货" : "等对方放货", false, null)
+                    : new OrderProgress(arrives ? "待我发货" : "待我放货", true,
+                            arrives ? "确认发货" : "确认放货");
 
-            case OrderStatus.DELIVERING ->
-                    // Whoever receives confirms completion, and a spot trade is
-                    // completed by the receiving side.
-                    iAmBuyer
-                            ? new OrderProgress("待我收货", true)
-                            : new OrderProgress("等对方收货", false);
+            // Then the buyer receives. 送到 is 收货, 自提 is 提货 — the same
+            // handover described from the two ends of the journey.
+            case OrderStatus.DELIVERING -> iAmBuyer
+                    ? new OrderProgress(arrives ? "待我收货" : "待我提货", true,
+                            arrives ? "确认收货" : "确认提货")
+                    : new OrderProgress(arrives ? "等对方收货" : "等对方提货", false, null);
 
             // Finished either way: nothing for anyone to do.
             default -> NOTHING_PENDING;
@@ -84,7 +96,7 @@ public record OrderProgress(String text, boolean mine) {
      */
     private static OrderProgress contractHint(Contract contract, Long viewerEnterpriseId) {
         if (contract == null) {
-            return new OrderProgress("待起草合同", true);
+            return new OrderProgress("待起草合同", true, "起草合同");
         }
         if (!Contract.Status.PENDING_SIGN.equals(contract.getStatus())) {
             return NOTHING_PENDING;
@@ -99,32 +111,11 @@ public record OrderProgress(String text, boolean mine) {
                 : contract.getBuyerSignedAt() != null;
 
         if (iSigned && !theySigned) {
-            return new OrderProgress("等对方签署", false);
+            return new OrderProgress("等对方签署", false, null);
         }
         if (!iSigned && theySigned) {
-            return new OrderProgress("待我签署", true);
+            return new OrderProgress("待我签署", true, "签署合同");
         }
-        return new OrderProgress("待双方签署", true);
-    }
-
-    /**
-     * Signed and ready; nobody has moved the goods yet.
-     *
-     * <p>Which side acts depends on the delivery term, which is the whole
-     * reason this case cannot be a single sentence: under 送到 the seller
-     * ships, under 自提 the buyer collects, and the same order status means
-     * opposite things to the two readers.
-     */
-    private static OrderProgress deliveryHint(Order order, boolean iAmBuyer) {
-        boolean sellerShips = Listing.DeliveryMethod.DELIVERED.equals(order.getDeliveryMethod());
-
-        if (sellerShips) {
-            return iAmBuyer
-                    ? new OrderProgress("等对方发货", false)
-                    : new OrderProgress("待我发货", true);
-        }
-        return iAmBuyer
-                ? new OrderProgress("待我提货", true)
-                : new OrderProgress("等对方提货", false);
+        return new OrderProgress("待双方签署", true, "签署合同");
     }
 }

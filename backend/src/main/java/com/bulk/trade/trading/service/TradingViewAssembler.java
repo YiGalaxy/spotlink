@@ -101,6 +101,8 @@ public class TradingViewAssembler {
                         viewerEnterpriseId,
                         viewerEnterpriseId != null
                                 && viewerEnterpriseId.equals(lookup(listerOf, order.getListingId(), null)),
+                        viewerEnterpriseId != null
+                                && viewerEnterpriseId.equals(order.getSellerId()),
                         OrderProgress.of(order, lookup(contracts, order.getContractId(), null), viewerEnterpriseId),
                         lookup(enterprises, order.getBuyerId(), "—"),
                         lookup(enterprises, order.getSellerId(), "—"),

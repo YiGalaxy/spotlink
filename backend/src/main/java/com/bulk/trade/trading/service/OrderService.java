@@ -308,24 +308,61 @@ public class OrderService {
         return lapsed.size();
     }
 
-    /** Marks delivery as started. */
+    /**
+     * The seller releases the goods.
+     *
+     * <p><b>Seller only, and this is a rule rather than a preference.</b>
+     * Delivery starts when the goods move, and only their owner can move them.
+     * A buyer able to press this would be a buyer announcing that somebody else
+     * has shipped — and if both parties can press it, the state it sets means
+     * nothing: an order marked 交收中 would no longer tell either side whether
+     * anything had actually left the warehouse.
+     *
+     * <p>{@code allowedActions} hides the button from the buyer; this is what
+     * refuses them if they call the endpoint anyway.
+     */
     @Transactional
     public Order startDelivery(Long orderId, LoginUser user) {
         Order order = loadParticipant(orderId, user.getEnterpriseId());
-        transition(order, OrderStatus.DELIVERING, user, "开始交收");
+        requireSeller(order, user, "只有卖方可以发起交收");
+        transition(order, OrderStatus.DELIVERING, user,
+                "DELIVERED".equals(order.getDeliveryMethod()) ? "卖方发货" : "卖方放货");
         orderMapper.updateById(order);
-        publishTaskChange("已开始交收", order);
+        publishTaskChange("卖方可发起交收", order);
         return order;
     }
 
-    /** Marks the order complete. */
+    /**
+     * The buyer confirms receipt.
+     *
+     * <p>Buyer only, for the mirror-image reason: completion means the goods
+     * arrived and were accepted, which is a statement about what the receiver
+     * got. A seller confirming their own delivery is a party marking their own
+     * homework, and the state would stop distinguishing "sent" from "arrived".
+     */
     @Transactional
     public Order complete(Long orderId, LoginUser user) {
         Order order = loadParticipant(orderId, user.getEnterpriseId());
-        transition(order, OrderStatus.COMPLETED, user, "交收完成");
+        requireBuyer(order, user, "只有买方可以确认收货");
+        transition(order, OrderStatus.COMPLETED, user,
+                "DELIVERED".equals(order.getDeliveryMethod()) ? "买方收货" : "买方提货");
         orderMapper.updateById(order);
         publishTaskChange("交收已完成", order);
         return order;
+    }
+
+    /** Refuses a caller who is not the selling party. */
+    private void requireSeller(Order order, LoginUser user, String message) {
+        if (!order.getSellerId().equals(user.getEnterpriseId())) {
+            throw BusinessException.of(ResultCode.FORBIDDEN, message);
+        }
+    }
+
+    /** Refuses a caller who is not the buying party. */
+    private void requireBuyer(Order order, LoginUser user, String message) {
+        if (!order.getBuyerId().equals(user.getEnterpriseId())) {
+            throw BusinessException.of(ResultCode.FORBIDDEN, message);
+        }
     }
 
     // ------------------------------------------------------------------

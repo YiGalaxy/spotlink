@@ -71,6 +71,12 @@ public record OrderView(
         String statusHint,
         /** True when the next move is the caller's. Drives sorting and colour. */
         boolean statusHintMine,
+        /**
+         * Label for the button that performs the next move, or null when it is
+         * not the caller's. Distinct from {@code statusHint}: that describes a
+         * situation, this performs an act.
+         */
+        String nextAction,
 
         List<String> allowedActions,
 
@@ -86,6 +92,7 @@ public record OrderView(
     public static OrderView of(Order order,
                                Long viewerEnterpriseId,
                                boolean callerIsLister,
+                               boolean callerIsSeller,
                                OrderProgress progress,
                                String buyerName,
                                String sellerName,
@@ -116,7 +123,9 @@ public record OrderView(
                 OrderStatus.text(order.getStatus()),
                 progress.text(),
                 progress.mine(),
-                List.copyOf(OrderStatus.allowedFrom(order.getStatus(), callerIsLister)),
+                progress.nextAction(),
+                List.copyOf(OrderStatus.allowedFrom(
+                        order.getStatus(), callerIsLister, callerIsSeller)),
                 order.getConfirmDeadline(),
                 order.getConfirmedAt(),
                 order.getCancelledAt(),

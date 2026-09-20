@@ -1064,11 +1064,20 @@ function OrderDetailModal({
                   <Button danger>拒绝摘牌</Button>
                 </Popconfirm>
               )}
+              {/* Labels come from the server rather than being written here.
+                  Who starts delivery and who finishes it depends on the
+                  delivery term and on which party is reading, and a second copy
+                  of that rule in the client is one that can disagree with the
+                  button the server would accept. */}
               {order.allowedActions.includes('DELIVERING') && (
-                <Button type="primary" onClick={() => void onAction('deliver', order)}>开始交收</Button>
+                <Button type="primary" onClick={() => void onAction('deliver', order)}>
+                  {order.nextAction ?? '发起交收'}
+                </Button>
               )}
               {order.allowedActions.includes('COMPLETED') && (
-                <Button type="primary" onClick={() => void onAction('complete', order)}>确认完成</Button>
+                <Button type="primary" onClick={() => void onAction('complete', order)}>
+                  {order.nextAction ?? '确认完成'}
+                </Button>
               )}
               {order.allowedActions.includes('CANCELLED') && (
                 <Popconfirm title="取消这笔订单？" description="交收开始前可取消，货物会退回卖方。"

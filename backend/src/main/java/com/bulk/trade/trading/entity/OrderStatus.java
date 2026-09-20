@@ -69,16 +69,43 @@ public final class OrderStatus {
     /**
      * Legal moves for a particular caller.
      *
-     * <p>Only {@code PENDING_CONFIRM} is role-sensitive, and deliberately so:
-     * the whole point of that state is that <em>one named party</em> owes an
-     * answer. Letting the counterparty press confirm would let the party who
-     * proposed the deal accept it on the other's behalf, which is the same as
-     * having no confirmation step at all. They may still walk away — declining
-     * your own offer is not something anyone needs protecting from.
+     * <p><b>Three states are role-sensitive, and for one reason: a step that
+     * either party could take is a step nobody owns.</b>
+     *
+     * <ul>
+     *   <li>{@code PENDING_CONFIRM} — only the lister answers. Letting the
+     *       counterparty press confirm would let the party who proposed the
+     *       deal accept it on the other's behalf, which is the same as having
+     *       no confirmation step at all.</li>
+     *   <li>{@code CONTRACTED} — only the seller releases the goods. Delivery
+     *       starts when the goods move, and only their owner can move them.
+     *       The buyer pressing this would be the buyer announcing that someone
+     *       else has shipped.</li>
+     *   <li>{@code DELIVERING} — only the buyer receives. Completion means the
+     *       goods arrived and were accepted, which is a statement about what
+     *       the receiver got. The seller confirming their own delivery is a
+     *       party marking their own homework.</li>
+     * </ul>
+     *
+     * <p>In every case the counterparty may still walk away while the order is
+     * cancellable — declining your own deal is not something anyone needs
+     * protecting from.
+     *
+     * @param callerIsLister published the listing this order accepted
+     * @param callerIsSeller is the party releasing the goods
      */
-    public static Set<String> allowedFrom(String status, boolean callerIsLister) {
+    public static Set<String> allowedFrom(String status, boolean callerIsLister, boolean callerIsSeller) {
         if (PENDING_CONFIRM.equals(status) && !callerIsLister) {
             return Set.of(CANCELLED);
+        }
+        if (CONTRACTED.equals(status) && !callerIsSeller) {
+            return Set.of(CANCELLED);
+        }
+        if (DELIVERING.equals(status) && callerIsSeller) {
+            // Nothing to offer the seller here: the goods are out and the next
+            // move is the receiver's. An empty set is the honest answer, and
+            // the screen shows the wait rather than a button that would fail.
+            return Set.of();
         }
         return allowedFrom(status);
     }
