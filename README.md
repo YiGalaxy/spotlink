@@ -38,7 +38,18 @@ cd frontend && npm install && npm run dev  # http://localhost:5173
 ```
 
 **演示数据是可选的，但推荐**——不跑的话数据库里只有 3 家企业 4 个账号，看不到市场。
-脚本在 `scripts/`，用法见 [docs/演示数据.md](docs/演示数据.md)。
+
+```bash
+cd scripts
+for f in generate-demo-data generate-inflight-orders generate-rich-catalogue \
+         backfill-demo-contracts topup-seller-inventory; do
+  docker exec -i spotlink-mysql mysql --default-character-set=utf8mb4 \
+    -ubulk -pbulk_trade_2026 bulk_trade < "$f.sql"
+done
+```
+
+脚本都是幂等的，跑几遍不会重复。**`--default-character-set=utf8mb4` 不能省**——
+容器里的 mysql 客户端默认 latin1，不加会把中文写成双重编码。
 
 **RAG 需要本地嵌入模型**（`ollama pull bge-m3`）。没有它平台照常运行，只是知识库
 检索退化为纯关键词匹配。
@@ -109,19 +120,6 @@ frontend/src/
 ```
 
 模块按**业务能力**划分，不按技术分层。
-
----
-
-## 文档
-
-| 文档 | 内容 |
-|---|---|
-| [docs/设计要点.md](docs/设计要点.md) | 九个关键设计决策及其理由 |
-| [docs/已知取舍.md](docs/已知取舍.md) | 简化、缺口、以及为什么不补 |
-| [docs/数据库约定.md](docs/数据库约定.md) | 主键、金额、审计列、索引、迁移 |
-| [docs/演示数据.md](docs/演示数据.md) | 演示脚本的用法与注意事项 |
-| [docs/steps/](docs/steps/) | 分阶段实现解读与面试考点 |
-| [docs/adr/](docs/adr/) | 架构决策记录 |
 
 ---
 
