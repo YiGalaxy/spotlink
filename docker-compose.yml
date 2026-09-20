@@ -1,0 +1,60 @@
+name: bulk-trade
+
+# Infrastructure for the bulk commodity spot trading platform.
+# Ports are intentionally non-default to avoid clashing with a local
+# PostgreSQL service and other Docker containers already on this machine.
+#   PostgreSQL -> 15432
+#   Redis      -> 16379
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bulk-trade-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bulk_trade
+      POSTGRES_USER: bulk
+      POSTGRES_PASSWORD: bulk_trade_2026
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+    ports:
+      - "15432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bulk -d bulk_trade"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "log_min_duration_statement=500"
+
+  redis:
+    image: redis:7-alpine
+    container_name: bulk-trade-redis
+    restart: unless-stopped
+    command:
+      - "redis-server"
+      - "--appendonly"
+      - "yes"
+      - "--requirepass"
+      - "bulk_trade_2026"
+    ports:
+      - "16379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "bulk_trade_2026", "--no-auth-warning", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  pgdata:
+    name: bulk-trade-pgdata
+  redisdata:
+    name: bulk-trade-redisdata

@@ -1,0 +1,40 @@
+# ---- Java / Maven ----
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+
+# ---- Node / frontend ----
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# ---- IDE ----
+.idea/
+*.iml
+*.iws
+.vscode/
+*.swp
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Logs & runtime ----
+logs/
+*.log
+*.pid
+
+# ---- Secrets: never commit real credentials ----
+.env
+.env.*
+!/.env.example
+application-local.yml
+application-prod.yml
+
+# ---- Build output ----
+/bulk-trade-*
