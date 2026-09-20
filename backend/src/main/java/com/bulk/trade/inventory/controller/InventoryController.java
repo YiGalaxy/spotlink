@@ -2,6 +2,7 @@ package com.bulk.trade.inventory.controller;
 
 import com.bulk.trade.inventory.dto.InventoryNoteView;
 import com.bulk.trade.inventory.dto.InventoryRegisterRequest;
+import com.bulk.trade.inventory.dto.InventoryUpdateRequest;
 import com.bulk.trade.inventory.service.InventoryService;
 import com.bulk.trade.inventory.service.InventoryViewAssembler;
 import com.bulk.trade.shared.security.SecurityUtils;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -59,6 +61,17 @@ public class InventoryController {
             @Valid @RequestBody InventoryRegisterRequest request) {
         return ApiResponse.success(viewAssembler.toView(
                 inventoryService.register(request, SecurityUtils.currentEnterpriseId())));
+    }
+
+    @Operation(summary = "修改库存单",
+            description = "只能改商品名称、品牌、产地、规格、备注等描述信息。"
+                    + "数量、仓库、单位不可修改——那些是货物的物理事实，"
+                    + "变动要走入库/出库/移库流程，而不是改表单。")
+    @PutMapping("/{id}")
+    public ApiResponse<InventoryNoteView> update(@PathVariable Long id,
+                                                 @Valid @RequestBody InventoryUpdateRequest request) {
+        return ApiResponse.success(viewAssembler.toView(
+                inventoryService.update(id, request, SecurityUtils.currentEnterpriseId())));
     }
 
     @Operation(summary = "注销库存单",

@@ -16,6 +16,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,6 +30,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * including the check constraint and the optimistic lock — none of which a mock
  * would exercise.
  *
+ * <p>All rows created here are removed afterwards. An earlier version set the
+ * soft-delete column by hand and called updateById, which does nothing —
+ * {@code @TableLogic} makes MyBatis-Plus ignore that field on update — and the
+ * leftover rows turned up in the application's inventory list. Cleanup now goes
+ * through deleteById, which is the supported path.
+ *
  * <p>Requires the docker compose stack from the README to be running.
  */
 @SpringBootTest
@@ -35,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DisplayName("库存冻结生命周期")
 class FreezeServiceTest {
 
+    /** Deliberately not a real enterprise id, so nothing here touches live data. */
     private static final Long TEST_ENTERPRISE_ID = 999_000_001L;
 
     @Autowired
@@ -47,6 +56,7 @@ class FreezeServiceTest {
     private FreezeRecordMapper freezeRecordMapper;
 
     private Long noteId;
+    private final List<Long> freezeIds = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -69,20 +79,18 @@ class FreezeServiceTest {
 
     @AfterEach
     void tearDown() {
+        freezeIds.forEach(freezeRecordMapper::deleteById);
+        freezeIds.clear();
         if (noteId != null) {
-            InventoryNote note = inventoryNoteMapper.selectById(noteId);
-            if (note != null) {
-                note.setDeleted(1);
-                inventoryNoteMapper.updateById(note);
-            }
+            // deleteById, not a hand-set `deleted` field — see the class note.
+            inventoryNoteMapper.deleteById(noteId);
         }
     }
 
     @Test
     @DisplayName("部分冻结：可用减少，冻结增加，总量不变")
     void partialFreeze() {
-        freezeService.freezeInventory(TEST_ENTERPRISE_ID, noteId, new BigDecimal("30"),
-                FreezeRecord.BizType.LISTING, null, "测试挂牌");
+        freeze(new BigDecimal("30"), FreezeRecord.BizType.LISTING);
 
         InventoryNote note = inventoryNoteMapper.selectById(noteId);
         assertThat(note.getTotalQuantity()).isEqualByComparingTo("100");
@@ -94,15 +102,14 @@ class FreezeServiceTest {
     @Test
     @DisplayName("全部冻结后状态变为 FULLY_FROZEN，再冻结会被拒绝")
     void fullFreezeThenReject() {
-        freezeService.freezeInventory(TEST_ENTERPRISE_ID, noteId, new BigDecimal("100"),
-                FreezeRecord.BizType.LISTING, null, "整批挂牌");
+        freeze(new BigDecimal("100"), FreezeRecord.BizType.LISTING);
 
         InventoryNote note = inventoryNoteMapper.selectById(noteId);
         assertThat(note.getAvailableQuantity()).isEqualByComparingTo("0");
         assertThat(note.getStatus()).isEqualTo(InventoryNote.Status.FULLY_FROZEN);
 
-        // The over-request must be refused rather than silently accepting a
-        // negative available quantity.
+        // The over-request must be refused rather than silently driving the
+        // available quantity negative.
         assertThatThrownBy(() -> freezeService.freezeInventory(
                 TEST_ENTERPRISE_ID, noteId, new BigDecimal("1"),
                 FreezeRecord.BizType.LISTING, null, "超额挂牌"))
@@ -114,8 +121,7 @@ class FreezeServiceTest {
     @Test
     @DisplayName("解冻：冻结量回到可用量，状态回到在库")
     void release() {
-        FreezeRecord freeze = freezeService.freezeInventory(TEST_ENTERPRISE_ID, noteId,
-                new BigDecimal("40"), FreezeRecord.BizType.LISTING, null, "挂牌");
+        FreezeRecord freeze = freeze(new BigDecimal("40"), FreezeRecord.BizType.LISTING);
 
         freezeService.releaseInventory(TEST_ENTERPRISE_ID, freeze.getId());
 
@@ -132,8 +138,7 @@ class FreezeServiceTest {
     @Test
     @DisplayName("解冻后重复解冻会被拒绝")
     void doubleReleaseRejected() {
-        FreezeRecord freeze = freezeService.freezeInventory(TEST_ENTERPRISE_ID, noteId,
-                new BigDecimal("10"), FreezeRecord.BizType.LISTING, null, "挂牌");
+        FreezeRecord freeze = freeze(new BigDecimal("10"), FreezeRecord.BizType.LISTING);
         freezeService.releaseInventory(TEST_ENTERPRISE_ID, freeze.getId());
 
         assertThatThrownBy(() -> freezeService.releaseInventory(TEST_ENTERPRISE_ID, freeze.getId()))
@@ -145,8 +150,7 @@ class FreezeServiceTest {
     @Test
     @DisplayName("消耗：冻结量不回到可用量，总量随之减少")
     void consumeRemovesGoods() {
-        FreezeRecord freeze = freezeService.freezeInventory(TEST_ENTERPRISE_ID, noteId,
-                new BigDecimal("60"), FreezeRecord.BizType.ORDER, null, "成交");
+        FreezeRecord freeze = freeze(new BigDecimal("60"), FreezeRecord.BizType.ORDER);
 
         freezeService.consumeInventory(TEST_ENTERPRISE_ID, freeze.getId());
 
@@ -160,8 +164,7 @@ class FreezeServiceTest {
     @Test
     @DisplayName("全部消耗后状态变为已交收")
     void consumeAllMarksDelivered() {
-        FreezeRecord freeze = freezeService.freezeInventory(TEST_ENTERPRISE_ID, noteId,
-                new BigDecimal("100"), FreezeRecord.BizType.ORDER, null, "整批成交");
+        FreezeRecord freeze = freeze(new BigDecimal("100"), FreezeRecord.BizType.ORDER);
 
         freezeService.consumeInventory(TEST_ENTERPRISE_ID, freeze.getId());
 
@@ -181,4 +184,11 @@ class FreezeServiceTest {
                 .isEqualTo(ResultCode.INVENTORY_NOTE_NOT_FOUND);
     }
 
+    /** Freezes and remembers the row so tearDown can remove it. */
+    private FreezeRecord freeze(BigDecimal quantity, String bizType) {
+        FreezeRecord record = freezeService.freezeInventory(
+                TEST_ENTERPRISE_ID, noteId, quantity, bizType, null, "测试");
+        freezeIds.add(record.getId());
+        return record;
+    }
 }

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.bulk.trade.commodity.entity.CommodityCategory;
 import com.bulk.trade.commodity.mapper.CommodityCategoryMapper;
 import com.bulk.trade.inventory.dto.InventoryRegisterRequest;
+import com.bulk.trade.inventory.dto.InventoryUpdateRequest;
 import com.bulk.trade.inventory.entity.InventoryNote;
 import com.bulk.trade.inventory.mapper.InventoryNoteMapper;
 import com.bulk.trade.shared.exception.BusinessException;
@@ -99,6 +100,51 @@ public class InventoryService {
 
     public InventoryNote get(Long id, Long enterpriseId) {
         return loadOwned(id, enterpriseId);
+    }
+
+    /**
+     * Corrects the descriptive fields of a note.
+     *
+     * <p>Quantity, warehouse and unit are not editable — see
+     * {@link com.bulk.trade.inventory.dto.InventoryUpdateRequest} for why. What
+     * changes here is only what a clerk could have mistyped.
+     *
+     * <p>Editing stays possible while goods are frozen: a wrong brand name does
+     * not affect how much is reserved, and blocking the correction would leave
+     * the error in place until the listing ended.
+     */
+    @Transactional
+    public InventoryNote update(Long id, InventoryUpdateRequest request, Long enterpriseId) {
+        InventoryNote note = loadOwned(id, enterpriseId);
+
+        if (note.getStatus() != null
+                && (note.getStatus() == InventoryNote.Status.DELIVERED
+                 || note.getStatus() == InventoryNote.Status.CANCELLED)) {
+            throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_AVAILABLE,
+                    note.getStatus() == InventoryNote.Status.DELIVERED
+                            ? "已交收的库存单不能再修改"
+                            : "已注销的库存单不能再修改");
+        }
+
+        CommodityCategory category = categoryMapper.selectById(request.categoryId());
+        if (category == null) {
+            throw BusinessException.of(ResultCode.CATEGORY_NOT_FOUND);
+        }
+
+        note.setCategoryId(request.categoryId());
+        note.setCommodityName(request.commodityName());
+        note.setBrand(request.brand());
+        note.setOrigin(request.origin());
+        note.setSpec(writeSpec(request.spec()));
+        note.setRemark(request.remark());
+
+        // Quantities are untouched, so the balance constraint cannot be
+        // affected; the optimistic lock still guards against a concurrent edit.
+        if (inventoryNoteMapper.updateById(note) == 0) {
+            throw BusinessException.of(ResultCode.CONFLICT, "该库存单正在被其他操作修改，请重试");
+        }
+        log.info("Inventory note {} updated by enterprise {}", note.getNoteNo(), enterpriseId);
+        return note;
     }
 
     /**
