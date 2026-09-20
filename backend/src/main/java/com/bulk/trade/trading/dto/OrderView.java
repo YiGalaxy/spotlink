@@ -2,6 +2,7 @@ package com.bulk.trade.trading.dto;
 
 import com.bulk.trade.trading.entity.Order;
 import com.bulk.trade.trading.entity.OrderStatus;
+import com.bulk.trade.trading.service.OrderProgress;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
@@ -62,6 +63,15 @@ public record OrderView(
 
         String status,
         String statusText,
+
+        /**
+         * Whose move it is, from this caller's side — "待我签署" against the same
+         * order's "等对方签署". Null once nothing is pending from anyone.
+         */
+        String statusHint,
+        /** True when the next move is the caller's. Drives sorting and colour. */
+        boolean statusHintMine,
+
         List<String> allowedActions,
 
         /** When the lister's answer is due; null unless one is awaited. */
@@ -76,6 +86,7 @@ public record OrderView(
     public static OrderView of(Order order,
                                Long viewerEnterpriseId,
                                boolean callerIsLister,
+                               OrderProgress progress,
                                String buyerName,
                                String sellerName,
                                String categoryName,
@@ -103,6 +114,8 @@ public record OrderView(
                 "DELIVERED".equals(order.getDeliveryMethod()) ? "送到" : "自提",
                 order.getStatus(),
                 OrderStatus.text(order.getStatus()),
+                progress.text(),
+                progress.mine(),
                 List.copyOf(OrderStatus.allowedFrom(order.getStatus(), callerIsLister)),
                 order.getConfirmDeadline(),
                 order.getConfirmedAt(),

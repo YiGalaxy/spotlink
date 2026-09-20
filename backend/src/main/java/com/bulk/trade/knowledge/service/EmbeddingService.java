@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.List;
 import java.util.Map;
 
@@ -84,25 +86,70 @@ public class EmbeddingService {
     }
 
     /**
-     * Converts a vector to the literal pgvector accepts.
+     * Packs a vector into the bytes stored in the {@code embedding} column.
      *
-     * <p>Passed as text and cast in SQL because the JDBC driver has no type
-     * mapping for {@code vector}; adding one would mean depending on a driver
-     * extension for a single column.
+     * <p>Four bytes per dimension, little-endian, no header — the width is fixed
+     * at {@link #DIMENSIONS} and a self-describing format would only be a way
+     * for a corrupt row to look plausible.
+     *
+     * <p><b>Why bytes rather than the JSON array this used to be.</b> PostgreSQL
+     * had a {@code vector} type and the value travelled as text to be cast in
+     * SQL. MySQL has no such type, so the column is a {@code BLOB} and the
+     * encoding is ours. Bytes over JSON because a float's shortest decimal
+     * representation is not its value: round-tripping through text would make a
+     * stored vector differ in the last bits from the one that was computed, and
+     * the difference would be invisible right up until two identical questions
+     * ranked differently.
      */
-    public static String toVectorLiteral(float[] vector) {
+    public static byte[] toBytes(float[] vector) {
         if (vector == null || vector.length == 0) {
             return null;
         }
-        StringBuilder sb = new StringBuilder(vector.length * 8 + 2);
-        sb.append('[');
-        for (int i = 0; i < vector.length; i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            sb.append(vector[i]);
+        ByteBuffer buffer = ByteBuffer.allocate(vector.length * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+        for (float value : vector) {
+            buffer.putFloat(value);
         }
-        return sb.append(']').toString();
+        return buffer.array();
+    }
+
+    /** The inverse of {@link #toBytes}; empty for a null or malformed value. */
+    public static float[] fromBytes(byte[] bytes) {
+        if (bytes == null || bytes.length < Float.BYTES) {
+            return new float[0];
+        }
+        ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+        float[] vector = new float[bytes.length / Float.BYTES];
+        for (int i = 0; i < vector.length; i++) {
+            vector[i] = buffer.getFloat();
+        }
+        return vector;
+    }
+
+    /**
+     * Cosine similarity, higher meaning closer.
+     *
+     * <p>Computed here rather than in SQL because MySQL has no vector type and
+     * no distance operator. That makes retrieval a scan of the chunk table: free
+     * at this corpus size, and the reason a real deployment at scale would move
+     * to a dedicated vector store. Recorded in the README rather than left for
+     * someone to discover from a latency graph.
+     */
+    public static double cosineSimilarity(float[] a, float[] b) {
+        if (a.length == 0 || a.length != b.length) {
+            return 0;
+        }
+        double dot = 0;
+        double normA = 0;
+        double normB = 0;
+        for (int i = 0; i < a.length; i++) {
+            dot += (double) a[i] * b[i];
+            normA += (double) a[i] * a[i];
+            normB += (double) b[i] * b[i];
+        }
+        if (normA == 0 || normB == 0) {
+            return 0;
+        }
+        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
     }
 
     public String modelName() {

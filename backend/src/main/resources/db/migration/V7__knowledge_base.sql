@@ -13,8 +13,6 @@
 -- Neither method alone covers both.
 -- =============================================================================
 
-CREATE EXTENSION IF NOT EXISTS vector;
-
 -- -----------------------------------------------------------------------------
 -- t_knowledge_doc: a source document.
 -- -----------------------------------------------------------------------------
@@ -27,19 +25,22 @@ CREATE TABLE t_knowledge_doc (
     version     VARCHAR(32)  NOT NULL DEFAULT 'v1',
     status      SMALLINT     NOT NULL DEFAULT 1,
     remark      VARCHAR(512),
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    created_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_by  BIGINT,
     updated_by  BIGINT,
     deleted     SMALLINT     NOT NULL DEFAULT 0
 );
 
-COMMENT ON TABLE t_knowledge_doc IS 'Source document for retrieval. Rules, guides, standards.';
+ALTER TABLE t_knowledge_doc COMMENT = 'Source document for retrieval. Rules, guides, standards.';
 
-CREATE UNIQUE INDEX uk_knowledge_doc_code ON t_knowledge_doc (doc_code) WHERE deleted = 0;
-CREATE INDEX idx_knowledge_doc_category ON t_knowledge_doc (category) WHERE deleted = 0;
+CREATE UNIQUE INDEX uk_knowledge_doc_code ON t_knowledge_doc (doc_code);
+CREATE INDEX idx_knowledge_doc_category ON t_knowledge_doc (category);
 
-SELECT attach_updated_at_trigger('t_knowledge_doc');
+CREATE TRIGGER trg_t_knowledge_doc_updated_at
+    BEFORE UPDATE ON t_knowledge_doc
+    FOR EACH ROW
+    SET NEW.updated_at = NOW(6);
 
 -- -----------------------------------------------------------------------------
 -- t_knowledge_chunk: one retrievable passage and its embedding.
@@ -57,20 +58,20 @@ CREATE TABLE t_knowledge_chunk (
     -- Nullable because a chunk can be stored before its embedding is computed;
     -- ingestion is a two-step process and a half-embedded corpus is still
     -- searchable by keyword.
-    embedding   vector(1024),
+    embedding   BLOB         NULL,
     token_count INT          NOT NULL DEFAULT 0,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+    created_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 );
 
-COMMENT ON TABLE  t_knowledge_chunk IS 'A retrievable passage with its embedding.';
-COMMENT ON COLUMN t_knowledge_chunk.embedding IS 'BGE-M3 output, 1024 dimensions. Null until embedded.';
+ALTER TABLE t_knowledge_chunk COMMENT = 'A retrievable passage with its embedding.';
+ALTER TABLE t_knowledge_chunk MODIFY COLUMN embedding BLOB NULL COMMENT 'BGE-M3 output, 1024 dimensions. Null until embedded.';
 
 CREATE UNIQUE INDEX uk_knowledge_chunk ON t_knowledge_chunk (doc_id, chunk_index);
 CREATE INDEX idx_knowledge_chunk_doc ON t_knowledge_chunk (doc_id);
 -- Trigram index for keyword recall. Chinese has no whitespace tokenisation, so
 -- PostgreSQL's built-in text search is close to useless here; trigrams work on
 -- character sequences and handle CJK without a dictionary.
-CREATE INDEX idx_knowledge_chunk_content_trgm ON t_knowledge_chunk USING gin (content gin_trgm_ops);
+CREATE FULLTEXT INDEX idx_knowledge_chunk_content_trgm ON t_knowledge_chunk (content) WITH PARSER ngram;
 
 -- -----------------------------------------------------------------------------
 -- Seed the platform rules the advisor should be able to cite.

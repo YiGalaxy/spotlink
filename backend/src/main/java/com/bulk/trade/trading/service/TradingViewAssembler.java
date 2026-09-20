@@ -1,6 +1,8 @@
 package com.bulk.trade.trading.service;
 
 import com.bulk.trade.commodity.entity.CommodityCategory;
+import com.bulk.trade.contract.entity.Contract;
+import com.bulk.trade.contract.mapper.ContractMapper;
 import com.bulk.trade.commodity.mapper.CommodityCategoryMapper;
 import com.bulk.trade.identity.entity.Enterprise;
 import com.bulk.trade.identity.mapper.EnterpriseMapper;
@@ -43,6 +45,7 @@ public class TradingViewAssembler {
     private final CommodityCategoryMapper categoryMapper;
     private final WarehouseMapper warehouseMapper;
     private final ListingMapper listingMapper;
+    private final ContractMapper contractMapper;
     private final ObjectMapper objectMapper;
 
     public List<ListingView> toListingViews(Collection<Listing> listings, Long viewerEnterpriseId) {
@@ -86,17 +89,36 @@ public class TradingViewAssembler {
         // one query per row.
         Map<Long, Long> listerOf = listerOf(orders.stream().map(Order::getListingId));
 
+        // "已签约" does not say who signed, so the per-viewer progress hint needs
+        // the contract's own signature state. Loaded in one batch for the same
+        // reason as the names above.
+        Map<Long, Contract> contracts = contractsById(
+                orders.stream().map(Order::getContractId));
+
         return orders.stream()
                 .map(order -> OrderView.of(
                         order,
                         viewerEnterpriseId,
                         viewerEnterpriseId != null
                                 && viewerEnterpriseId.equals(listerOf.get(order.getListingId())),
+                        OrderProgress.of(order, contracts.get(order.getContractId()), viewerEnterpriseId),
                         enterprises.getOrDefault(order.getBuyerId(), "—"),
                         enterprises.getOrDefault(order.getSellerId(), "—"),
                         categories.getOrDefault(order.getCategoryId(), "—"),
                         warehouses.getOrDefault(order.getWarehouseId(), "—")))
                 .toList();
+    }
+
+    /** Contract id to the contract, for the orders that have one. */
+    private Map<Long, Contract> contractsById(Stream<Long> contractIds) {
+        Set<Long> distinct = contractIds
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (distinct.isEmpty()) {
+            return Map.of();
+        }
+        return contractMapper.selectBatchIds(distinct).stream()
+                .collect(Collectors.toMap(Contract::getId, contract -> contract));
     }
 
     /** Listing id to the enterprise that published it. */

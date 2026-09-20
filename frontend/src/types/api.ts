@@ -201,6 +201,13 @@ export interface OrderView {
   deliveryMethodText: string
   status: string
   statusText: string
+  /**
+   * Whose move it is, from this caller's side — "待我签署" against the same
+   * order's "等对方签署". Null once nothing is pending from anyone.
+   */
+  statusHint: string | null
+  /** True when the next move is this caller's. */
+  statusHintMine: boolean
   /** Transitions this caller may actually perform — the same table the server enforces. */
   allowedActions: string[]
   /** 挂牌方的答复截止时间；只有「待挂牌方确认」的订单有值。 */

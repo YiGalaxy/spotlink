@@ -22,20 +22,20 @@
 -- rejected on write, not discovered during settlement.
 -- -----------------------------------------------------------------------------
 CREATE TABLE t_fund_account (
-    id                BIGINT        PRIMARY KEY,
-    account_no        VARCHAR(32)   NOT NULL,
-    enterprise_id     BIGINT        NOT NULL,
-    balance           NUMERIC(19,4) NOT NULL DEFAULT 0,
-    available_balance NUMERIC(19,4) NOT NULL DEFAULT 0,
-    frozen_balance    NUMERIC(19,4) NOT NULL DEFAULT 0,
-    currency          VARCHAR(8)    NOT NULL DEFAULT 'CNY',
-    status            SMALLINT      NOT NULL DEFAULT 1,
-    version           INT           NOT NULL DEFAULT 0,
-    created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    updated_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    id                BIGINT         PRIMARY KEY,
+    account_no        VARCHAR(32)    NOT NULL,
+    enterprise_id     BIGINT         NOT NULL,
+    balance           DECIMAL(19,4)  NOT NULL DEFAULT 0,
+    available_balance DECIMAL(19,4)  NOT NULL DEFAULT 0,
+    frozen_balance    DECIMAL(19,4)  NOT NULL DEFAULT 0,
+    currency          VARCHAR(8)     NOT NULL DEFAULT 'CNY',
+    status            SMALLINT       NOT NULL DEFAULT 1,
+    version           INT            NOT NULL DEFAULT 0,
+    created_at        DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at        DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_by        BIGINT,
     updated_by        BIGINT,
-    deleted           SMALLINT      NOT NULL DEFAULT 0,
+    deleted           SMALLINT       NOT NULL DEFAULT 0,
 
     CONSTRAINT ck_account_balance_balance
         CHECK (available_balance + frozen_balance = balance),
@@ -43,13 +43,16 @@ CREATE TABLE t_fund_account (
         CHECK (balance >= 0 AND available_balance >= 0 AND frozen_balance >= 0)
 );
 
-COMMENT ON TABLE  t_fund_account IS 'Enterprise fund account. Balances are a cached total; the ledger is the truth.';
-COMMENT ON COLUMN t_fund_account.frozen_balance IS 'Reserved as margin for orders in flight.';
+ALTER TABLE t_fund_account COMMENT = 'Enterprise fund account. Balances are a cached total; the ledger is the truth.';
+ALTER TABLE t_fund_account MODIFY COLUMN frozen_balance DECIMAL(19,4) NOT NULL DEFAULT 0 COMMENT 'Reserved as margin for orders in flight.';
 
-CREATE UNIQUE INDEX uk_account_no ON t_fund_account (account_no) WHERE deleted = 0;
-CREATE UNIQUE INDEX uk_account_enterprise ON t_fund_account (enterprise_id) WHERE deleted = 0;
+CREATE UNIQUE INDEX uk_account_no ON t_fund_account (account_no);
+CREATE UNIQUE INDEX uk_account_enterprise ON t_fund_account (enterprise_id);
 
-SELECT attach_updated_at_trigger('t_fund_account');
+CREATE TRIGGER trg_t_fund_account_updated_at
+    BEFORE UPDATE ON t_fund_account
+    FOR EACH ROW
+    SET NEW.updated_at = NOW(6);
 
 -- -----------------------------------------------------------------------------
 -- t_fund_flow: append-only ledger.
@@ -63,26 +66,26 @@ SELECT attach_updated_at_trigger('t_fund_account');
 -- replaying it.
 -- -----------------------------------------------------------------------------
 CREATE TABLE t_fund_flow (
-    id            BIGINT        PRIMARY KEY,
-    flow_no       VARCHAR(32)   NOT NULL,
-    account_id    BIGINT        NOT NULL,
-    enterprise_id BIGINT        NOT NULL,
-    direction     VARCHAR(8)    NOT NULL,
-    biz_type      VARCHAR(32)   NOT NULL,
-    amount        NUMERIC(19,4) NOT NULL,
-    balance_after NUMERIC(19,4) NOT NULL,
+    id            BIGINT         PRIMARY KEY,
+    flow_no       VARCHAR(32)    NOT NULL,
+    account_id    BIGINT         NOT NULL,
+    enterprise_id BIGINT         NOT NULL,
+    direction     VARCHAR(8)     NOT NULL,
+    biz_type      VARCHAR(32)    NOT NULL,
+    amount        DECIMAL(19,4)  NOT NULL,
+    balance_after DECIMAL(19,4)  NOT NULL,
     biz_id        BIGINT,
     remark        VARCHAR(512),
-    created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    created_at    DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_by    BIGINT,
 
     CONSTRAINT ck_flow_direction CHECK (direction IN ('IN', 'OUT')),
     CONSTRAINT ck_flow_amount CHECK (amount > 0)
 );
 
-COMMENT ON TABLE  t_fund_flow IS
+ALTER TABLE t_fund_flow COMMENT =
     'Append-only ledger. Rows are never updated or deleted; a correction is a new row.';
-COMMENT ON COLUMN t_fund_flow.balance_after IS 'Account balance immediately after this movement, for statements.';
+ALTER TABLE t_fund_flow MODIFY COLUMN balance_after DECIMAL(19,4) NOT NULL COMMENT 'Account balance immediately after this movement, for statements.';
 
 CREATE UNIQUE INDEX uk_flow_no ON t_fund_flow (flow_no);
 CREATE INDEX idx_flow_account ON t_fund_flow (account_id, id DESC);
@@ -98,38 +101,38 @@ CREATE INDEX idx_flow_biz ON t_fund_flow (biz_type, biz_id);
 -- read whole, and never queried by individual field.
 -- -----------------------------------------------------------------------------
 CREATE TABLE t_contract (
-    id              BIGINT       PRIMARY KEY,
-    contract_no     VARCHAR(32)  NOT NULL,
-    order_id        BIGINT       NOT NULL,
-    buyer_id        BIGINT       NOT NULL,
-    seller_id       BIGINT       NOT NULL,
-    title           VARCHAR(256) NOT NULL,
-    terms           JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    id              BIGINT         PRIMARY KEY,
+    contract_no     VARCHAR(32)    NOT NULL,
+    order_id        BIGINT         NOT NULL,
+    buyer_id        BIGINT         NOT NULL,
+    seller_id       BIGINT         NOT NULL,
+    title           VARCHAR(256)   NOT NULL,
+    terms           JSON           NOT NULL DEFAULT (JSON_OBJECT()),
     -- Amount and quantity are duplicated from the order on purpose: a contract
     -- is a snapshot of what was agreed, and must not change if the order is
     -- later corrected.
-    quantity        NUMERIC(18,3) NOT NULL,
-    unit            VARCHAR(16)   NOT NULL DEFAULT '吨',
-    price           NUMERIC(19,4) NOT NULL,
-    amount          NUMERIC(19,4) NOT NULL,
+    quantity        DECIMAL(18,3)  NOT NULL,
+    unit            VARCHAR(16)    NOT NULL DEFAULT '吨',
+    price           DECIMAL(19,4)  NOT NULL,
+    amount          DECIMAL(19,4)  NOT NULL,
     -- Tolerance for weighing variance, in percent. Settlement beyond this is
     -- not automatic.
-    weight_tolerance NUMERIC(5,2) NOT NULL DEFAULT 3.00,
+    weight_tolerance DECIMAL(5,2)  NOT NULL DEFAULT 3.00,
 
-    status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING_SIGN',
-    buyer_signed_at  TIMESTAMPTZ,
+    status          VARCHAR(16)    NOT NULL DEFAULT 'PENDING_SIGN',
+    buyer_signed_at  DATETIME(6),
     buyer_signed_by  BIGINT,
-    seller_signed_at TIMESTAMPTZ,
+    seller_signed_at DATETIME(6),
     seller_signed_by BIGINT,
 
-    terminated_at   TIMESTAMPTZ,
+    terminated_at   DATETIME(6),
     terminate_reason VARCHAR(512),
 
-    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    created_at      DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at      DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_by      BIGINT,
     updated_by      BIGINT,
-    deleted         SMALLINT     NOT NULL DEFAULT 0,
+    deleted         SMALLINT       NOT NULL DEFAULT 0,
 
     CONSTRAINT ck_contract_status
         CHECK (status IN ('DRAFT', 'PENDING_SIGN', 'SIGNED', 'TERMINATED')),
@@ -139,23 +142,26 @@ CREATE TABLE t_contract (
         OR (buyer_signed_at IS NOT NULL AND seller_signed_at IS NOT NULL))
 );
 
-COMMENT ON TABLE  t_contract IS
+ALTER TABLE t_contract COMMENT =
     'The signed agreement behind an order. Terms are snapshotted, not referenced.';
-COMMENT ON COLUMN t_contract.weight_tolerance IS
+ALTER TABLE t_contract MODIFY COLUMN weight_tolerance DECIMAL(5,2) NOT NULL DEFAULT 3.00 COMMENT
     'Allowed weighing variance in percent. Settlement beyond this needs human agreement.';
 
-CREATE UNIQUE INDEX uk_contract_no ON t_contract (contract_no) WHERE deleted = 0;
-CREATE UNIQUE INDEX uk_contract_order ON t_contract (order_id) WHERE deleted = 0;
-CREATE INDEX idx_contract_buyer ON t_contract (buyer_id, status) WHERE deleted = 0;
-CREATE INDEX idx_contract_seller ON t_contract (seller_id, status) WHERE deleted = 0;
+CREATE UNIQUE INDEX uk_contract_no ON t_contract (contract_no);
+CREATE UNIQUE INDEX uk_contract_order ON t_contract (order_id);
+CREATE INDEX idx_contract_buyer ON t_contract (buyer_id, status);
+CREATE INDEX idx_contract_seller ON t_contract (seller_id, status);
 
-SELECT attach_updated_at_trigger('t_contract');
+CREATE TRIGGER trg_t_contract_updated_at
+    BEFORE UPDATE ON t_contract
+    FOR EACH ROW
+    SET NEW.updated_at = NOW(6);
 
 -- -----------------------------------------------------------------------------
 -- Give the seeded enterprises an account each, so a fresh database can trade.
 -- -----------------------------------------------------------------------------
 INSERT INTO t_fund_account (id, account_no, enterprise_id, balance, available_balance, frozen_balance, status)
-SELECT 3000 + row_number() OVER (ORDER BY id), 'ACC' || enterprise_code, id,
+SELECT 3000 + row_number() OVER (ORDER BY id), CONCAT('ACC', enterprise_code), id,
        5000000.0000, 5000000.0000, 0.0000, 1
 FROM t_enterprise
 WHERE deleted = 0 AND trader_code IS NOT NULL;

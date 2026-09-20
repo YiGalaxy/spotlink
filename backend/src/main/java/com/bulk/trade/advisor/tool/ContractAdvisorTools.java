@@ -8,11 +8,9 @@ import com.bulk.trade.identity.mapper.EnterpriseMapper;
 import com.bulk.trade.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Tools that expose contracts for review.
@@ -68,77 +66,9 @@ public class ContractAdvisorTools {
         return sb.toString();
     }
 
-    @Tool(name = "get_contract_detail",
-            description = """
-                    Returns the full text of one contract the caller is a party to: all terms
-                    and both parties' signing status. Use it before reviewing a contract or
-                    answering questions about its specific clauses. Requires the contract
-                    number, which list_my_contracts provides.""")
-    public String getContractDetail(
-            @ToolParam(description = "Contract number, e.g. CT202609202025074559")
-            String contractNo) {
-
-        Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();
-        if (enterpriseId == null) {
-            return "该账号是平台运营账号，未绑定企业。";
-        }
-        if (contractNo == null || contractNo.isBlank()) {
-            return "请提供合同编号。可以先用 list_my_contracts 查看你有哪些合同。";
-        }
-
-        Contract contract = contractMapper.selectOne(Wrappers.<Contract>lambdaQuery()
-                .eq(Contract::getContractNo, contractNo.trim()));
-        if (contract == null || !contract.involves(enterpriseId)) {
-            // Same answer for "does not exist" and "not yours": a distinct
-            // message would confirm another company's contract number.
-            return "没有找到该编号的合同，或你不是该合同的当事人。";
-        }
-
-        String buyerName = enterpriseName(contract.getBuyerId());
-        String sellerName = enterpriseName(contract.getSellerId());
-
-        return """
-                合同编号: %s
-                标题: %s
-                买方: %s
-                卖方: %s
-                商品数量: %s %s
-                单价: %s 元
-                总金额: %s 元
-                磅差容差: %s%%
-                签署状态: %s（买方%s，卖方%s）
-
-                条款正文:
-                %s
-                """.formatted(
-                contract.getContractNo(),
-                contract.getTitle(),
-                buyerName,
-                sellerName,
-                plain(contract.getQuantity()), contract.getUnit(),
-                plain(contract.getPrice()),
-                plain(contract.getAmount()),
-                contract.getWeightTolerance().stripTrailingZeros().toPlainString(),
-                Contract.Status.text(contract.getStatus()),
-                contract.getBuyerSignedAt() == null ? "未签" : "已签",
-                contract.getSellerSignedAt() == null ? "未签" : "已签",
-                prettyTerms(contract.getTerms()));
-    }
-
     private String enterpriseName(Long id) {
         Enterprise enterprise = enterpriseMapper.selectById(id);
         return enterprise == null ? "—" : enterprise.getName();
-    }
-
-    /** Stored JSON is one line; a model reads a line-per-term form more reliably. */
-    private String prettyTerms(String termsJson) {
-        if (termsJson == null || termsJson.isBlank()) {
-            return "（无条款正文）";
-        }
-        return termsJson.replace(",\"", ",\n\"").replace("{\"", "{\n\"")
-                .lines()
-                .map(String::trim)
-                .collect(Collectors.joining("\n"));
     }
 
     private String plain(java.math.BigDecimal value) {

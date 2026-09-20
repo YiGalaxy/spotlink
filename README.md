@@ -15,8 +15,8 @@
 |---|---|
 | 后端 | Java 21 · Spring Boot 3.5 · MyBatis-Plus · Spring Security 6 |
 | AI | **Spring AI 1.0** + Anthropic 模型（端点可配置） |
-| 数据库 | PostgreSQL 16 + **pgvector** · Flyway |
-| 缓存 | Redis 7 |
+| 数据库 | **MySQL 8.4** · Flyway |
+| 缓存 | Redis 7（管理后台的权限缓存） |
 | 前端 | React 19 · TypeScript · Vite · Ant Design 5 · ECharts |
 | 嵌入模型 | BGE-M3（Ollama 本地部署） |
 | 部署 | Docker Compose |
@@ -31,7 +31,7 @@
 docker compose up -d
 ```
 
-PostgreSQL → `localhost:15432`（库 `bulk_trade`，用户 `bulk`）
+MySQL → `localhost:13306`（库 `bulk_trade`，用户 `bulk`）
 Redis → `localhost:16379`
 
 > 刻意使用非默认端口，避免与本机已装的 PostgreSQL 服务和其它容器冲突。
@@ -105,6 +105,7 @@ http://localhost:5173
 4. **冻结一张表管两种东西** —— 商品冻结和资金冻结生命周期相同，共用一张表和一套服务。
 5. **乐观锁防并发** —— 每次数量变动都是 `UPDATE ... WHERE id = ? AND version = ?`，抢不到的拿到零行结果并被要求重试。
 6. **ID 序列化为字符串** —— 雪花 ID 是 19 位，JavaScript 安全整数只有 16 位，用数字传输会让前端回传的 id 变成另一个值。
+7. **状态之外还有一句「该谁动」** —— 「已签约」不说谁签了，「交收中」不说谁该收货。同一笔送到订单，卖方看到的是「待我发货」，买方看到的是「等对方发货」，而 `statusHintMine` 单独作为布尔字段返回，让客户端排序和标色不必去解析那句话的措辞。
 
 ---
 
@@ -173,6 +174,9 @@ AI 顾问的工具同样遵守这条：**没有工具接受企业 ID 参数**，
 
   这是一次**有意识的取舍而非疏忽**：合同审查是顾问的核心功能，没有合同正文就做不了。不能接受这一点的部署，应当把 `BULK_ADVISOR_BASE_URL` 指向自建模型。这条写在这里而不是埋在代码注释里，因为它是一个需要被拍板的产品决定。
 - **顾问不读资金余额**。余额是平台上最敏感的数字，而顾问没有任何一项职责需要它——它会让余额进到外部模型的 prompt 里，这笔交易不划算。「没有这个能力」比「有这个能力但拦着」更可靠，`AdvisorTenantIsolationTest` 会断言它不存在，因为这种能力回归的方式就是有人图方便把它加回来。
+- **向量检索在 Java 端做，不是数据库索引**。MySQL 没有向量类型（9.x 才加，且太新），所以 `t_knowledge_chunk.embedding` 是 `BLOB`，检索时把全部分块读出来在 Java 里算余弦相似度。**当前语料十几个分块，扫描就是索引，而且排序是精确的**——比近似索引还准。失效点是规模：一万个分块时每个问题要读一万个 blob，那时的解法是换向量库，不是把 `LIMIT` 调大。这条写在这里是因为它是这次从 PostgreSQL 迁移过来**唯一真正变差**的地方。
+- **部分索引没了**。PostgreSQL 的 44 个 `CREATE INDEX ... WHERE deleted = 0` 在 MySQL 里不存在，全部退化成普通索引。软删标记因此从索引定义挪进了查询条件——占空间略多，查得一样快。
+- **`TIMESTAMPTZ` 没了**。MySQL 没有时区感知类型，改成 `DATETIME(6)`，时区语义从"每个值自带"变成"整个连接约定 UTC"（见 JDBC URL 的 `connectionTimeZone`）。这要求**所有写入都走应用层**；有人直连数据库手写 `NOW()` 就会混进本地时间。
 - **资金账户没有开户流程**。目前只有演示数据脚本会创建 `t_fund_account`，没有任何 Java 代码在注册或审核通过时开户。结果是**通过接口注册的新企业没有资金账户**——资金工具的应答是「还没有资金账户」，而不是 0 余额。正确做法是在企业审核通过时开户。
 - **AI 端点为兼容网关**。代码按 Anthropic 官方 SDK 写，`base-url` 与模型走配置。prompt caching 的策略已按官方语义实现，但真实效果需官方 API 才能验证。
 - **未做**：竞价专区、物流运单、发票、质量异议流程、磅差结算。

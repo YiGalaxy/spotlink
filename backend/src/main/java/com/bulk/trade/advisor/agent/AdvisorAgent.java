@@ -3,6 +3,7 @@ package com.bulk.trade.advisor.agent;
 import com.bulk.trade.advisor.prompt.SystemPromptBuilder;
 import com.bulk.trade.advisor.tool.AdvisorTools;
 import com.bulk.trade.advisor.tool.ContractAdvisorTools;
+import com.bulk.trade.advisor.tool.ContractReviewTools;
 import com.bulk.trade.advisor.tool.InventoryAdvisorTools;
 import com.bulk.trade.advisor.tool.KnowledgeAdvisorTools;
 import com.bulk.trade.advisor.tool.MarketAdvisorTools;
@@ -49,29 +50,53 @@ public class AdvisorAgent {
     private final InventoryAdvisorTools inventoryAdvisorTools;
     private final KnowledgeAdvisorTools knowledgeAdvisorTools;
     private final ContractAdvisorTools contractAdvisorTools;
+    private final ContractReviewTools contractReviewTools;
     private final MarketAdvisorTools marketAdvisorTools;
     private final OrderAdvisorTools orderAdvisorTools;
     private final TaskAdvisorTools taskAdvisorTools;
     private final SystemPromptBuilder promptBuilder;
 
     /**
-     * The beans whose {@code @Tool} methods are handed to the model.
+     * Every bean whose {@code @Tool} methods this agent can hand to the model.
      *
-     * <p><b>One list, two readers.</b> The prompt specification that makes the
-     * tools callable and the readiness endpoint that reports what is callable
-     * both read this. Keeping two lists is what let that endpoint advertise
-     * nine tools while thirteen were registered — drift that stays invisible
-     * precisely because the report is what people trust instead of checking.
+     * <p><b>One list, three readers.</b> The prompt specification that makes the
+     * tools callable, the readiness endpoint that reports what is callable, and
+     * the test that asserts what is <em>not</em> callable all read this. Keeping
+     * a second list is what let that endpoint advertise nine tools while
+     * thirteen were registered — drift that stays invisible precisely because
+     * the report is what people trust instead of checking.
      *
-     * <p>Adding a tool class is now a one-line change in a single place, and
-     * forgetting it is no longer possible: a tool that is not in this list is
-     * not callable either, so the failure is a missing feature rather than a
-     * confident wrong answer about what exists.
+     * <p>Adding a tool class is a one-line change in one place, and forgetting
+     * it is no longer possible: a tool not in this list is not callable either,
+     * so the failure is a missing feature rather than a confident wrong answer
+     * about what exists.
      */
     public List<Object> toolBeans() {
         return List.of(advisorTools, inventoryAdvisorTools, knowledgeAdvisorTools,
-                contractAdvisorTools, marketAdvisorTools,
+                contractAdvisorTools, contractReviewTools, marketAdvisorTools,
                 orderAdvisorTools, taskAdvisorTools);
+    }
+
+    /**
+     * The tools available for one turn.
+     *
+     * <p>Everything except the contract text, which has to be asked for. Every
+     * tool result enters the prompt and the prompt leaves for an external
+     * provider, so the tool list is the switch that decides what leaves — and
+     * a switch that is always on is not a switch.
+     *
+     * <p>Decided in Java from the user's own words, not by the model: a model
+     * that can call a tool will call it whenever it seems useful, and "seems
+     * useful" is the judgement this exists to keep out of the loop. See
+     * {@link ContractReviewTrigger} for what the rule is and why a crude one is
+     * the right shape for it.
+     */
+    List<Object> toolsFor(String userMessage) {
+        List<Object> tools = new ArrayList<>(toolBeans());
+        if (!ContractReviewTrigger.requested(userMessage)) {
+            tools.remove(contractReviewTools);
+        }
+        return tools;
     }
 
     public AgentResult run(String userMessage, List<ConversationTurn> history, LoginUser user) {
@@ -98,12 +123,12 @@ public class AdvisorAgent {
                             .text(promptBuilder.callerSection(user)))
                     .messages(messages)
                     // Every @Tool method on these beans becomes callable.
-                    .tools(toolBeans().toArray())
+                    .tools(toolsFor(userMessage).toArray())
                     .call()
                     .chatResponse();
 
             return AgentResult.of(
-                    extractText(response),
+                    AnswerCleaner.clean(extractText(response)),
                     ToolCallRecorder.drain(),
                     promptTokens(response),
                     completionTokens(response));

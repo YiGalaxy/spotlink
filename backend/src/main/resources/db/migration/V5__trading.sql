@@ -27,14 +27,14 @@ CREATE TABLE t_listing (
     commodity_name     VARCHAR(128)   NOT NULL,
     brand              VARCHAR(64),
     origin             VARCHAR(64),
-    spec               JSONB          NOT NULL DEFAULT '{}'::jsonb,
+    spec               JSON           NOT NULL DEFAULT (JSON_OBJECT()),
 
-    quantity           NUMERIC(18,3)  NOT NULL,
+    quantity           DECIMAL(18,3)  NOT NULL,
     -- Decremented as trade happens; a listing can be taken in several parts.
-    remaining_quantity NUMERIC(18,3)  NOT NULL,
+    remaining_quantity DECIMAL(18,3)  NOT NULL,
     unit               VARCHAR(16)    NOT NULL DEFAULT '吨',
 
-    price              NUMERIC(19,4),
+    price              DECIMAL(19,4),
     price_type         VARCHAR(16)    NOT NULL DEFAULT 'NEGOTIABLE',
 
     warehouse_id       BIGINT,
@@ -45,14 +45,14 @@ CREATE TABLE t_listing (
     -- when it closes. Null for BUY listings, which reserve money instead.
     freeze_id          BIGINT,
 
-    valid_until        TIMESTAMPTZ    NOT NULL,
+    valid_until        DATETIME(6)    NOT NULL,
     status             VARCHAR(24)    NOT NULL DEFAULT 'OPEN',
 
     version            INT            NOT NULL DEFAULT 0,
     remark             VARCHAR(512),
 
-    created_at         TIMESTAMPTZ    NOT NULL DEFAULT now(),
-    updated_at         TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    created_at         DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at         DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_by         BIGINT,
     updated_by         BIGINT,
     deleted            SMALLINT       NOT NULL DEFAULT 0,
@@ -71,18 +71,21 @@ CREATE TABLE t_listing (
         CHECK (remaining_quantity >= 0 AND remaining_quantity <= quantity)
 );
 
-COMMENT ON TABLE  t_listing IS
+ALTER TABLE t_listing COMMENT =
     'An offer to sell (挂牌) or a request to buy. Publishing it is making an offer.';
-COMMENT ON COLUMN t_listing.remaining_quantity IS 'Still open to acceptance; a listing can be taken in parts.';
-COMMENT ON COLUMN t_listing.freeze_id IS 'Goods freeze backing a SELL listing, released when it closes.';
+ALTER TABLE t_listing MODIFY COLUMN remaining_quantity DECIMAL(18,3) NOT NULL COMMENT 'Still open to acceptance; a listing can be taken in parts.';
+ALTER TABLE t_listing MODIFY COLUMN freeze_id BIGINT NULL COMMENT 'Goods freeze backing a SELL listing, released when it closes.';
 
-CREATE UNIQUE INDEX uk_listing_no ON t_listing (listing_no) WHERE deleted = 0;
-CREATE INDEX idx_listing_market ON t_listing (status, side, category_id) WHERE deleted = 0;
-CREATE INDEX idx_listing_owner ON t_listing (enterprise_id, status, created_at DESC) WHERE deleted = 0;
+CREATE UNIQUE INDEX uk_listing_no ON t_listing (listing_no);
+CREATE INDEX idx_listing_market ON t_listing (status, side, category_id);
+CREATE INDEX idx_listing_owner ON t_listing (enterprise_id, status, created_at DESC);
 -- Expiry sweeps scan open listings by deadline.
-CREATE INDEX idx_listing_expiry ON t_listing (valid_until) WHERE deleted = 0 AND status IN ('OPEN', 'PARTIALLY_FILLED');
+CREATE INDEX idx_listing_expiry ON t_listing (valid_until);
 
-SELECT attach_updated_at_trigger('t_listing');
+CREATE TRIGGER trg_t_listing_updated_at
+    BEFORE UPDATE ON t_listing
+    FOR EACH ROW
+    SET NEW.updated_at = NOW(6);
 
 -- -----------------------------------------------------------------------------
 -- t_order: the result of accepting a listing.
@@ -103,14 +106,14 @@ CREATE TABLE t_order (
     -- two-column match rather than one.
     category_id       BIGINT         NOT NULL,
     commodity_name    VARCHAR(128)   NOT NULL,
-    spec              JSONB          NOT NULL DEFAULT '{}'::jsonb,
+    spec              JSON           NOT NULL DEFAULT (JSON_OBJECT()),
 
-    quantity          NUMERIC(18,3)  NOT NULL,
+    quantity          DECIMAL(18,3)  NOT NULL,
     unit              VARCHAR(16)    NOT NULL DEFAULT '吨',
-    price             NUMERIC(19,4)  NOT NULL,
+    price             DECIMAL(19,4)  NOT NULL,
     -- Stored rather than recomputed: the price and quantity are what was agreed,
     -- and a later change to either must not silently restate history.
-    amount            NUMERIC(19,4)  NOT NULL,
+    amount            DECIMAL(19,4)  NOT NULL,
 
     warehouse_id      BIGINT,
     delivery_method   VARCHAR(16)    NOT NULL DEFAULT 'SELF_PICKUP',
@@ -123,15 +126,15 @@ CREATE TABLE t_order (
     status            VARCHAR(24)    NOT NULL DEFAULT 'PENDING_CONFIRM',
     contract_id       BIGINT,
 
-    confirmed_at      TIMESTAMPTZ,
-    cancelled_at      TIMESTAMPTZ,
+    confirmed_at      DATETIME(6),
+    cancelled_at      DATETIME(6),
     cancel_reason     VARCHAR(256),
 
     version           INT            NOT NULL DEFAULT 0,
     remark            VARCHAR(512),
 
-    created_at        TIMESTAMPTZ    NOT NULL DEFAULT now(),
-    updated_at        TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    created_at        DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at        DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_by        BIGINT,
     updated_by        BIGINT,
     deleted           SMALLINT       NOT NULL DEFAULT 0,
@@ -143,17 +146,20 @@ CREATE TABLE t_order (
     CONSTRAINT ck_order_amount CHECK (amount >= 0)
 );
 
-COMMENT ON TABLE  t_order IS
-    'One contract-to-be between two named parties. Either side can read it, which '
-    'is why the tenant column is a pair of party ids rather than an owner id.';
-COMMENT ON COLUMN t_order.amount IS 'quantity * price, stored rather than recomputed.';
+ALTER TABLE t_order COMMENT =
+    'One contract-to-be between two named parties. Either side can read it, which
+     is why the tenant column is a pair of party ids rather than an owner id.';
+ALTER TABLE t_order MODIFY COLUMN amount DECIMAL(19,4) NOT NULL COMMENT 'quantity * price, stored rather than recomputed.';
 
-CREATE UNIQUE INDEX uk_order_no ON t_order (order_no) WHERE deleted = 0;
-CREATE INDEX idx_order_buyer ON t_order (buyer_id, status, created_at DESC) WHERE deleted = 0;
-CREATE INDEX idx_order_seller ON t_order (seller_id, status, created_at DESC) WHERE deleted = 0;
-CREATE INDEX idx_order_listing ON t_order (listing_id) WHERE deleted = 0;
+CREATE UNIQUE INDEX uk_order_no ON t_order (order_no);
+CREATE INDEX idx_order_buyer ON t_order (buyer_id, status, created_at DESC);
+CREATE INDEX idx_order_seller ON t_order (seller_id, status, created_at DESC);
+CREATE INDEX idx_order_listing ON t_order (listing_id);
 
-SELECT attach_updated_at_trigger('t_order');
+CREATE TRIGGER trg_t_order_updated_at
+    BEFORE UPDATE ON t_order
+    FOR EACH ROW
+    SET NEW.updated_at = NOW(6);
 
 -- -----------------------------------------------------------------------------
 -- t_order_status_log: append-only record of every transition.
@@ -170,10 +176,10 @@ CREATE TABLE t_order_status_log (
     operator_id BIGINT,
     operator    VARCHAR(64),
     reason      VARCHAR(256),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 );
 
-COMMENT ON TABLE t_order_status_log IS
+ALTER TABLE t_order_status_log COMMENT =
     'Append-only order transition trail. Never updated, never deleted.';
 
 CREATE INDEX idx_order_log ON t_order_status_log (order_id, id);

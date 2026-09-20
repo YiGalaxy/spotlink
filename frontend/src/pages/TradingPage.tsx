@@ -401,27 +401,43 @@ export default function TradingPage() {
     {
       title: '状态',
       width: 150,
-      // Pending first, then by lifecycle stage. The default sort for this
-      // table, because the reason someone opens 我的订单 is almost always to
-      // find the one waiting on them — and with twenty rows, a list ordered by
-      // anything else makes that a search.
+      // Three tiers, and the middle one is the point: your move first, then
+      // orders still in flight that are waiting on the other party, then
+      // everything finished. Two tiers was not enough — an order the
+      // counterparty is sitting on is not done, and burying it under the
+      // finished ones hides exactly the deal that is going stale.
       //
-      // It sorts on `allowedActions` rather than on a status code because
-      // "pending" is not a status: the same 已确认 order is your move if the
-      // contract is undrafted and nobody's move once it exists.
+      // Sorted on `statusHint`, not on the status code, because "pending" is
+      // not a status: the same 已确认 order is your move while its contract is
+      // undrafted and nobody's move once it exists.
       sorter: (a: OrderView, b: OrderView) => {
-        const pendingA = a.allowedActions.length > 0 ? 0 : 1
-        const pendingB = b.allowedActions.length > 0 ? 0 : 1
-        if (pendingA !== pendingB) return pendingA - pendingB
+        const tier = (o: OrderView) =>
+          o.statusHintMine ? 0 : o.statusHint ? 1 : 2
+        const byTier = tier(a) - tier(b)
+        if (byTier !== 0) return byTier
         return a.status.localeCompare(b.status)
       },
       defaultSortOrder: 'ascend' as const,
-      // One tag, the current status. A second one beside it reads as a second
-      // status, and the row has exactly one. That the row needs you is said by
-      // the 去处理 button in the next column and by the ordering, both of which
-      // are about the action rather than the state.
+      // The tag is the state; the line under it is whose move it is. One tag
+      // still — a second tag beside it read as a second status, and a row has
+      // exactly one. But "已签约" alone does not say whether the seller or the
+      // buyer is being waited on, and that is the question someone scanning
+      // their orders is actually asking.
       render: (_: unknown, r: OrderView) => (
-        <Tag color={ORDER_COLOURS[r.status]}>{r.statusText}</Tag>
+        <Space direction="vertical" size={2}>
+          <Tag color={ORDER_COLOURS[r.status]} style={{ marginInlineEnd: 0 }}>
+            {r.statusText}
+          </Tag>
+          {r.statusHint && (
+            <Typography.Text
+              style={{ fontSize: 12 }}
+              type={r.statusHintMine ? undefined : 'secondary'}
+              strong={r.statusHintMine}
+            >
+              {r.statusHintMine ? '● ' : ''}{r.statusHint}
+            </Typography.Text>
+          )}
+        </Space>
       ),
     },
     // Deliberately not the default sort: Ant Design applies only one, and

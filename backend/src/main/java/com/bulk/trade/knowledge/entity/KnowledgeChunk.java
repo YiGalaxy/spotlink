@@ -11,9 +11,15 @@ import java.time.OffsetDateTime;
 /**
  * A retrievable passage.
  *
- * <p>The embedding is handled outside MyBatis — pgvector needs a type the
- * mapper cannot guess — so it is not mapped as a column here. Retrieval goes
- * through hand-written SQL; this entity covers the ordinary reads.
+ * <p><b>The embedding is not mapped, and under MySQL that is still the right
+ * call.</b> On PostgreSQL it was because pgvector's type had no MyBatis
+ * handler. Here the column is a plain {@code BLOB} that a handler <em>could</em>
+ * map — but retrieval does not want it mapped. Scoring happens in Java over
+ * every embedded chunk at once, and hydrating a 4 KB blob into a {@code float[]}
+ * for each of them through the entity pipeline would allocate the whole corpus
+ * to answer one question. The retrieval path reads blobs directly and decodes
+ * them one at a time; this entity covers the ordinary reads, which never need
+ * the vector.
  */
 @Getter
 @Setter
@@ -28,7 +34,7 @@ public class KnowledgeChunk {
     private String content;
     private Integer tokenCount;
 
-    /** Not mapped: see the class comment. */
+    /** Never hydrated by the entity path; see the class comment. */
     @com.baomidou.mybatisplus.annotation.TableField(exist = false)
     private float[] embedding;
 

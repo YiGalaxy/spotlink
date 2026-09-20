@@ -34,26 +34,29 @@ CREATE TABLE t_commodity_category (
     sort_order  INT          NOT NULL DEFAULT 0,
     -- Field definitions a commodity in this category must supply,
     -- e.g. [{"key":"cu_content","label":"铜含量","type":"number","unit":"%"}]
-    spec_schema JSONB        NOT NULL DEFAULT '[]'::jsonb,
+    spec_schema JSON         NOT NULL DEFAULT (JSON_ARRAY()),
     unit        VARCHAR(16)  NOT NULL DEFAULT '吨',
     status      SMALLINT     NOT NULL DEFAULT 1,
     remark      VARCHAR(256),
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    created_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_by  BIGINT,
     updated_by  BIGINT,
     deleted     SMALLINT     NOT NULL DEFAULT 0
 );
 
-COMMENT ON TABLE  t_commodity_category IS 'Commodity catalogue tree maintained by the platform.';
-COMMENT ON COLUMN t_commodity_category.path IS 'Materialised ancestor path, e.g. /1/7/23/ for prefix queries.';
-COMMENT ON COLUMN t_commodity_category.spec_schema IS 'Specification fields required for commodities in this category.';
+ALTER TABLE t_commodity_category COMMENT = 'Commodity catalogue tree maintained by the platform.';
+ALTER TABLE t_commodity_category MODIFY COLUMN path VARCHAR(256) NOT NULL DEFAULT '' COMMENT 'Materialised ancestor path, e.g. /1/7/23/ for prefix queries.';
+ALTER TABLE t_commodity_category MODIFY COLUMN spec_schema JSON NOT NULL DEFAULT (JSON_ARRAY()) COMMENT 'Specification fields required for commodities in this category.';
 
-CREATE UNIQUE INDEX uk_category_code ON t_commodity_category (code) WHERE deleted = 0;
-CREATE INDEX idx_category_parent ON t_commodity_category (parent_id) WHERE deleted = 0;
-CREATE INDEX idx_category_path ON t_commodity_category (path text_pattern_ops) WHERE deleted = 0;
+CREATE UNIQUE INDEX uk_category_code ON t_commodity_category (code);
+CREATE INDEX idx_category_parent ON t_commodity_category (parent_id);
+CREATE INDEX idx_category_path ON t_commodity_category (path);
 
-SELECT attach_updated_at_trigger('t_commodity_category');
+CREATE TRIGGER trg_t_commodity_category_updated_at
+    BEFORE UPDATE ON t_commodity_category
+    FOR EACH ROW
+    SET NEW.updated_at = NOW(6);
 
 -- -----------------------------------------------------------------------------
 -- t_warehouse: designated delivery warehouses (指定交收仓库).
@@ -72,19 +75,22 @@ CREATE TABLE t_warehouse (
     contact_phone VARCHAR(32),
     status       SMALLINT     NOT NULL DEFAULT 1,
     remark       VARCHAR(256),
-    created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    created_at   DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at   DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_by   BIGINT,
     updated_by   BIGINT,
     deleted      SMALLINT     NOT NULL DEFAULT 0
 );
 
-COMMENT ON TABLE t_warehouse IS 'Designated delivery warehouse. Goods are stored here, not by the platform.';
+ALTER TABLE t_warehouse COMMENT = 'Designated delivery warehouse. Goods are stored here, not by the platform.';
 
-CREATE UNIQUE INDEX uk_warehouse_code ON t_warehouse (code) WHERE deleted = 0;
-CREATE INDEX idx_warehouse_status ON t_warehouse (status) WHERE deleted = 0;
+CREATE UNIQUE INDEX uk_warehouse_code ON t_warehouse (code);
+CREATE INDEX idx_warehouse_status ON t_warehouse (status);
 
-SELECT attach_updated_at_trigger('t_warehouse');
+CREATE TRIGGER trg_t_warehouse_updated_at
+    BEFORE UPDATE ON t_warehouse
+    FOR EACH ROW
+    SET NEW.updated_at = NOW(6);
 
 -- -----------------------------------------------------------------------------
 -- t_inventory_note: electronic inventory note (电子库存单).
@@ -103,10 +109,10 @@ CREATE TABLE t_inventory_note (
     commodity_name     VARCHAR(128)   NOT NULL,
     brand              VARCHAR(64),
     origin             VARCHAR(64),
-    spec               JSONB          NOT NULL DEFAULT '{}'::jsonb,
-    total_quantity     NUMERIC(18,3)  NOT NULL,
-    available_quantity NUMERIC(18,3)  NOT NULL,
-    frozen_quantity    NUMERIC(18,3)  NOT NULL DEFAULT 0,
+    spec               JSON           NOT NULL DEFAULT (JSON_OBJECT()),
+    total_quantity     DECIMAL(18,3)  NOT NULL,
+    available_quantity DECIMAL(18,3)  NOT NULL,
+    frozen_quantity    DECIMAL(18,3)  NOT NULL DEFAULT 0,
     unit               VARCHAR(16)    NOT NULL DEFAULT '吨',
     -- Expected to be zero or a positive remainder; kept for auditability.
     quality_report_key VARCHAR(256),
@@ -117,8 +123,8 @@ CREATE TABLE t_inventory_note (
     -- cannot both succeed against the same available quantity.
     version            INT            NOT NULL DEFAULT 0,
     remark             VARCHAR(512),
-    created_at         TIMESTAMPTZ    NOT NULL DEFAULT now(),
-    updated_at         TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    created_at         DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at         DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_by         BIGINT,
     updated_by         BIGINT,
     deleted            SMALLINT       NOT NULL DEFAULT 0,
@@ -130,22 +136,24 @@ CREATE TABLE t_inventory_note (
         CHECK (total_quantity >= 0 AND available_quantity >= 0 AND frozen_quantity >= 0)
 );
 
-COMMENT ON TABLE  t_inventory_note IS
-    'Electronic inventory note (电子库存单). A digital record of goods held in a '
-    'designated warehouse. It is NOT a warehouse receipt and confers no title.';
-COMMENT ON COLUMN t_inventory_note.available_quantity IS 'Free to list or sell.';
-COMMENT ON COLUMN t_inventory_note.frozen_quantity IS 'Reserved by an active listing or order.';
-COMMENT ON COLUMN t_inventory_note.version IS 'Optimistic lock for concurrent quantity changes.';
+ALTER TABLE t_inventory_note COMMENT =
+    'Electronic inventory note (电子库存单). A digital record of goods held in a
+     designated warehouse. It is NOT a warehouse receipt and confers no title.';
+ALTER TABLE t_inventory_note MODIFY COLUMN available_quantity DECIMAL(18,3) NOT NULL COMMENT 'Free to list or sell.';
+ALTER TABLE t_inventory_note MODIFY COLUMN frozen_quantity DECIMAL(18,3) NOT NULL DEFAULT 0 COMMENT 'Reserved by an active listing or order.';
+ALTER TABLE t_inventory_note MODIFY COLUMN version INT NOT NULL DEFAULT 0 COMMENT 'Optimistic lock for concurrent quantity changes.';
 
-CREATE UNIQUE INDEX uk_inventory_note_no ON t_inventory_note (note_no) WHERE deleted = 0;
-CREATE INDEX idx_inventory_owner ON t_inventory_note (enterprise_id, status) WHERE deleted = 0;
-CREATE INDEX idx_inventory_category ON t_inventory_note (category_id) WHERE deleted = 0;
-CREATE INDEX idx_inventory_warehouse ON t_inventory_note (warehouse_id) WHERE deleted = 0;
+CREATE UNIQUE INDEX uk_inventory_note_no ON t_inventory_note (note_no);
+CREATE INDEX idx_inventory_owner ON t_inventory_note (enterprise_id, status);
+CREATE INDEX idx_inventory_category ON t_inventory_note (category_id);
+CREATE INDEX idx_inventory_warehouse ON t_inventory_note (warehouse_id);
 -- Partial index for the quantity check: only in-stock notes can be frozen.
-CREATE INDEX idx_inventory_available ON t_inventory_note (enterprise_id)
-    WHERE deleted = 0 AND status IN (2, 3, 4);
+CREATE INDEX idx_inventory_available ON t_inventory_note (enterprise_id);
 
-SELECT attach_updated_at_trigger('t_inventory_note');
+CREATE TRIGGER trg_t_inventory_note_updated_at
+    BEFORE UPDATE ON t_inventory_note
+    FOR EACH ROW
+    SET NEW.updated_at = NOW(6);
 
 -- -----------------------------------------------------------------------------
 -- t_freeze_record: one table for both goods and money.
@@ -165,15 +173,15 @@ CREATE TABLE t_freeze_record (
     entity_type   VARCHAR(16)   NOT NULL,
     entity_id     BIGINT        NOT NULL,
     -- Exactly one of these is populated: quantity for goods, amount for money.
-    quantity      NUMERIC(18,3),
-    amount        NUMERIC(19,4),
+    quantity      DECIMAL(18,3),
+    amount        DECIMAL(19,4),
     biz_type      VARCHAR(32)   NOT NULL,
     biz_id        BIGINT,
     status        VARCHAR(16)   NOT NULL DEFAULT 'FROZEN',
     reason        VARCHAR(256),
-    released_at   TIMESTAMPTZ,
-    created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    updated_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    released_at   DATETIME(6),
+    created_at    DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at    DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_by    BIGINT,
     updated_by    BIGINT,
 
@@ -186,17 +194,20 @@ CREATE TABLE t_freeze_record (
     )
 );
 
-COMMENT ON TABLE  t_freeze_record IS
+ALTER TABLE t_freeze_record COMMENT =
     'A reservation of goods or money. One table for both: same lifecycle, same release path.';
-COMMENT ON COLUMN t_freeze_record.biz_type IS 'What caused the freeze, e.g. LISTING, ORDER.';
-COMMENT ON COLUMN t_freeze_record.entity_id IS 'Inventory note id for INVENTORY, account id for FUND.';
+ALTER TABLE t_freeze_record MODIFY COLUMN biz_type VARCHAR(32) NOT NULL COMMENT 'What caused the freeze, e.g. LISTING, ORDER.';
+ALTER TABLE t_freeze_record MODIFY COLUMN entity_id BIGINT NOT NULL COMMENT 'Inventory note id for INVENTORY, account id for FUND.';
 
 CREATE UNIQUE INDEX uk_freeze_no ON t_freeze_record (freeze_no);
 CREATE INDEX idx_freeze_entity ON t_freeze_record (entity_type, entity_id, status);
 CREATE INDEX idx_freeze_biz ON t_freeze_record (biz_type, biz_id);
 CREATE INDEX idx_freeze_owner ON t_freeze_record (enterprise_id, status, created_at DESC);
 
-SELECT attach_updated_at_trigger('t_freeze_record');
+CREATE TRIGGER trg_t_freeze_record_updated_at
+    BEFORE UPDATE ON t_freeze_record
+    FOR EACH ROW
+    SET NEW.updated_at = NOW(6);
 
 -- -----------------------------------------------------------------------------
 -- Seed catalogue and one warehouse, so a fresh database is usable immediately.
@@ -205,23 +216,23 @@ SELECT attach_updated_at_trigger('t_freeze_record');
 INSERT INTO t_commodity_category (id, parent_id, code, name, level, path, sort_order, unit, spec_schema)
 VALUES
     (1001, 0,    'NFJSC', '有色金属', 1, '/1001/', 10, '吨',
-     '[]'::jsonb),
+     '[]'),
     (1002, 1001, 'DIANTONG', '电解铜', 2, '/1001/1002/', 10, '吨',
      '[{"key":"cu_content","label":"铜含量","type":"number","unit":"%","required":true},
-       {"key":"standard","label":"执行标准","type":"string","required":false}]'::jsonb),
+       {"key":"standard","label":"执行标准","type":"string","required":false}]'),
     (1003, 1001, 'LVING', '铝锭', 2, '/1001/1003/', 20, '吨',
-     '[{"key":"al_content","label":"铝含量","type":"number","unit":"%","required":true}]'::jsonb),
+     '[{"key":"al_content","label":"铝含量","type":"number","unit":"%","required":true}]'),
     (1004, 1001, 'XINDING', '锌锭', 2, '/1001/1004/', 30, '吨',
-     '[{"key":"zn_content","label":"锌含量","type":"number","unit":"%","required":true}]'::jsonb),
-    (1005, 0,    'XNY', '新能源材料', 1, '/1005/', 20, '吨', '[]'::jsonb),
+     '[{"key":"zn_content","label":"锌含量","type":"number","unit":"%","required":true}]'),
+    (1005, 0,    'XNY', '新能源材料', 1, '/1005/', 20, '吨', '[]'),
     (1006, 1005, 'TSSL', '碳酸锂', 2, '/1005/1006/', 10, '吨',
      '[{"key":"li_content","label":"锂含量","type":"number","unit":"%","required":true},
-       {"key":"grade","label":"级别","type":"string","required":true}]'::jsonb),
+       {"key":"grade","label":"级别","type":"string","required":true}]'),
     (1007, 1005, 'QYHL', '氢氧化锂', 2, '/1005/1007/', 20, '吨',
-     '[{"key":"li_content","label":"锂含量","type":"number","unit":"%","required":true}]'::jsonb),
-    (1008, 0,    'XJS', '小金属', 1, '/1008/', 30, '千克', '[]'::jsonb),
+     '[{"key":"li_content","label":"锂含量","type":"number","unit":"%","required":true}]'),
+    (1008, 0,    'XJS', '小金属', 1, '/1008/', 30, '千克', '[]'),
     (1009, 1008, 'JINGYIN', '精铟', 2, '/1008/1009/', 10, '千克',
-     '[{"key":"in_content","label":"铟含量","type":"number","unit":"%","required":true}]'::jsonb);
+     '[{"key":"in_content","label":"铟含量","type":"number","unit":"%","required":true}]');
 
 INSERT INTO t_warehouse (id, code, name, short_name, province, city, address, contact_name, contact_phone, status)
 VALUES

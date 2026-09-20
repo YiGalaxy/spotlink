@@ -1,41 +1,57 @@
 name: spotlink
 
 # Infrastructure for the bulk commodity spot trading platform.
-# Ports are intentionally non-default to avoid clashing with a local
-# PostgreSQL service and other Docker containers already on this machine.
-#   PostgreSQL -> 15432
-#   Redis      -> 16379
+# Ports are intentionally non-default to avoid clashing with a local database
+# service and other Docker containers already on this machine.
+#   MySQL -> 13306
+#   Redis -> 16379
 
 services:
-  postgres:
-    # Same PostgreSQL 16 with the pgvector extension added. The official
-    # `postgres` image does not ship it, and RAG needs a vector column; this
-    # image is the upstream PG build plus that one extension, so the data
-    # directory is compatible with the plain image either way.
-    image: pgvector/pgvector:pg16
-    container_name: spotlink-postgres
+  mysql:
+    # 8.4 is the current LTS, chosen over 9.x deliberately: 9.x adds a native
+    # VECTOR type, but it is new enough to be absent from most production
+    # environments, and a portfolio project should run on the version the people
+    # reading it actually deploy.
+    #
+    # Without a vector type the knowledge base computes cosine similarity in
+    # Java over the chunk table. That is a full scan: free at eleven passages,
+    # untenable at ten thousand. The trade is recorded in the README rather than
+    # hidden.
+    image: mysql:8.4
+    container_name: spotlink-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_DB: bulk_trade
-      POSTGRES_USER: bulk
-      POSTGRES_PASSWORD: bulk_trade_2026
+      MYSQL_DATABASE: bulk_trade
+      MYSQL_USER: bulk
+      MYSQL_PASSWORD: bulk_trade_2026
+      MYSQL_ROOT_PASSWORD: bulk_root_2026
       TZ: Asia/Shanghai
-      PGTZ: Asia/Shanghai
     ports:
-      - "15432:5432"
+      - "13306:3306"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - mysqldata:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bulk -d bulk_trade"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "bulk", "-pbulk_trade_2026"]
       interval: 5s
       timeout: 3s
-      retries: 12
+      retries: 20
+      start_period: 20s
     command:
-      - "postgres"
-      - "-c"
-      - "max_connections=200"
-      - "-c"
-      - "log_min_duration_statement=500"
+      # utf8mb4 throughout with a collation that sorts Chinese sensibly. The 8.4
+      # default is already utf8mb4; stating it is what stops a container built
+      # elsewhere from silently differing.
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_0900_ai_ci"
+      # Creating a TRIGGER as a non-SUPER user while binary logging is on
+      # requires this. The alternative is running the application as root,
+      # which is a worse answer to the same problem.
+      - "--log-bin-trust-function-creators=1"
+      - "--max-connections=200"
+      - "--slow-query-log=1"
+      - "--long-query-time=0.5"
+      # Stored timestamps are UTC by convention; this only affects NOW() in
+      # ad-hoc sessions.
+      - "--default-time-zone=+08:00"
 
   redis:
     image: redis:7-alpine
@@ -61,8 +77,12 @@ services:
 # Docker create empty volumes and the existing data would appear to vanish - the
 # name is the volume's identity, not a label. Rename only alongside a
 # dump-and-restore.
+#
+# `mysqldata` is new because this is a different engine and there is nothing to
+# carry over. The PostgreSQL volume is deliberately left in place rather than
+# deleted, so the previous dataset survives until someone removes it on purpose.
 volumes:
-  pgdata:
-    name: bulk-trade-pgdata
+  mysqldata:
+    name: bulk-trade-mysqldata
   redisdata:
     name: bulk-trade-redisdata

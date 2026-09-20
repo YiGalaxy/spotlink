@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -129,7 +130,7 @@ public class KnowledgeService {
                 log.warn("Embedding unavailable, stopping after {} chunk(s)", done);
                 break;
             }
-            chunkMapper.updateEmbedding(chunk.getId(), EmbeddingService.toVectorLiteral(vector));
+            chunkMapper.updateEmbedding(chunk.getId(), EmbeddingService.toBytes(vector));
             done++;
         }
         if (done > 0) {
@@ -151,13 +152,48 @@ public class KnowledgeService {
 
     // ------------------------------------------------------------------
 
+    /**
+     * Nearest chunks by cosine similarity, scored in Java.
+     *
+     * <p>PostgreSQL did this in one indexed query with pgvector's {@code <=>}.
+     * MySQL has no vector type, so the comparison moved here and this is now a
+     * scan: every embedded chunk is read, scored, and sorted.
+     *
+     * <p><b>Correct, and honestly bounded.</b> At the current corpus — a dozen
+     * passages — the scan is free and the ranking is exact, which is strictly
+     * better than an approximate index would be. The failure mode is size, not
+     * logic: at ten thousand chunks this reads ten thousand blobs per question.
+     * The fix at that point is a vector store, not a bigger {@code LIMIT},
+     * which is why {@code loadEmbedded} deliberately returns everything.
+     *
+     * <p>A chunk whose stored blob is the wrong width yields a similarity of
+     * zero rather than an exception — a corrupt row should cost one candidate,
+     * not the whole answer.
+     */
     private List<Map<String, Object>> vectorSearch(String question) {
-        float[] vector = embeddingService.embed(question);
-        if (vector == null) {
+        float[] query = embeddingService.embed(question);
+        if (query == null) {
             return List.of();
         }
-        return chunkMapper.searchByVector(
-                EmbeddingService.toVectorLiteral(vector), CANDIDATES_PER_METHOD);
+
+        record Scored(Map<String, Object> row, double score) {
+        }
+
+        return chunkMapper.loadEmbedded().stream()
+                .map(row -> new Scored(row,
+                        EmbeddingService.cosineSimilarity(
+                                query, EmbeddingService.fromBytes((byte[]) row.get("embedding")))))
+                .filter(scored -> scored.score() > 0)
+                .sorted(Comparator.comparingDouble(Scored::score).reversed())
+                .limit(CANDIDATES_PER_METHOD)
+                // The embedding is dropped here: it is the largest field by far
+                // and nothing downstream reads it.
+                .map(scored -> {
+                    Map<String, Object> row = new LinkedHashMap<>(scored.row());
+                    row.remove("embedding");
+                    return row;
+                })
+                .toList();
     }
 
     /**

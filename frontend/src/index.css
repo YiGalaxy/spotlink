@@ -228,30 +228,73 @@ body {
 
 .md-table-wrap {
   overflow-x: auto;
-  margin: 10px 0;
+  margin: 12px 0;
+  /* Rounded corners on the scroll container, so the table looks like a card
+     rather than a grid floating in the answer. */
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
 }
 
 .markdown-body table {
   border-collapse: collapse;
   width: 100%;
   font-size: 13px;
+  /* Figures in a column of prices or tonnages are compared by eye; proportional
+     digits make 1,111 narrower than 9,999 and destroy that. */
+  font-variant-numeric: tabular-nums;
 }
 
 .markdown-body th,
 .markdown-body td {
-  border: 1px solid #e4e7ec;
-  padding: 6px 10px;
+  padding: 7px 12px;
   text-align: left;
-  white-space: nowrap;
+  /* The single most important line here. Cells used to be `nowrap`, which
+     meant a seven-column table could not narrow by a single pixel — it
+     overflowed the chat column and had to be scrolled sideways to be read at
+     all, which is what made these tables look wrong. Body cells wrap; only the
+     header stays on one line, where wrapping helps nothing. */
+  white-space: normal;
+  word-break: break-word;
+  /* Below this, columns collapse to one character per line. */
+  min-width: 72px;
+  vertical-align: top;
+  /* Row rules only: no vertical lines. A grid of boxes around every cell is
+     what makes a small table look like a spreadsheet. */
+  border-bottom: 1px solid #eef0f4;
 }
 
 .markdown-body th {
+  white-space: nowrap;
   background: #f7f8fa;
   font-weight: 600;
+  color: #1f2329;
+  border-bottom: 1px solid #e4e7ec;
 }
 
-.markdown-body tr:nth-child(even) td {
-  background: #fcfcfd;
+.markdown-body tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-body tbody tr:hover td {
+  background: #fafbfc;
+}
+
+/* The first column is usually the label — a commodity name or an order number
+   — and reads better distinguishing itself from the figures beside it. */
+.markdown-body td:first-child {
+  color: #1f2329;
+}
+
+/* On a phone the chat column is narrow enough that horizontal scroll is
+   unavoidable for any table; tightening the padding buys back a column or two
+   before it starts. */
+@media (max-width: 600px) {
+  .markdown-body th,
+  .markdown-body td {
+    padding: 6px 8px;
+    font-size: 12.5px;
+    min-width: 64px;
+  }
 }
 
 .markdown-body hr {

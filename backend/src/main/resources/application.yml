@@ -15,18 +15,24 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
 
   datasource:
-    # stringtype=unspecified lets a Java String bind to a jsonb column: the
-    # driver sends it as an untyped parameter and PostgreSQL infers the target
-    # column type. Without it the driver sends varchar and jsonb rejects it.
-    url: jdbc:postgresql://localhost:15432/bulk_trade?stringtype=unspecified
+    # allowPublicKeyRetrieval + useSSL=false are for local Docker only. MySQL 8
+    # defaults to caching_sha2_password over TLS; a scratch container has no
+    # certificate worth validating, and requiring one would make `docker compose
+    # up` fail on a fresh machine for no security gain.
+    #
+    # connectionTimeZone=Asia/Shanghai with forceConnectionTimeZoneToSession
+    # pins the JDBC session so a DATETIME written as OffsetDateTime comes back
+    # the same instant it went in. MySQL has no timezone-aware type, so this
+    # setting is what carries the meaning PostgreSQL kept in TIMESTAMPTZ.
+    url: jdbc:mysql://localhost:13306/bulk_trade?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&connectionTimeZone=Asia/Shanghai&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true
     username: bulk
     password: bulk_trade_2026
-    driver-class-name: org.postgresql.Driver
+    driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
       connection-timeout: 30000
-      pool-name: BulkTradeHikari
+      pool-name: SpotlinkHikari
 
   flyway:
     enabled: true

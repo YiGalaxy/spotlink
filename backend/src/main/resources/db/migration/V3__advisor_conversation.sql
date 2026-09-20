@@ -18,23 +18,25 @@ CREATE TABLE t_ai_conversation (
     user_id         BIGINT       NOT NULL,
     title           VARCHAR(128) NOT NULL DEFAULT '新对话',
     message_count   INT          NOT NULL DEFAULT 0,
-    last_message_at TIMESTAMPTZ,
-    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    last_message_at DATETIME(6),
+    created_at      DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at      DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_by      BIGINT,
     updated_by      BIGINT,
     deleted         SMALLINT     NOT NULL DEFAULT 0
 );
 
-COMMENT ON TABLE  t_ai_conversation IS 'AI advisor chat session, owned by one user.';
-COMMENT ON COLUMN t_ai_conversation.title IS 'Derived from the first user message; renaming is allowed.';
+ALTER TABLE t_ai_conversation COMMENT = 'AI advisor chat session, owned by one user.';
+ALTER TABLE t_ai_conversation MODIFY COLUMN title VARCHAR(128) NOT NULL DEFAULT '新对话' COMMENT 'Derived from the first user message; renaming is allowed.';
 
 -- The list query is always "my conversations, most recent first".
 CREATE INDEX idx_ai_conversation_owner
-    ON t_ai_conversation (user_id, last_message_at DESC NULLS LAST)
-    WHERE deleted = 0;
+    ON t_ai_conversation (user_id, last_message_at DESC);
 
-SELECT attach_updated_at_trigger('t_ai_conversation');
+CREATE TRIGGER trg_t_ai_conversation_updated_at
+    BEFORE UPDATE ON t_ai_conversation
+    FOR EACH ROW
+    SET NEW.updated_at = NOW(6);
 
 -- -----------------------------------------------------------------------------
 -- t_ai_message
@@ -50,20 +52,20 @@ CREATE TABLE t_ai_message (
     user_id               BIGINT,
     role                  VARCHAR(16) NOT NULL,
     content               TEXT        NOT NULL,
-    tool_calls            JSONB,
+    tool_calls            JSON,
     iterations            INT,
     input_tokens          BIGINT,
     output_tokens         BIGINT,
     cache_read_tokens     BIGINT,
     cache_creation_tokens BIGINT,
     model                 VARCHAR(64),
-    created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at            DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 );
 
-COMMENT ON TABLE  t_ai_message IS 'One turn of an advisor conversation. Append-only.';
-COMMENT ON COLUMN t_ai_message.role IS 'user or assistant.';
-COMMENT ON COLUMN t_ai_message.tool_calls IS 'Tool invocations behind an assistant answer: [{name,input,output}].';
-COMMENT ON COLUMN t_ai_message.cache_read_tokens IS
+ALTER TABLE t_ai_message COMMENT = 'One turn of an advisor conversation. Append-only.';
+ALTER TABLE t_ai_message MODIFY COLUMN role VARCHAR(16) NOT NULL COMMENT 'user or assistant.';
+ALTER TABLE t_ai_message MODIFY COLUMN tool_calls JSON NULL COMMENT 'Tool invocations behind an assistant answer: [{name,input,output}].';
+ALTER TABLE t_ai_message MODIFY COLUMN cache_read_tokens BIGINT NULL COMMENT
     'Prompt-cache read count reported by the API. Used to verify caching actually works.';
 
 -- History is always read in insertion order for one conversation. The id is a

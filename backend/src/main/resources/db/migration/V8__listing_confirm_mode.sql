@@ -19,7 +19,8 @@
 -- =============================================================================
 
 ALTER TABLE t_listing
-    ADD COLUMN confirm_mode VARCHAR(8) NOT NULL DEFAULT 'AUTO';
+    ADD COLUMN confirm_mode VARCHAR(8) NOT NULL DEFAULT 'AUTO'
+        COMMENT 'AUTO: 摘牌即成交（挂牌是要约，摘牌是承诺）。MANUAL: 摘牌后待挂牌方确认，确认前货权不转移。';
 
 ALTER TABLE t_listing
     ADD CONSTRAINT ck_listing_confirm_mode
@@ -39,13 +40,13 @@ ALTER TABLE t_listing
 -- order that never waits, which is every order under AUTO.
 -- -----------------------------------------------------------------------------
 ALTER TABLE t_order
-    ADD COLUMN confirm_deadline TIMESTAMPTZ;
+    ADD COLUMN confirm_deadline DATETIME(6) NULL
+        COMMENT '挂牌方答复摘牌的截止时间；逾期由定时任务作废并解冻。仅 MANUAL 挂牌产生的订单有值。';
 
 -- The expiry sweep is the only reader, and it only ever looks at orders that
 -- are still waiting. A partial index keeps it proportional to the backlog
 -- rather than to the history of the platform.
-CREATE INDEX idx_order_confirm_deadline ON t_order (confirm_deadline)
-    WHERE deleted = 0 AND status = 'PENDING_CONFIRM';
+CREATE INDEX idx_order_confirm_deadline ON t_order (confirm_deadline);
 
 -- -----------------------------------------------------------------------------
 -- Existing PENDING_CONFIRM rows were created under the old semantics, where
@@ -56,26 +57,21 @@ CREATE INDEX idx_order_confirm_deadline ON t_order (confirm_deadline)
 -- already in in substance; the log rows below say why the row changed without
 -- anyone pressing a button.
 -- -----------------------------------------------------------------------------
-WITH migrated AS (
-    UPDATE t_order
-       SET status           = 'CONFIRMED',
-           confirmed_at     = COALESCE(confirmed_at, updated_at, now()),
-           confirm_deadline = NULL,
-           updated_at       = now()
-     WHERE status = 'PENDING_CONFIRM'
-       AND deleted = 0
-    RETURNING id
-)
 INSERT INTO t_order_status_log (id, order_id, from_status, to_status, operator, reason)
-SELECT (extract(epoch FROM clock_timestamp()) * 1000000)::bigint + row_number() OVER (),
+SELECT UNIX_TIMESTAMP(NOW(6)) * 1000000 + row_number() OVER (),
        id,
        'PENDING_CONFIRM',
        'CONFIRMED',
        'system',
        'V8 迁移：旧语义下摘牌时货权已转移，此状态为冗余确认，补记为已确认'
-  FROM migrated;
+  FROM t_order
+ WHERE status = 'PENDING_CONFIRM'
+   AND deleted = 0;
 
-COMMENT ON COLUMN t_listing.confirm_mode IS
-    'AUTO: 摘牌即成交（挂牌是要约，摘牌是承诺）。MANUAL: 摘牌后待挂牌方确认，确认前货权不转移。';
-COMMENT ON COLUMN t_order.confirm_deadline IS
-    '挂牌方答复摘牌的截止时间；逾期由定时任务作废并解冻。仅 MANUAL 挂牌产生的订单有值。';
+UPDATE t_order
+   SET status           = 'CONFIRMED',
+       confirmed_at     = COALESCE(confirmed_at, updated_at, NOW(6)),
+       confirm_deadline = NULL,
+       updated_at       = NOW(6)
+ WHERE status = 'PENDING_CONFIRM'
+   AND deleted = 0;

@@ -26,7 +26,7 @@ public class MybatisPlusConfig {
 
         // Pagination. The dbType must be set or MyBatis-Plus cannot pick the
         // right dialect for the LIMIT clause.
-        PaginationInnerInterceptor pagination = new PaginationInnerInterceptor(DbType.POSTGRE_SQL);
+        PaginationInnerInterceptor pagination = new PaginationInnerInterceptor(DbType.MYSQL);
         pagination.setMaxLimit(500L);
         pagination.setOverflow(false);
         interceptor.addInnerInterceptor(pagination);
