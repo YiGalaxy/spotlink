@@ -126,6 +126,144 @@ export interface InventoryNoteView {
   createdAt: string
 }
 
+// ---- trading ----
+
+export interface ListingView {
+  id: EntityId
+  listingNo: string
+  side: 'SELL' | 'BUY'
+  sideText: string
+  enterpriseId: EntityId
+  enterpriseName: string
+  categoryId: EntityId
+  categoryName: string
+  commodityName: string
+  brand: string | null
+  origin: string | null
+  spec: Record<string, unknown>
+  quantity: number
+  remainingQuantity: number
+  unit: string
+  price: number | null
+  priceType: 'FIXED' | 'NEGOTIABLE'
+  priceText: string
+  warehouseId: EntityId | null
+  warehouseName: string
+  deliveryMethod: string
+  deliveryMethodText: string
+  validUntil: string
+  status: string
+  statusText: string
+  /** True when the caller owns this listing — you cannot accept your own offer. */
+  mine: boolean
+  createdAt: string
+}
+
+export interface OrderView {
+  id: EntityId
+  orderNo: string
+  listingId: EntityId | null
+  buyerId: EntityId
+  buyerName: string
+  sellerId: EntityId
+  sellerName: string
+  myRole: 'BUYER' | 'SELLER' | '—'
+  counterpartyName: string
+  categoryId: EntityId
+  categoryName: string
+  commodityName: string
+  quantity: number
+  unit: string
+  price: number
+  amount: number
+  amountText: string
+  warehouseName: string
+  deliveryMethodText: string
+  status: string
+  statusText: string
+  /** Transitions this caller may actually perform — the same table the server enforces. */
+  allowedActions: string[]
+  confirmedAt: string | null
+  cancelledAt: string | null
+  cancelReason: string | null
+  createdAt: string
+}
+
+export interface OrderStatusLogEntry {
+  fromStatus: string
+  fromText: string
+  toStatus: string
+  toText: string
+  operator: string
+  reason: string
+  createdAt: string
+}
+
+export interface ContractView {
+  id: EntityId
+  contractNo: string
+  orderId: EntityId
+  title: string
+  buyerId: EntityId
+  buyerName: string
+  sellerId: EntityId
+  sellerName: string
+  commodityName: string
+  quantity: number
+  unit: string
+  price: number
+  amount: number
+  weightTolerance: number
+  terms: Record<string, unknown>
+  status: string
+  statusText: string
+  mySigned: boolean
+  counterpartySigned: boolean
+  buyerSignedAt: string | null
+  sellerSignedAt: string | null
+  createdAt: string
+}
+
+// ---- market data ----
+
+export interface QuoteRow {
+  categoryId: EntityId
+  categoryName: string
+  latestPrice: number | null
+  previousPrice: number | null
+  change: number | null
+  changePercent: number | null
+  tradeCount: number
+  volume: number | null
+  unit: string
+  lastTradedAt: string | null
+}
+
+/**
+ * A point on a market series.
+ *
+ * `tradeCount` accompanies every average on purpose: on a thin spot market an
+ * average of one trade and an average of forty look identical on a chart, and
+ * that difference is the whole question of how much the number can be trusted.
+ * `value` is null for days when nothing traded, so the line breaks rather than
+ * drawing straight through a gap.
+ */
+export interface SeriesPoint {
+  time: string
+  value: number | null
+  tradeCount: number
+  volume: number | null
+}
+
+export interface SeriesData {
+  seriesKey: string
+  label: string
+  unit: string
+  /** 'line' or 'bar' — the backend decides, since it knows the data's shape. */
+  kind: string
+  points: SeriesPoint[]
+}
+
 export interface AdvisorStatus {
   available: boolean
   enabled: boolean

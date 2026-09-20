@@ -12,11 +12,13 @@ import com.bulk.trade.trading.entity.Listing;
 import com.bulk.trade.trading.entity.Order;
 import com.bulk.trade.trading.entity.OrderStatus;
 import com.bulk.trade.trading.entity.OrderStatusLog;
+import com.bulk.trade.trading.event.OrderTradedEvent;
 import com.bulk.trade.trading.mapper.ListingMapper;
 import com.bulk.trade.trading.mapper.OrderMapper;
 import com.bulk.trade.trading.mapper.OrderStatusLogMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +50,7 @@ public class OrderService {
     private final ListingMapper listingMapper;
     private final InventoryNoteMapper inventoryNoteMapper;
     private final FreezeService freezeService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ------------------------------------------------------------------
     // Acceptance
@@ -133,6 +136,13 @@ public class OrderService {
                 user.getUserId(), user.getUsername(), "摘牌成交"));
 
         reduceListing(listing, quantity);
+
+        // Announced, not called. The trading module does not know a market feed
+        // exists; whoever cares subscribes.
+        eventPublisher.publishEvent(new OrderTradedEvent(
+                listing.getCategoryId(), listing.getCommodityName(),
+                price, quantity, listing.getUnit(),
+                buyerId, sellerId, order.getOrderNo()));
 
         log.info("Order {} created: {} {} of {} at {} (buyer={}, seller={})",
                 order.getOrderNo(), quantity.toPlainString(), listing.getUnit(),

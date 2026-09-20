@@ -52,10 +52,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /**
+     * Finds the bearer token.
+     *
+     * <p>Normally the Authorization header. The market stream is the one
+     * exception: the browser's EventSource API cannot set headers, so that
+     * endpoint also accepts the token as a query parameter.
+     *
+     * <p>This is a real trade-off and not a free one — a token in a URL can end
+     * up in access logs, browser history and proxy logs. It is confined to the
+     * single streaming path, and the proper fix (a short-lived, single-use
+     * stream ticket) is noted rather than pretended away.
+     */
     private String resolveToken(HttpServletRequest request) {
         String header = request.getHeader(HEADER);
         if (StringUtils.hasText(header) && header.startsWith(PREFIX)) {
             return header.substring(PREFIX.length()).trim();
+        }
+        if (request.getRequestURI().endsWith("/market/stream")) {
+            return request.getParameter("token");
         }
         return null;
     }
