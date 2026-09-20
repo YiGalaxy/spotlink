@@ -25,24 +25,43 @@ export interface LoginResponse {
   user: UserProfile
 }
 
-export interface ToolCall {
+// ---- advisor ----
+
+export interface ToolCallView {
   name: string
   input: string
   output: string
 }
 
-export interface ChatUsage {
+export interface TokenUsage {
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
   cacheCreationTokens: number
 }
 
-export interface ChatResponse {
-  answer: string
-  toolCalls: ToolCall[]
-  iterations: number
-  usage: ChatUsage
+export interface MessageView {
+  id: number | null
+  role: 'user' | 'assistant'
+  content: string
+  toolCalls: ToolCallView[]
+  iterations: number | null
+  usage: TokenUsage | null
+  createdAt: string
+}
+
+export interface ConversationSummary {
+  id: number
+  title: string
+  messageCount: number
+  lastMessageAt: string | null
+  createdAt: string
+}
+
+export interface ConversationDetail {
+  id: number
+  title: string
+  messages: MessageView[]
 }
 
 export interface AdvisorStatus {
