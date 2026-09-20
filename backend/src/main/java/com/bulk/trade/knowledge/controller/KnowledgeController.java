@@ -16,20 +16,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The rule corpus the assistant answers from.
+ * 助手据以作答的规则语料库。
  *
- * <p><b>Moved under the console, and the path changed with the audience.</b> It
- * used to sit at {@code /api/knowledge} and be readable without a token, on the
- * argument that a venue publishes its rules. That argument is about the rules;
- * it was never true of this. What these endpoints serve is the operator's view
- * of the corpus — how many chunks are embedded, what the retrieval scored a
- * question, and a button that makes the server call an embedding model once per
- * chunk. That last one was reachable by any signed-in member, and it runs
- * sequential HTTP calls to Ollama inside one transaction. It is a maintenance
- * surface, and it now sits behind the authority that names it.
+ * <p><b>已挪到运营后台之下，路径也随受众一起改了。</b>它原先位于
+ * {@code /api/knowledge}，不带令牌就能读，理由是"交易场所会公开自己的规则"。那条
+ * 理由针对的是规则本身；而对这里的接口它从来不成立。这些接口提供的是运营视角下的语料
+ * 库——嵌入了多少分块、检索给某个问题打了多少分，以及一个让服务端为每个分块调用一次
+ * 嵌入模型的按钮。最后那个按钮原本任何已登录会员都能触发，而它会在一个事务里对 Ollama
+ * 发起一连串顺序 HTTP 调用。这是一个运维面，现在它被挡在点名它的那个权限之后。
  *
- * <p>The advisor is unaffected: it reads {@link KnowledgeService} in process,
- * never over HTTP.
+ * <p>顾问不受影响：它在进程内直接读 {@link KnowledgeService}，从不走 HTTP。
  */
 @Tag(name = "知识库", description = "平台规则检索（RAG），运营维护用")
 @RestController

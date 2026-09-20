@@ -17,17 +17,14 @@ import type { ListingView, QuoteRow } from '@/types/api'
 const PRIMARY = '#1f4e79'
 
 /**
- * The public homepage.
+ * 公开首页。
  *
- * <p>Modelled on how a real commodity venue presents itself to the street: the
- * size of the market, what it last traded at, what is currently on offer, and
- * where the rules are. All four are things a visitor is entitled to know before
- * deciding whether to apply for membership — and none of them describe any
- * individual member.
+ * <p>照着真实大宗商品交易场所对外亮相的方式来做：市场规模有多大、最近成交在什么
+ * 价位、眼下有什么在挂、规则放在哪里。这四件事都是访客在决定要不要申请入会之前
+ * 有权知道的——而它们没有一样描述任何单个会员。
  *
- * <p>Signed-in users land here too, with their menu alongside. Making the
- * homepage vanish once you log in would mean the venue's own description of
- * itself is only visible to people who no longer need it.
+ * <p>已登录用户也会落到这里，菜单就在旁边。让首页在登录后消失，等于说交易场所
+ * 对自身的介绍只给那些已经不再需要它的人看。
  */
 export default function LandingPage() {
   const navigate = useNavigate()
@@ -48,8 +45,7 @@ export default function LandingPage() {
     queryFn: () => fetchMarket(),
   })
 
-  // The few most recently posted offers. A homepage is not the marketplace —
-  // it is the reason to walk into it.
+  // 最近发布的几笔挂牌。首页不是市场本身——它是让你走进市场的理由。
   const featured = [...listings]
     .sort((a, b) => dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf())
     .slice(0, 6)
@@ -58,7 +54,7 @@ export default function LandingPage() {
 
   return (
     <div>
-      {/* ---------- headline ---------- */}
+      {/* ---------- 头条 ---------- */}
       <div
         style={{
           background: `linear-gradient(135deg, ${PRIMARY} 0%, #2c6da3 100%)`,
@@ -104,7 +100,7 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ---------- platform figures ---------- */}
+      {/* ---------- 平台数据 ---------- */}
       <div style={{ maxWidth: 1200, margin: '-32px auto 0', padding: '0 24px' }}>
         <Card styles={{ body: { padding: '20px 8px' } }}>
           <Row gutter={[8, 16]}>
@@ -142,7 +138,7 @@ export default function LandingPage() {
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px 48px' }}>
         <Row gutter={[24, 24]}>
-          {/* ---------- latest prices ---------- */}
+          {/* ---------- 最新行情 ---------- */}
           <Col xs={24} lg={10}>
             <Card
               size="small"
@@ -204,7 +200,7 @@ export default function LandingPage() {
             </Card>
           </Col>
 
-          {/* ---------- featured offers ---------- */}
+          {/* ---------- 精选挂牌 ---------- */}
           <Col xs={24} lg={14}>
             <Card
               size="small"
@@ -282,7 +278,7 @@ export default function LandingPage() {
           </Col>
         </Row>
 
-        {/* ---------- where the rules live ---------- */}
+        {/* ---------- 规则在哪里 ---------- */}
         <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
           {[
             {

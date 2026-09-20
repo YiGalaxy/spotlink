@@ -8,14 +8,13 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 
 /**
- * An inventory note as the client sees it.
+ * 客户端看到的库存单视图。
  *
- * <p>Ids are strings: a snowflake id is 19 digits and JavaScript loses
- * precision past 16, so a numeric id would come back changed.
+ * <p>ID 是字符串：Snowflake ID 是 19 位，而 JavaScript 超过 16 位就会丢失精度，
+ * 所以以数字形式传出去会变样。
  *
- * <p>The three quantity figures are all exposed, not just the available one.
- * A seller who sees only "available" cannot tell whether goods are gone or
- * merely reserved, and that distinction is the first thing they will ask about.
+ * <p>三个数量都暴露出来，而不是只给可用量。只看得到"可用"的卖家分不清货物是真的
+ * 没了，还是只是被占用了，而这个区分恰恰是他们第一个会问的问题。
  */
 public record InventoryNoteView(
         @JsonSerialize(using = ToStringSerializer.class) Long id,

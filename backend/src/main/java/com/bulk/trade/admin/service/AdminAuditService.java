@@ -10,13 +10,13 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Reading back what operators did.
+ * 回读运营人员做过什么。
  *
- * <p>The table has existed since V2 with three indexes designed for exactly
- * these queries and, until the console, no writer at all. This is the reader.
+ * <p>这张表从 V2 起就存在，带着三个专为这些查询设计的索引，而且在运营后台出现
+ * 之前，它完全没有写入方。这里就是它的读取方。
  *
- * <p>Newest first and bounded. An audit trail is read by looking at what just
- * happened, and an unbounded one would be an export rather than a screen.
+ * <p>倒序且限量。审计轨迹的读法是看刚刚发生了什么，而不限量的读取是导出，不是
+ * 一个页面。
  */
 @Service
 @RequiredArgsConstructor

@@ -29,9 +29,8 @@ const footerStyle: React.CSSProperties = {
 }
 
 /**
- * Menu entries map one-to-one onto routes. Modules that do not exist yet are
- * deliberately absent: a menu item leading to a stub page is worse than no
- * menu item, especially in a demo.
+ * 菜单项与路由一一对应。尚不存在的模块刻意不放进来：一个通向占位页面的
+ * 菜单项比没有这个菜单项更糟，在演示里尤其如此。
  */
 const PUBLIC_MENU = [
   { key: '/', icon: <HomeOutlined />, label: '首页' },
@@ -39,18 +38,17 @@ const PUBLIC_MENU = [
   { key: '/trading', icon: <SwapOutlined />, label: '挂牌交易' },
 ]
 
-// 知识库 is not here on purpose. It is the platform's own rulebook — the corpus
-// the assistant retrieves from, and something the operator maintains. A member
-// browsing rules is a reasonable thing to want, but maintaining them is not,
-// and the page as it stands does both. It moves to the operator console, where
-// the people who write the rules can see what the assistant is answering from.
+// 知识库 是有意不放在这里的。它是平台自己的规则手册——助手从中检索的语料，
+// 也是运营方要维护的东西。会员想翻一翻规则是合理的诉求，但维护规则不是，
+// 而这个页面目前两件事都做了。它移到了运营控制台，让写规则的人能看见助手
+// 究竟是根据什么在回答。
 
 /**
- * What signing in adds.
+ * 登录之后多出来的东西。
  *
- * <p>Each of these reads data scoped to one enterprise — which is why they sit
- * behind the login rather than merely being hidden there. With no enterprise
- * to scope by, every one of them would render empty.
+ * <p>其中每一项读的都是限定到某一家企业的数据——这就是它们被放在登录后面、
+ * 而不只是被藏在登录后面的原因。没有企业可供限定范围时，它们每一个都会渲染
+ * 成空页面。
  */
 const MEMBER_MENU = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '工作台' },
@@ -68,9 +66,8 @@ export default function MainLayout() {
 
   const signedIn = Boolean(accessToken)
 
-  // Pushed when the server can reach us, polled otherwise. The poll is the
-  // fallback rather than the mechanism: it keeps a long-idle tab honest if the
-  // stream could not be held open.
+  // 服务端推得过来就推，否则轮询。轮询是兜底而不是机制：当流没能保持住连接
+  // 时，它让一个久置未动的标签页不至于说谎。
   useTaskStream()
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks'],
@@ -80,15 +77,13 @@ export default function MainLayout() {
   })
   const pendingCount = tasks.length
 
-  // Member entries are appended, so signing in does not reshuffle the items a
-  // visitor has just learned the positions of.
+  // 会员项追加在后面，这样登录不会把访客刚记住位置的菜单项重新洗牌。
   const menuItems = signedIn
     ? [...PUBLIC_MENU, ...MEMBER_MENU]
     : PUBLIC_MENU
 
-  // The count rides on 挂牌交易 even though the tasks span orders, contracts
-  // and delivery. That is where the user goes to act on them, and a count on a
-  // menu entry nobody clicks is a number rather than a prompt.
+  // 角标挂在 挂牌交易 上，尽管这些待办横跨订单、合同和发货。用户正是去那里
+  // 处理它们的，而挂在一个没人点的菜单项上的计数，只是个数字而不是提示。
   const itemsWithBadge = menuItems.map((item) =>
     item.key === '/trading' && pendingCount > 0
       ? {
@@ -103,10 +98,9 @@ export default function MainLayout() {
       : item,
   )
 
-  // Exact match, deliberately: every entry is a single path segment and a
-  // prefix rule would light up 挂牌交易 while the user is on a sub-page of
-  // something else. Sub-pages are modals over their list page rather than
-  // routes, which is what keeps this honest.
+  // 刻意用精确匹配：每个菜单项都是单层路径段，而前缀规则会让用户在别的
+  // 页面子级时 挂牌交易 也亮起来。子页面是叠在各自列表页上的弹窗而非路由，
+  // 正是这一点让它保持诚实。
   const selectedKey = menuItems.find((item) => item.key === location.pathname)?.key ?? '/'
 
   const handleLogout = () => {
@@ -217,9 +211,9 @@ export default function MainLayout() {
           <Outlet />
         </Content>
 
-        {/* A portfolio project, and saying so is the point of the footer. Kept
-            to one quiet line: a trading screen that shouts about its author is
-            a demo, and the screens above it are meant to look like a product. */}
+        {/* 这是一个作品集项目，把这件事说出来正是页脚存在的意义。克制在
+            一行安静的说明里：一个大声喊着作者名字的交易界面就是演示，而
+            它上面的那些界面是要看起来像产品的。 */}
         <Footer style={footerStyle}>
           <Space size={8} wrap split={<Divider type="vertical" />}>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>

@@ -7,11 +7,11 @@ import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.util.List;
 
 /**
- * A category with its children.
+ * 一个品类，连同它的子节点。
  *
- * <p>{@code parentId} and {@code id} are strings — a snowflake id is 19 digits
- * and JavaScript loses precision past 16, so sending them as numbers makes every
- * id the client echoes back a different id.
+ * <p>{@code parentId} 和 {@code id} 是字符串——Snowflake ID 是 19 位，而
+ * JavaScript 超过 16 位就会丢失精度，所以一旦以数字发送，客户端回传的每一个 ID
+ * 都会变成另一个 ID。
  */
 public record CategoryNode(
         @JsonSerialize(using = ToStringSerializer.class) Long id,

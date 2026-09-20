@@ -28,7 +28,7 @@ import { fetchTasks } from '@/api/tasks'
 import { useAuthStore } from '@/store/auth'
 import type { TaskView } from '@/types/api'
 
-/** Which icon a task kind wears. Decoration only — the action is the point. */
+/** 某种待办类型戴哪个图标。纯装饰——动作才是重点。 */
 const KIND_ICON: Record<TaskView['kind'], React.ReactNode> = {
   ACCEPTANCE_PENDING: <ClockCircleOutlined style={{ color: '#d46b08' }} />,
   CONTRACT_TO_SIGN: <SignatureOutlined style={{ color: '#d46b08' }} />,
@@ -38,17 +38,15 @@ const KIND_ICON: Record<TaskView['kind'], React.ReactNode> = {
 }
 
 /**
- * The workbench: what this enterprise owes the platform, and nothing else.
+ * 工作台：这家企业欠平台什么，仅此而已。
  *
- * <p>Replaces a page of build-progress notes and advisor configuration. Those
- * described the project; this describes the user's own work, which is what a
- * person opens a trading console to see. The old content was not wrong, it was
- * addressed to the wrong reader — it now lives in the admin console, where a
- * developer or an operator is the audience.
+ * <p>它取代了一页构建进度说明和顾问配置。那些东西描述的是项目；而这里描述的
+ * 是用户自己的活儿，这才是一个人打开交易控制台想看到的东西。原来的内容并不算
+ * 错，只是写给了错误的读者——它现在住在管理后台里，那里开发者或运营人员才是
+ * 受众。
  *
- * <p>The task list is not assembled here. It comes from one server-side
- * aggregation that the AI advisor also reads, so asking the assistant and
- * looking at this page cannot produce different answers.
+ * <p>待办列表不是在这里拼起来的。它来自服务端的一次汇总，AI 顾问读的也是同一
+ * 份，所以问助手和看这个页面不可能给出不同的答案。
  */
 export default function DashboardPage() {
   const user = useAuthStore((state) => state.user)
@@ -58,8 +56,8 @@ export default function DashboardPage() {
   const { data: tasks = [], isLoading: tasksLoading } = useQuery({
     queryKey: ['tasks'],
     queryFn: fetchTasks,
-    // A workbench that only updates when reloaded is the bug this page exists
-    // to fix; the stream pushes, and this covers a stream that could not be held.
+    // 一个只有重新加载才会更新的工作台，正是这个页面要修掉的 bug；流会推送，
+    // 而这里兜住的是流没能保持住的情况。
     refetchInterval: 60_000,
   })
 
@@ -101,7 +99,7 @@ export default function DashboardPage() {
     },
   })
 
-  /** The one task kind that offers a refusal as well as an assent. */
+  /** 唯一一种除了同意之外还给出拒绝的待办类型。 */
   const refuse = async (task: TaskView) => {
     await rejectOrder(task.targetId, '挂牌方拒绝摘牌')
     void message.success('已拒绝')

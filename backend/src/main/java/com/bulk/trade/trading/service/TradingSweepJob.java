@@ -7,24 +7,21 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * The background tidy-up for things that expire by themselves.
+ * 针对那些会自行过期的事项的后台整理工作。
  *
- * <p>Two jobs, both answering the same question — what happens when nobody
- * does anything. An acceptance whose lister never replied, and an offer whose
- * validity ran out. Both have to resolve on their own, because the party who
- * would otherwise resolve them is precisely the one not acting.
+ * <p>两个任务，回答的是同一个问题——当没有任何人做任何事时会发生什么。
+ * 一个挂牌方从未答复的摘牌，和一份有效期已过的要约。两者都必须自行了结，
+ * 因为本该去了结它们的那一方，恰恰就是没有在行动的那一方。
  *
- * <p><b>Why a sweep and not a read-time check.</b> Deriving "expired" when
- * someone loads a page is tempting and wrong: reading a marketplace would
- * mutate rows, two readers would race to do the same work, and the state would
- * depend on traffic. A sweep makes expiry a fact about time rather than about
- * who happened to look.
+ * <p><b>为什么用扫描而不是读取时检查。</b>在有人加载页面时才推导出“已过期”
+ * 很诱人，但也是错的：读一次行情就会改动数据行，两个读者会竞相做同一件事，
+ * 而状态会取决于流量。扫描让过期成为一个关于时间的事实，而不是关于谁碰巧
+ * 看了一眼的事实。
  *
- * <p><b>Known limitation:</b> {@code @Scheduled} runs on every instance, so a
- * multi-instance deployment would sweep concurrently. That is survivable here —
- * both jobs re-read status and skip work already done, and the transitions are
- * guarded — but it is wasteful and would need a lock (ShedLock, or a
- * {@code pg_advisory_lock}) before it could be called correct at scale.
+ * <p><b>已知局限：</b>{@code @Scheduled} 会在每个实例上运行，因此多实例部署
+ * 会并发扫描。在这里这是可以承受的——两个任务都会重新读取状态并跳过已经做完
+ * 的工作，而且状态迁移本身有防护——但它是浪费的，要在规模上称得上正确，还需
+ * 要一把锁（ShedLock，或一个 {@code pg_advisory_lock}）。
  */
 @Slf4j
 @Component
@@ -45,9 +42,8 @@ public class TradingSweepJob {
                 log.info("Sweep: {} acceptance(s) lapsed, {} listing(s) expired", lapsed, expired);
             }
         } catch (Exception e) {
-            // A failed sweep must not kill the scheduler: the next tick
-            // retries, and a thread that dies here would silently stop expiring
-            // anything at all.
+            // 一次失败的扫描绝不能弄死调度器：下一个节拍会重试，而在这里死掉
+            // 的线程会无声地让所有过期处理彻底停摆。
             log.error("Trading sweep failed; will retry on the next tick", e);
         }
     }

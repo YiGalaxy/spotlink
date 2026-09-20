@@ -32,12 +32,11 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Publishing and withdrawing listings.
+ * 挂牌的发布与撤回。
  *
- * <p>The important property here is what a listing does to goods. It does not
- * take them; it reserves them. The seller keeps ownership throughout, and the
- * reservation is released when the listing closes or expires. That is why the
- * freeze is created and released inside these two methods and nowhere else.
+ * <p>这里最重要的性质是挂牌对货物做了什么。它不取走货物，它是预留货物。卖方
+ * 自始至终保留所有权，而这份预留会在挂牌关闭或过期时释放。这就是为什么冻结的
+ * 创建与释放只发生在这两个方法里，别处没有。
  */
 @Slf4j
 @Service
@@ -56,12 +55,11 @@ public class ListingService {
     private final ObjectMapper objectMapper;
 
     /**
-     * Publishes an offer.
+     * 发布一份要约。
      *
-     * <p>For a SELL listing the goods are frozen in the same transaction that
-     * creates the listing. Splitting them would allow a listing to exist with
-     * nothing behind it — an offer to sell goods that are simultaneously
-     * promised elsewhere.
+     * <p>SELL 挂牌的货物是在创建挂牌的同一个事务里被冻结的。若把两者拆开，
+     * 就会出现一份背后空无一物的挂牌——一份出卖同时已被许诺给别处的货物的
+     * 要约。
      */
     @Transactional
     public Listing publish(ListingPublishRequest request, LoginUser user) {
@@ -114,14 +112,13 @@ public class ListingService {
 
         listingMapper.insert(listing);
 
-        // The freeze was created before the listing had an id, so it could not
-        // record which listing it belongs to. Filled in now that one exists.
+        // 冻结是在挂牌还没有 id 的时候创建的，因此它当时无法记录自己属于哪份
+        // 挂牌。现在有了 id，就补上。
         //
-        // Worth the extra write: without it a freeze row says only "some goods
-        // are reserved" and cannot be traced back to the offer they are
-        // reserved for. The link exists — a listing points at its freeze — but
-        // only one way, so reconciling the other direction (this money-like
-        // reservation, which offer is it?) is impossible without a scan.
+        // 多这一次写入是值得的：没有它，一条冻结记录只能说明“有些货物被预留
+        // 了”，无法回溯到它们究竟是为哪份要约而预留。这个关联是存在的——挂牌
+        // 指向自己的冻结——但只有一个方向，于是反过来对账（这笔类资金的预留，
+        // 到底对应哪份要约？）不扫全表就做不到。
         if (listing.getFreezeId() != null) {
             freezeService.attributeTo(listing.getFreezeId(), listing.getId());
         }
@@ -132,29 +129,25 @@ public class ListingService {
     }
 
     /**
-     * Withdraws a listing, releasing whatever it reserved.
+     * 撤回一份挂牌，释放它所预留的一切。
      *
-     * <p>Only the owner may withdraw, and only while it is open. A listing that
-     * has been partly taken can still be withdrawn — the remainder is released,
-     * the trades already struck are untouched.
+     * <p>只有所有者可以撤回，且只在其仍处于开放状态时可以。一份已被部分摘走
+     * 的挂牌仍然可以撤回——剩余部分被释放，已经达成的交易不受影响。
      *
-     * <p><b>Except while an acceptance is waiting for an answer.</b> That
-     * acceptance is a question the lister has been asked, and the goods behind
-     * it are reserved for the answer. Withdrawing would release that
-     * reservation and leave the waiting order permanently unanswerable, so the
-     * withdrawal is refused until the question is settled. Refusing is the
-     * safer failure: the lister can still decline, and one button press later
-     * the listing is theirs to withdraw.
+     * <p><b>但当有一笔摘牌正在等待答复时除外。</b>那笔摘牌是向挂牌方提出的
+     * 一个问题，而它背后的货物正是为这个答复而预留的。此时撤回会释放那笔预留，
+     * 让等待中的订单永远无法答复，因此在这个问题了结之前，撤牌会被拒绝。拒绝
+     * 是更安全的失败方式：挂牌方仍然可以拒绝摘牌，再按一次按钮，这份挂牌就
+     * 可以撤了。
      */
     @Transactional
     public void close(Long listingId, Long enterpriseId) {
         Listing listing = loadOwned(listingId, enterpriseId);
 
-        // Asked before "is it still open", because a listing whose whole
-        // remainder was accepted reads as FILLED rather than open — yet the
-        // reason its owner cannot withdraw is not that it is finished, it is
-        // that a question is waiting for them. That is the answer that tells
-        // them what to do next; the other one just says no.
+        // 这一问放在“它是否还开放”之前，因为一份剩余部分被全部摘走的挂牌
+        // 读起来是 FILLED 而不是开放——然而其所有者无法撤牌的原因并不是它
+        // 已终结，而是有个问题正等着他回答。那才是告诉他下一步该做什么的
+        // 答案；另一个答案只是说不行。
         long waiting = countAwaitingAcceptance(listing.getId());
         if (waiting > 0) {
             throw BusinessException.of(ResultCode.CONFLICT,
@@ -175,18 +168,16 @@ public class ListingService {
     }
 
     /**
-     * Expires listings whose deadline has passed.
+     * 让已过截止时间的挂牌过期。
      *
-     * <p>Driven by a scheduled sweep rather than by reads: nothing about
-     * <em>reading</em> an expired listing should change it, and a marketplace
-     * page that mutates rows as a side effect of being viewed is a trap.
+     * <p>由定时扫描驱动，而不是由读取驱动：<em>读取</em>一份已过期的挂牌不应
+     * 该改变它，而一个因被浏览就顺带改动数据行的行情页是个陷阱。
      *
-     * <p>A listing with an acceptance still waiting is skipped, for the same
-     * reason withdrawal is refused. This resolves itself rather than deadlocking:
-     * the order sweep answers the waiting acceptance — by expiry, if the lister
-     * never does — and the listing is expired by the next pass.
+     * <p>仍有摘牌在等待答复的挂牌会被跳过，理由与拒绝撤牌相同。这能自行了结
+     * 而不会死锁：订单扫描会处理那笔等待中的摘牌——若挂牌方始终不答复，就由
+     * 过期处理——随后下一轮扫描就会让该挂牌过期。
      *
-     * @return how many listings were expired
+     * @return 有多少份挂牌被置为过期
      */
     @Transactional
     public int expireOverdue() {
@@ -211,7 +202,7 @@ public class ListingService {
         return expired;
     }
 
-    /** The marketplace: open listings from every enterprise except the caller's own. */
+    /** 行情大厅：来自所有企业的开放中挂牌，不含调用方自己的。 */
     public List<Listing> browse(Long categoryId, String side, String keyword) {
         var query = Wrappers.<Listing>lambdaQuery()
                 .in(Listing::getStatus, Listing.Status.OPEN, Listing.Status.PARTIALLY_FILLED)
@@ -240,21 +231,20 @@ public class ListingService {
         if (listing == null) {
             throw BusinessException.of(ResultCode.LISTING_NOT_FOUND);
         }
-        // A listing is public while open, so reading one that is not yours is
-        // allowed; acting on it is not, and that is enforced at the action.
+        // 挂牌在开放期间是公开的，因此读取一份不属于自己的挂牌是允许的；
+        // 对它采取动作则不允许，这一点在动作发生处强制执行。
         return listing;
     }
 
     // ------------------------------------------------------------------
-    // Internals
+    // 内部实现
     // ------------------------------------------------------------------
 
     /**
-     * Freezes the goods behind a SELL listing.
+     * 冻结 SELL 挂牌背后的货物。
      *
-     * <p>The note is named explicitly by the seller rather than chosen by the
-     * platform from whatever they happen to hold. Reserving goods the seller
-     * did not point at would silently commit inventory they may have plans for.
+     * <p>库存单由卖方明确指定，而不是由平台从他碰巧持有的库存里挑一份。预留
+     * 卖方没有指明的货物，会悄悄占用掉他可能另有安排的库存。
      */
     private Long freezeForListing(ListingPublishRequest request, Long enterpriseId) {
         if (request.inventoryNoteId() == null) {
@@ -287,12 +277,11 @@ public class ListingService {
     }
 
     /**
-     * Releases a listing's freeze, if it has one.
+     * 释放挂牌的冻结，如果它有的话。
      *
-     * <p>Idempotent by way of the freeze record's own status: a freeze that was
-     * already released or consumed rejects a second release, and that rejection
-     * is swallowed here because reaching this method twice is not an error worth
-     * failing a withdrawal over.
+     * <p>幂等性来自冻结记录自身的状态：一笔已释放或已消耗的冻结会拒绝第二次
+     * 释放，而这个拒绝在这里被吞掉，因为第二次走到本方法并不是值得让一次撤牌
+     * 失败的错误。
      */
     private void releaseListingFreeze(Listing listing) {
         if (listing.getFreezeId() == null) {
@@ -307,11 +296,10 @@ public class ListingService {
     }
 
     /**
-     * How many acceptances of this listing are still unanswered.
+     * 这份挂牌还有多少笔摘牌未获答复。
      *
-     * <p>Each one holds a reservation against this listing's freeze, so the
-     * count is what stands between a withdrawal and an order nobody can ever
-     * answer.
+     * <p>每一笔都在这份挂牌的冻结上占着一份预留，因此这个计数就是横在撤牌与
+     * 一笔永远无人能答复的订单之间的东西。
      */
     private long countAwaitingAcceptance(Long listingId) {
         return orderMapper.selectCount(Wrappers.<Order>lambdaQuery()
@@ -320,12 +308,11 @@ public class ListingService {
     }
 
     /**
-     * Resolves the requested confirmation mode.
+     * 解析所请求的确认方式。
      *
-     * <p>MANUAL is refused for a BUY listing here as well as in the database.
-     * The check constraint is the guarantee; this is the explanation, because a
-     * constraint violation reaches the client as a 500 and a person who asked
-     * for something reasonable deserves to be told why it is not on offer.
+     * <p>这里和数据库里一样拒绝给 BUY 挂牌用 MANUAL。保证来自那条 CHECK
+     * 约束；这里是解释，因为约束违例到达客户端时是一个 500，而一个提出了合理
+     * 诉求的人应当被告知为什么这项功能不提供。
      */
     private String normaliseConfirmMode(ListingPublishRequest request) {
         String mode = request.confirmMode();
@@ -345,8 +332,8 @@ public class ListingService {
     private String normalisePriceType(ListingPublishRequest request) {
         String priceType = request.priceType();
         if (priceType == null || priceType.isBlank()) {
-            // Inferring from presence keeps the field optional for clients while
-            // the database still sees exactly one of the two shapes.
+            // 由有无取值来推断，使该字段对客户端保持可选，同时数据库看到的
+            // 仍然正好是两种形态之一。
             return request.price() == null ? Listing.PriceType.NEGOTIABLE : Listing.PriceType.FIXED;
         }
         if (!Listing.PriceType.FIXED.equals(priceType)
@@ -373,8 +360,8 @@ public class ListingService {
             throw BusinessException.of(ResultCode.LISTING_NOT_FOUND);
         }
         if (!listing.getEnterpriseId().equals(enterpriseId)) {
-            // "Not yours" and "does not exist" are reported the same way so a
-            // caller cannot probe for other companies' listing ids.
+            // “不是你的”和“不存在”以同样的方式报告，这样调用方就无法通过
+            // 试探来摸出其它公司的挂牌 id。
             throw BusinessException.of(ResultCode.LISTING_NOT_OWNED);
         }
         return listing;

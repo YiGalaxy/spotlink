@@ -53,8 +53,8 @@ public class MarketController {
                     + "断线会自动重连；不需要 WebSocket 的双向通道。")
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream() {
-        // Authentication happens in the filter chain before this runs, so a
-        // caller reaching here is already authenticated.
+        // 认证在过滤器链里就已经完成，早于这里执行，所以能走到这一行的调用方已经是
+        // 通过认证的。
         return broadcaster.register();
     }
 

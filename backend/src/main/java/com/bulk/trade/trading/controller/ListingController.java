@@ -27,10 +27,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * Listings and the acceptance that turns one into an order.
+ * 挂牌，以及把一份挂牌变成订单的那次摘牌。
  *
- * <p>Sitting together because they are two halves of one act: publishing an
- * offer, and taking it.
+ * <p>二者放在一起，因为它们同属一个动作的两半：发出要约，与接受要约。
  */
 @Tag(name = "挂牌交易", description = "挂牌、摘牌与成交")
 @RestController

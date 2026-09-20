@@ -47,9 +47,8 @@ public class AuthServiceImpl implements AuthService {
         User user = userMapper.selectOne(Wrappers.<User>lambdaQuery()
                 .eq(User::getUsername, request.username()));
 
-        // "No such user" and "wrong password" deliberately return the same code.
-        // Distinct messages would let an attacker enumerate valid usernames,
-        // and on a trading platform a username list is a customer list.
+        // 「没有这个用户」和「密码错误」刻意返回同一个错误码。区分开的提示会让攻击者能够
+        // 枚举出有效用户名，而在一个交易平台上，一份用户名清单就是一份客户清单。
         if (user == null || !passwordEncoder.matches(request.password(), user.getPassword())) {
             log.warn("Failed login attempt for username='{}' from {}", request.username(), clientIp);
             throw BusinessException.of(ResultCode.LOGIN_FAILED);
@@ -64,10 +63,9 @@ public class AuthServiceImpl implements AuthService {
 
         Enterprise enterprise = loadAndValidateEnterprise(user);
 
-        // Authority is loaded here as well as per request, so the login
-        // response can carry it and the console can render its menu without a
-        // second call. It is loaded again on every request afterwards, because
-        // this copy goes stale the moment a role changes.
+        // 权限在这里加载一次，之后每个请求还会再加载，这样登录响应就能带上它，
+        // 控制台不必再发第二次请求就能渲染菜单。此后每个请求都会重新加载，因为这份副本
+        // 在角色发生变化的那一刻就过期了。
         UserAuthority authority = authorityProvider.load(user.getId());
 
         LoginUser loginUser = LoginUser.builder()
@@ -95,7 +93,7 @@ public class AuthServiceImpl implements AuthService {
         LoginUser current = SecurityUtils.currentUser();
         User user = userMapper.selectById(current.getUserId());
         if (user == null) {
-            // The account was deleted after the token was issued.
+            // 账号在 token 签发之后被删掉了。
             throw BusinessException.of(ResultCode.UNAUTHORIZED);
         }
         Enterprise enterprise = loadAndValidateEnterprise(user);
@@ -103,9 +101,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * A tenant account is only usable while its enterprise is approved.
-     * Checking this on every login (not only at registration) is what makes a
-     * frozen enterprise actually stop trading.
+     * 租户账号只有在其企业已通过审核期间才可用。
+     * 每次登录都做这项检查（而不是只在注册时做）才让一个被冻结的企业真正停止交易。
      */
     private Enterprise loadAndValidateEnterprise(User user) {
         if (user.getEnterpriseId() == null) {
@@ -135,10 +132,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * @param authority the caller's live permissions, or null when the account
-     *                  could not be resolved — in which case the profile still
-     *                  renders, holding no authority at all. Failing here would
-     *                  make an optional field able to break a login.
+     * @param authority 调用方的实时权限；账号解析不出来时为 null —— 此时档案仍然照常渲染，
+     *                  只是不带任何权限。在这里失败会让一个可选字段有能力弄挂整个登录。
      */
     private LoginResponse.UserProfile toProfile(User user, Enterprise enterprise,
                                                UserAuthority authority) {

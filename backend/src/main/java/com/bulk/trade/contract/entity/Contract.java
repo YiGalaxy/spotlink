@@ -13,18 +13,15 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 /**
- * The signed agreement behind an order.
+ * 订单背后的已签署协议。
  *
- * <p><b>Terms are snapshotted, not referenced.</b> Quantity, price and amount
- * are copied from the order rather than joined to it. A contract records what
- * two parties agreed at a moment; if the order is later corrected, the contract
- * must not silently change with it — an invoice already issued refers to this
- * document, not to the order's current state.
+ * <p><b>条款是快照，不是引用。</b>数量、价格和金额是从订单复制过来的，而不是
+ * 关联到订单。合同记录的是双方在某一刻约定的内容；如果订单日后被更正，合同
+ * 绝不能随之悄悄改变——已经开出的发票引用的是这份文件，而不是订单的当前状态。
  *
- * <p><b>Signed means both sides signed.</b> A check constraint enforces that no
- * row can claim to be signed with only one signature present, because a
- * one-sided signature is not an agreement and the database should not be able
- * to hold that state at all.
+ * <p><b>已签署意味着双方都已签署。</b>一条 CHECK 约束保证任何一行都不可能
+ * 在只有一方签名的情况下声称已签署，因为单方签名不是一份协议，数据库本就不该
+ * 能持有这种状态。
  */
 @Getter
 @Setter
@@ -41,7 +38,7 @@ public class Contract {
 
     private String title;
 
-    /** Terms as JSON: delivery, quality, tolerance, dispute resolution. */
+    /** 以 JSON 表示的条款：交收、质量、溢短装、争议解决。 */
     private String terms;
 
     private BigDecimal quantity;
@@ -49,10 +46,10 @@ public class Contract {
     private BigDecimal price;
     private BigDecimal amount;
 
-    /** Allowed weighing variance in percent; settlement beyond this is manual. */
+    /** 允许的过磅差异百分比；超出此范围的结算走人工。 */
     private BigDecimal weightTolerance;
 
-    /** {@link Status}. */
+    /** {@link Status}。 */
     private String status;
 
     private OffsetDateTime buyerSignedAt;

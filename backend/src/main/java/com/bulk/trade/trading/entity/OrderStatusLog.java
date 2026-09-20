@@ -11,11 +11,11 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * One order transition. Append-only.
+ * 一次订单状态迁移。只追加。
  *
- * <p>A status column says where an order is; it cannot say how it got there,
- * who moved it, or whether a move happened twice. When two parties disagree
- * about what was agreed, this trail is the only evidence either of them has.
+ * <p>一个状态列只能说明订单在哪里；它说不出订单是怎么到那里的、是谁推动的、
+ * 或者某次迁移是否发生了两次。当双方对当初约定了什么产生分歧时，这条轨迹是
+ * 他们唯一拥有的证据。
  */
 @Getter
 @Setter

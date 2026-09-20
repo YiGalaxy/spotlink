@@ -68,12 +68,11 @@ export default function MarketPage() {
   const categoryOptions = useMemo(() => flattenLeaves(categories), [categories])
 
   /**
-   * Live trade feed.
+   * 实时成交推送。
    *
-   * <p>EventSource rather than WebSocket: this is a one-way stream, and SSE
-   * reconnects on its own. The token goes in the query string because
-   * EventSource cannot set headers — the trade-off is recorded here rather than
-   * hidden, since a token in a URL can end up in access logs.
+   * <p>用 EventSource 而不是 WebSocket：这是一条单向流，而 SSE 自己会重连。
+   * token 放在查询串里，因为 EventSource 无法设置请求头——这个取舍被写在这里
+   * 而不是被藏起来，因为 URL 里的 token 有可能落进访问日志。
    */
   useEffect(() => {
     if (!accessToken) return
@@ -87,7 +86,7 @@ export default function MarketPage() {
       )
     })
     source.onerror = () => {
-      // EventSource retries by itself; nothing to do but let it.
+      // EventSource 自己会重试；除了随它去，没什么可做的。
     }
     return () => source.close()
   }, [accessToken])
@@ -139,9 +138,8 @@ export default function MarketPage() {
               name: series?.label,
               type: 'line',
               data: values,
-              // connectNulls false: a day with no trades must break the line
-              // rather than be bridged, or the chart implies trading that
-              // never happened.
+              // connectNulls 为 false：没有成交的那一天必须让折线断开，而不是
+              // 被接起来，否则图表就在暗示发生过根本没发生的交易。
               connectNulls: false,
               symbolSize: 6,
               lineStyle: { width: 2, color: '#1f5eff' },

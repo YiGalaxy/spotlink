@@ -21,11 +21,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Turns inventory notes into views, resolving category and warehouse names.
+ * 把库存单转换为视图，并解析出品类名与仓库名。
  *
- * <p>Names are looked up in batches rather than per row: a list of fifty notes
- * would otherwise issue a hundred extra queries, which is the classic N+1 that
- * only shows up once someone has real data.
+ * <p>名称是批量查的，而不是逐行查：否则一页五十张库存单会多打出上百条查询，这正是
+ * 那种典型的 N+1——只有等真实数据进来之后才会暴露出来。
  */
 @Slf4j
 @Component

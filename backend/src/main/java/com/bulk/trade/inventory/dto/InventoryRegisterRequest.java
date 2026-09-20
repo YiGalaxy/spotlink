@@ -9,11 +9,10 @@ import java.math.BigDecimal;
 import java.util.Map;
 
 /**
- * Registers goods into a designated warehouse.
+ * 把货物登记进指定交收仓库。
  *
- * <p>There is no {@code enterpriseId} field on purpose: the owner is taken from
- * the authenticated principal, so a caller cannot register goods under another
- * company's name.
+ * <p>刻意不设 {@code enterpriseId} 字段：归属方取自已认证的主体身份，所以调用方
+ * 无法把货物登记到别家公司名下。
  */
 public record InventoryRegisterRequest(
 
@@ -33,7 +32,7 @@ public record InventoryRegisterRequest(
         @Size(max = 64, message = "产地过长")
         String origin,
 
-        /** Values keyed by the category's spec schema. */
+        /** 取值按品类的规格 schema 组织。 */
         Map<String, Object> spec,
 
         @NotNull(message = "请填写数量")

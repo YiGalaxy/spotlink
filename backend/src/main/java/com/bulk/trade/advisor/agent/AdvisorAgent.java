@@ -28,18 +28,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Runs one advisor turn through Spring AI.
+ * 通过 Spring AI 执行一轮顾问对话。
  *
- * <p>Spring AI owns the tool-calling loop: the prompt goes out, the model
- * requests tools, the framework executes them and feeds the results back, and
- * what returns here is the finished answer. That removes the loop this module
- * used to hand-write — and with it, two things the hand-written loop could do
- * and this one cannot. Both are recorded in {@link AgentResult} rather than
- * quietly dropped.
+ * <p>工具调用循环由 Spring AI 掌管：提示词发出去，模型请求工具，框架执行工具并把结果
+ * 回灌，最后返回这里的就是完整答案。这去掉了本模块原先手写的那个循环 —— 随之也去掉了
+ * 手写循环能做、而这个循环做不到的两件事。这两件事都记录在 {@link AgentResult} 里，
+ * 而不是被悄悄丢弃。
  *
- * <p>What Spring AI does <em>not</em> remove is the tenant rule. Tools still
- * read the caller's enterprise from the security context, and the tool methods
- * run on this thread, so that context is present when they do.
+ * <p>Spring AI <em>没有</em>去掉的是租户规则。工具仍然从安全上下文中读取调用方所属的
+ * 企业，而工具方法就在当前线程上执行，所以它们执行时该上下文是存在的。
  */
 @Slf4j
 @Component
@@ -59,19 +56,15 @@ public class AdvisorAgent {
     private final SystemPromptBuilder promptBuilder;
 
     /**
-     * Every bean whose {@code @Tool} methods this agent can hand to the model.
+     * 本 Agent 能交给模型的全部带有 {@code @Tool} 方法的 Bean。
      *
-     * <p><b>One list, three readers.</b> The prompt specification that makes the
-     * tools callable, the readiness endpoint that reports what is callable, and
-     * the test that asserts what is <em>not</em> callable all read this. Keeping
-     * a second list is what let that endpoint advertise nine tools while
-     * thirteen were registered — drift that stays invisible precisely because
-     * the report is what people trust instead of checking.
+     * <p><b>一份清单，三个读取方。</b>让工具可被调用的提示词规格、报告哪些工具可调用的
+     * 就绪探测接口，以及断言哪些工具<em>不</em>可调用的测试，读的都是它。正是维护了第二份
+     * 清单，才让那个接口声称有九个工具、而实际注册了十三个 —— 这种漂移之所以一直隐形，
+     * 恰恰因为人们信任那份报告而不去核对。
      *
-     * <p>Adding a tool class is a one-line change in one place, and forgetting
-     * it is no longer possible: a tool not in this list is not callable either,
-     * so the failure is a missing feature rather than a confident wrong answer
-     * about what exists.
+     * <p>新增一个工具类只需在一处改一行，而且再也忘不掉：不在这份清单里的工具同样不可调用，
+     * 于是故障表现为少了一个功能，而不是模型自信地给出一个关于有哪些工具的错误答案。
      */
     public List<Object> toolBeans() {
         return List.of(advisorTools, inventoryAdvisorTools, knowledgeAdvisorTools,
@@ -80,18 +73,15 @@ public class AdvisorAgent {
     }
 
     /**
-     * The tools available for one turn.
+     * 一轮对话可用的工具。
      *
-     * <p>Everything except the contract text, which has to be asked for. Every
-     * tool result enters the prompt and the prompt leaves for an external
-     * provider, so the tool list is the switch that decides what leaves — and
-     * a switch that is always on is not a switch.
+     * <p>除合同文本之外的全部工具，合同文本必须先被请求才能用。每个工具结果都会进入提示词，
+     * 而提示词会离开本服务、发往外部的模型提供商，所以这份工具清单就是决定什么东西外发的
+     * 开关 —— 而一个永远打开的开关不算开关。
      *
-     * <p>Decided in Java from the user's own words, not by the model: a model
-     * that can call a tool will call it whenever it seems useful, and "seems
-     * useful" is the judgement this exists to keep out of the loop. See
-     * {@link ContractReviewTrigger} for what the rule is and why a crude one is
-     * the right shape for it.
+     * <p>在 Java 里依据用户自己说的话判断，而不是交给模型判断：一个能调用某工具的方法，
+     * 只要它显得有用就会去调用，而显得有用正是这里要挡在决策环路之外的判断。规则本身是什么、
+     * 以及为什么粗糙的规则才是它应有的形态，见 {@link ContractReviewTrigger}。
      */
     List<Object> toolsFor(String userMessage) {
         List<Object> tools = new ArrayList<>(toolBeans());
@@ -110,40 +100,34 @@ public class AdvisorAgent {
         }
         messages.add(new UserMessage(userMessage));
 
-        // Opened before the call: Spring AI executes tools inside it, and the
-        // aspect records into whatever slot is open on this thread.
+        // 在调用之前开启：Spring AI 会在其中执行工具，切面则记录到当前线程上打开的那个槽位。
         ToolCallRecorder.begin();
         try {
             ChatResponse response = chatClientBuilder.build()
                     .prompt()
-                    // Two separate system blocks, not one concatenated string.
-                    // The first is identical for every tenant, so with
-                    // SYSTEM_ONLY caching one cache entry serves all callers;
-                    // merging them would change the prefix per user.
+                    // 两个独立的 system 块，而不是拼接成的一个字符串。第一块对所有租户都完全
+                    // 相同，因此在 SYSTEM_ONLY 缓存下一条缓存就能服务所有调用方；把两者合并
+                    // 会让每个用户的前缀都不一样。
                     .system(system -> system
                             .text(promptBuilder.stablePrefix())
                             .text(promptBuilder.callerSection(user)))
                     .messages(messages)
-                    // Every @Tool method on these beans becomes callable.
+                    // 这些 Bean 上的每个 @Tool 方法都会变成可调用的。
                     .tools(toolsFor(userMessage).toArray())
                     .call()
                     .chatResponse();
 
             String answer = AnswerCleaner.clean(extractText(response));
             if (answer == null) {
-                // The model analysed and stopped without concluding. Seen on
-                // questions that need several rows weighed against each other —
-                // a contract review, and "find me the cheap large copper
-                // lots" — where it produces a page of English working and no
-                // answer. Every tool result it needs is already in the
-                // conversation, so asking once more costs one round trip and
-                // turns a dead end into a reply.
+                // 模型做完了分析却没有下结论就停住了。出现在需要把多行数据相互权衡的问题上 ——
+                // 比如一次合同审查，或者「帮我找便宜的大宗铜」—— 它会写满一页英文的推演过程，
+                // 却不给答案。它需要的每个工具结果都已经在对话里了，所以再问一次只花一个来回，
+                // 就能把死路变成一次回答。
                 log.info("No answer line produced; asking once more without tools");
                 answer = AnswerCleaner.clean(retryForAnswer(messages));
             }
             if (answer == null) {
-                // Twice is enough. The text was logged by the cleaner, so this
-                // is diagnosable rather than mysterious.
+                // 两次就够了。那段文本已被清理器打进日志，所以这是可诊断的，而不是无迹可寻。
                 answer = "抱歉，这次没能生成回答。请把问题再发一次，或换个说法。";
             }
 
@@ -157,8 +141,7 @@ public class AdvisorAgent {
             ToolCallRecorder.drain();
             throw e;
         } catch (Exception e) {
-            // The trail is discarded, not recorded: a failed call produced no
-            // answer to attach it to.
+            // 轨迹被丢弃而不是记录：这次调用失败了，没有答案可以挂靠这段轨迹。
             ToolCallRecorder.drain();
             log.error("Advisor call failed for user {}", user.getUsername(), e);
             throw BusinessException.of(ResultCode.ADVISOR_UNAVAILABLE,
@@ -167,17 +150,14 @@ public class AdvisorAgent {
     }
 
     /**
-     * Asks again, with the tools taken away.
+     * 把工具拿走之后重新问一次。
      *
-     * <p>Removing them is the point rather than an optimisation: a model that
-     * just spent its turn analysing is likely to spend the next one calling
-     * more tools, which is how the first attempt ended up concluding nothing.
-     * With no tools on offer the only thing it can produce is text, and the
-     * conversation already holds everything it needs.
+     * <p>拿走工具本身就是目的，而不是一种优化：刚花了一整轮做分析的模型，下一轮很可能又去
+     * 调用更多工具，第一次尝试之所以什么都没得出结论正是如此。没有工具可用时它能产出的只有
+     * 文本，而对话里已经装着它需要的一切。
      *
-     * <p>The scratchpad is deliberately <em>not</em> echoed back as an
-     * assistant turn. Feeding a model its own unfinished reasoning and asking
-     * it to continue is a good way to get more of the same.
+     * <p>草稿内容故意<em>不</em>作为 assistant 轮次回灌。把模型自己未完成的推理再喂回去、
+     * 让它接着往下写，是得到更多同类内容的好办法。
      */
     private String retryForAnswer(List<Message> messages) {
         List<Message> followUp = new ArrayList<>(messages);
@@ -197,18 +177,15 @@ public class AdvisorAgent {
     }
 
     /**
-     * Pulls the answer out of the response.
+     * 从响应里把答案取出来。
      *
-     * <p><b>The results list holds one entry per model round-trip, in order, and
-     * only the last one is the answer.</b> {@code getResult()} returns the
-     * first, so reading it yields a blank answer whenever a tool was used.
+     * <p><b>results 列表按顺序、每次模型往返各存一项，只有最后一项才是答案。</b>
+     * {@code getResult()} 返回的是第一项，所以只要用过工具，读它拿到的就是空答案。
      *
-     * <p>Taking the first generation that <em>has</em> text is equally wrong.
-     * Tool-calling rounds can carry text too — intermediate reasoning such as
-     * "Let me also check the enterprise info… The question is just about
-     * accounts. Provide answer." — and that would be surfaced to the user as if
-     * it were the reply. Walk the whole list and keep the last non-blank text,
-     * which is the one produced after the final tool result came back.
+     * <p>取第一个<em>带</em>文本的 generation 同样是错的。工具调用轮次也可能带文本 ——
+     * 例如 "Let me also check the enterprise info… The question is just about
+     * accounts. Provide answer." 这类中间推理 —— 而那会被当成正式回复呈现给用户。
+     * 正确做法是遍历整个列表、保留最后一段非空文本，那才是最后一个工具结果返回之后产出的。
      */
     private String extractText(ChatResponse response) {
         if (response == null || response.getResults() == null) {
@@ -252,7 +229,7 @@ public class AdvisorAgent {
                 : response.getMetadata().getUsage();
     }
 
-    /** SDK exceptions wrap the useful message one or two levels down. */
+    /** SDK 异常会把有用的信息包在一两层 cause 之下。 */
     private String rootMessage(Throwable throwable) {
         Throwable cursor = throwable;
         while (cursor.getCause() != null && cursor.getCause() != cursor) {

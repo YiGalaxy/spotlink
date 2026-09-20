@@ -21,12 +21,11 @@ public class CategoryService {
     private final CommodityCategoryMapper categoryMapper;
 
     /**
-     * The whole catalogue as a tree.
+     * 完整的品类目录，以树的形式呈现。
      *
-     * <p>Loaded in one query and assembled in memory. The catalogue is small and
-     * changes rarely, so a recursive query per level would be more round trips
-     * for no benefit — and this keeps the ordering deterministic, which matters
-     * because the frontend renders it directly.
+     * <p>一次查询全部加载，再在内存里组装。品类数据量小、改动也少，所以按层级做递归
+     * 查询只会多出若干次往返而毫无收益——而且这样能让排序保持确定，这一点很重要，
+     * 因为前端是直接照着渲染的。
      */
     public List<CategoryNode> tree() {
         List<CommodityCategory> all = categoryMapper.selectList(

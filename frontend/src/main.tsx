@@ -16,29 +16,26 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      // On, which is the opposite of the usual recommendation, and deliberate
-      // here. A trading screen is a shared document: the other party changes it
-      // while you are looking at another tab. With this off, a seller returns
-      // to the tab and sees a stale page until they think to reload — which was
-      // a reported bug, and this line was its root cause.
+      // 开启，与通常的建议相反，这里是刻意为之。交易界面是一份共享文档：
+      // 你在看另一个标签页时，对手方可能正在改动它。若关闭此项，卖方切回
+      // 该标签页会看到一份过期页面，直到他想起手动刷新——这曾是一个被上报
+      // 的 bug，而这一行正是它的根因。
       refetchOnWindowFocus: true,
-      // No global refetchInterval. Polling every mounted query would put the
-      // advisor transcript, the rule corpus and the enterprise profile on a
-      // 30-second timer for data that only changes when the user does
-      // something. The one query that genuinely needs a heartbeat — the task
-      // list, which the other party can change at any moment — asks for its own
-      // interval, and the task stream pushes when it can do better than that.
+      // 不设全局 refetchInterval。轮询每个已挂载的 query，会让顾问对话记录、
+      // 规则语料和企业档案统统进入 30 秒定时器，而这些数据只在用户做了操作
+      // 时才会变化。真正需要心跳的那个 query——任务列表，对手方随时可能改动
+      // 它——自行声明了间隔；而任务流在能做得更好时会主动推送。
       staleTime: 5_000,
     },
   },
 })
 
 /**
- * Bridges Ant Design's App context into the axios layer.
+ * 把 Ant Design 的 App 上下文接入 axios 层。
  *
- * <p>Assigning during render rather than in an effect is deliberate: React
- * Query fires its first request during the same commit, and an effect would
- * run after it, leaving the earliest errors without a message instance.
+ * <p>在渲染期间赋值而不是放在 effect 里，是刻意的：React Query 会在同一次
+ * commit 中发出第一个请求，而 effect 会晚于它执行，这会让最早的那几个错误
+ * 拿不到 message 实例。
  */
 function MessageBridge({ children }: { children: React.ReactNode }) {
   const { message } = AntApp.useApp()

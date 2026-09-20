@@ -1,4 +1,4 @@
-/** Mirrors the backend's ApiResponse envelope. */
+/** 与后端的 ApiResponse 信封一致。 */
 export interface ApiResponse<T> {
   code: number
   message: string
@@ -7,21 +7,21 @@ export interface ApiResponse<T> {
 }
 
 /**
- * Entity ids are strings, not numbers.
+ * 实体 id 是字符串，不是数字。
  *
- * A snowflake id is 19 digits; JavaScript numbers are only exact to 16. Parsing
- * `2101635756223557634` as a number yields `2101635756223557600`, so an id the
- * client echoes back would not match the row it came from. The backend
- * serialises every id as a string and the type system keeps it that way.
+ * 雪花 id 有 19 位；而 JavaScript 的数字只能精确到 16 位。把
+ * `2101635756223557634` 当数字解析会得到 `2101635756223557600`，于是客户端
+ * 回传的 id 就对不上它来自的那一行。后端把每个 id 都序列化成字符串，类型
+ * 系统则让它保持如此。
  */
 export type EntityId = string
 
 /**
- * Platform-wide figures shown to visitors who have not signed in.
+ * 展示给未登录访客的平台整体数据。
  *
- * All aggregates over the whole venue. `tradedAmountText` is pre-formatted by
- * the server so the homepage and any future report round the same way instead
- * of each inventing its own idea of what "3.2 亿元" is.
+ * 全部是整个交易场所的聚合量。`tradedAmountText` 由服务端预先格式化，这样
+ * 首页和将来任何报表都会以同一种方式取整，而不是各自发明自己对 "3.2 亿元"
+ * 的理解。
  */
 export interface PublicStats {
   enterpriseCount: number
@@ -33,7 +33,7 @@ export interface PublicStats {
   inventoryQuantity: number
 }
 
-/** Mirrors LoginResponse in the identity module. */
+/** 与身份模块中的 LoginResponse 一致。 */
 export interface UserProfile {
   userId: EntityId
   username: string
@@ -52,7 +52,7 @@ export interface LoginResponse {
   user: UserProfile
 }
 
-// ---- advisor ----
+// ---- 顾问 ----
 
 export interface ToolCallView {
   name: string
@@ -91,7 +91,7 @@ export interface ConversationDetail {
   messages: MessageView[]
 }
 
-// ---- commodity / inventory ----
+// ---- 商品 / 库存 ----
 
 export interface CategoryNode {
   id: EntityId
@@ -117,11 +117,10 @@ export interface WarehouseView {
 }
 
 /**
- * An electronic inventory note (电子库存单).
+ * 电子库存单。
  *
- * All three quantity figures are present, not just the available one: a seller
- * who sees only "available" cannot tell whether goods are gone or merely
- * reserved by an active listing.
+ * 三个数量都给出，而不只是可用量那一个：只看到 "available" 的卖方，分不清
+ * 货是没了，还是仅仅被某个生效中的挂牌占住了。
  */
 export interface InventoryNoteView {
   id: EntityId
@@ -143,7 +142,7 @@ export interface InventoryNoteView {
   createdAt: string
 }
 
-// ---- trading ----
+// ---- 交易 ----
 
 export interface ListingView {
   id: EntityId
@@ -174,7 +173,7 @@ export interface ListingView {
   validUntil: string
   status: string
   statusText: string
-  /** True when the caller owns this listing — you cannot accept your own offer. */
+  /** 当调用方就是该挂牌的发布方时为 true——你不能摘自己的牌。 */
   mine: boolean
   createdAt: string
 }
@@ -202,19 +201,18 @@ export interface OrderView {
   status: string
   statusText: string
   /**
-   * Whose move it is, from this caller's side — "待我签署" against the same
-   * order's "等对方签署". Null once nothing is pending from anyone.
+   * 从本调用方这一侧看，该谁走下一步——即同一个订单上的 "待我签署" 相对
+   * 于 "等对方签署"。当没有任何一方有待办时为空。
    */
   statusHint: string | null
-  /** True when the next move is this caller's. */
+  /** 当下一步该由本调用方走时为 true。 */
   statusHintMine: boolean
   /**
-   * Label for the button performing the next move, or null when it is not this
-   * caller's. Distinct from statusHint — that describes a situation ("待我发货"),
-   * this performs an act ("确认发货").
+   * 执行下一步动作的按钮文案，不属于本调用方时为空。它与 statusHint 有别
+   * ——后者描述一种处境（"待我发货"），前者执行一个动作（"确认发货"）。
    */
   nextAction: string | null
-  /** Transitions this caller may actually perform — the same table the server enforces. */
+  /** 本调用方实际可以执行的流转——与服务端强制执行的是同一张表。 */
   allowedActions: string[]
   /** 挂牌方的答复截止时间；只有「待挂牌方确认」的订单有值。 */
   confirmDeadline: string | null
@@ -225,13 +223,12 @@ export interface OrderView {
 }
 
 /**
- * One thing the current enterprise has to act on.
+ * 当前企业需要着手处理的一件事。
  *
- * `kind` decides which buttons the row shows — a waiting acceptance needs a
- * confirm/reject pair, a draft needs a single "起草" — while `action` is the
- * already-worded label. Keeping both means the label and the behaviour cannot
- * drift apart. The backend gathers these from every module at once, so the
- * console and the AI advisor cannot disagree about what is pending.
+ * `kind` 决定这一行显示哪些按钮——一份待确认的摘牌需要确认/拒绝这一对，
+ * 一份草稿只需要单个 "起草"——而 `action` 是已经写好的文案。两者都留着，
+ * 文案和行为就无法各自漂移。后端一次性从各个模块把这些汇总起来，所以控制台
+ * 和 AI 顾问对「什么在待办」不会产生分歧。
  */
 export interface TaskView {
   kind:
@@ -250,7 +247,7 @@ export interface TaskView {
   unit: string | null
   amount: number | null
   detail: string
-  /** Null when nothing lapses if the user is slow. */
+  /** 用户动作慢也不会有什么失效时为空。 */
   deadline: string | null
 }
 
@@ -289,7 +286,7 @@ export interface ContractView {
   createdAt: string
 }
 
-// ---- market data ----
+// ---- 行情数据 ----
 
 export interface QuoteRow {
   categoryId: EntityId
@@ -305,13 +302,12 @@ export interface QuoteRow {
 }
 
 /**
- * A point on a market series.
+ * 行情序列上的一个点。
  *
- * `tradeCount` accompanies every average on purpose: on a thin spot market an
- * average of one trade and an average of forty look identical on a chart, and
- * that difference is the whole question of how much the number can be trusted.
- * `value` is null for days when nothing traded, so the line breaks rather than
- * drawing straight through a gap.
+ * 每个均值都刻意配上 `tradeCount`：在清淡的即期市场上，一笔成交算出的均值和
+ * 四十笔成交算出的均值在图上长得一模一样，而这个差别恰恰就是「这个数字能信
+ * 几分」的全部问题所在。没有成交的那些天 `value` 为空，于是折线会断开，而不是
+ * 直直地穿过一个空缺画过去。
  */
 export interface SeriesPoint {
   time: string
@@ -324,7 +320,7 @@ export interface SeriesData {
   seriesKey: string
   label: string
   unit: string
-  /** 'line' or 'bar' — the backend decides, since it knows the data's shape. */
+  /** 'line' 或 'bar'——由后端决定，因为它知道数据的形状。 */
   kind: string
   points: SeriesPoint[]
 }

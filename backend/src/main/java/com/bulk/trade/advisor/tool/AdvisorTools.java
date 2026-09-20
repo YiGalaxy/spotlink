@@ -14,28 +14,24 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * Tools the advisor may call.
+ * 顾问可以调用的工具。
  *
- * <p>These are ordinary methods on an ordinary Spring bean — dependencies are
- * injected and the caller's identity is available from the security context,
- * which is what makes the tenant rule below enforceable rather than aspirational.
+ * <p>这些都是普通 Spring Bean 上的普通方法 —— 依赖会被注入，调用方的身份可以从安全上下文
+ * 中拿到，正是这一点让下面那条租户规则是可执行的，而不是一句空想。
  *
- * <p><b>The tenant is never a parameter.</b> Every method reads the enterprise
- * from {@link SecurityUtils}, so the model has no way to name a company. If an
- * id were accepted and validated afterwards, safety would depend on each future
- * tool author remembering to validate — and one forgotten check is a breach.
- * A second reason is prompt injection: text the model reads (a user message, a
- * document, a tool result) could otherwise instruct it to look up another
- * tenant.
+ * <p><b>租户永远不作为参数传入。</b>每个方法都从 {@link SecurityUtils} 读取企业，所以模型
+ * 没有任何办法点名一家公司。如果先接受一个 id、事后再校验，安全性就要依赖未来每一个工具
+ * 作者都记得去校验 —— 而漏掉一次检查就是一次越权。第二个理由是提示词注入：模型读到的文本
+ * （用户消息、文档、工具结果）否则就能指使去查另一个租户。
  *
- * <p>Descriptions are written for the model, not for a human reader: they say
- * when to call the tool and, just as importantly, what it cannot do.
+ * <p>description 是写给模型看的，不是写给人类读者的：它们说明何时该调用该工具，
+ * 以及同样重要的 —— 它做不到什么。
  */
 @Component
 @RequiredArgsConstructor
 public class AdvisorTools {
 
-    /** Tool results are re-sent as input tokens; keep them small. */
+    /** 工具结果会作为输入 token 再次发送；要控制体积。 */
     private static final int MAX_MEMBERS = 50;
 
     private final EnterpriseMapper enterpriseMapper;

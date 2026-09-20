@@ -30,11 +30,10 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Resolves ids to names for listings and orders.
+ * 为挂牌和订单把 id 解析成名称。
  *
- * <p>Names are fetched in batches. A marketplace page showing fifty listings
- * would otherwise fire a hundred extra queries — the N+1 that stays invisible
- * until someone loads real data.
+ * <p>名称是批量取回的。否则一个展示五十条挂牌的行情页会额外发出上百次查询
+ * ——这种 N+1 问题在有人加载真实数据之前一直隐形。
  */
 @Slf4j
 @Component
@@ -84,14 +83,12 @@ public class TradingViewAssembler {
         Map<Long, String> categories = categories(orders.stream().map(Order::getCategoryId));
         Map<Long, String> warehouses = warehouses(orders.stream().map(Order::getWarehouseId));
 
-        // Who published each listing decides which actions the viewer may take,
-        // so it is resolved in the same batch as the display names rather than
-        // one query per row.
+        // 每份挂牌是谁发布的，决定了查看者可以执行哪些动作，所以它与展示名称
+        // 在同一批次里解析，而不是逐行一次查询。
         Map<Long, Long> listerOf = listerOf(orders.stream().map(Order::getListingId));
 
-        // "已签约" does not say who signed, so the per-viewer progress hint needs
-        // the contract's own signature state. Loaded in one batch for the same
-        // reason as the names above.
+        // “已签约”没有说明是谁签的，所以逐查看者的进度提示需要合同自身的签署
+        // 状态。与上面的名称出于同样的原因，一次性批量加载。
         Map<Long, Contract> contracts = contractsById(
                 orders.stream().map(Order::getContractId));
 
@@ -112,29 +109,25 @@ public class TradingViewAssembler {
     }
 
     /**
-     * Reads a display value for a key that is allowed to be absent.
+     * 为一个允许缺失的键读取展示值。
      *
-     * <p><b>This exists because the immutable empty map throws on a null
-     * key.</b> The batch lookups return {@code Map.of()} when no row in the
-     * batch has the relation, and {@code Map.of()} rejects a null key — both
-     * from {@code get} and from {@code getOrDefault}, which is the part that
-     * made this hard to see. A {@code HashMap} tolerates it. So the same call
-     * behaved differently depending on whether <em>any</em> row in the batch
-     * happened to carry the relation, and the failure appeared only in the case
-     * where none did: an order with no warehouse, rendered alongside other
-     * orders that also had none.
+     * <p><b>它之所以存在，是因为不可变的空 map 在 null 键上会抛异常。</b>当
+     * 批次中没有任何一行具备该关联时，批量查询会返回 {@code Map.of()}，而
+     * {@code Map.of()} 拒绝 null 键——无论是 {@code get} 还是
+     * {@code getOrDefault} 都拒绝，后者正是让这个问题难以被看见的部分。而
+     * {@code HashMap} 容忍它。于是同一次调用会因为批次中<em>是否有任何</em>
+     * 一行碰巧带有该关联而表现不同，而故障只出现在一行都没有的那种情况里：
+     * 一笔没有仓库的订单，与其它同样没有仓库的订单一起渲染时。
      *
-     * <p>Every lookup in this class goes through here rather than through a map
-     * method directly. The fix is not to swap the empty map for a {@code
-     * HashMap} — that would work today and be quietly reverted to {@code
-     * Map.of()} by the next person tidying up. Not passing a null key is a
-     * property of the call site, and it survives refactoring.
+     * <p>本类中的每一次查找都走这里，而不直接走 map 的方法。修法不是把空 map
+     * 换成 {@code HashMap}——那样今天能跑，然后会被下一个整理代码的人悄悄改回
+     * {@code Map.of()}。不传 null 键是调用点自身的性质，而它能经受重构。
      */
     private static <K, V> V lookup(Map<K, V> map, K key, V fallback) {
         return key == null ? fallback : map.getOrDefault(key, fallback);
     }
 
-    /** Contract id to the contract, for the orders that have one. */
+    /** 合同 id 到合同，针对那些有合同的订单。 */
     private Map<Long, Contract> contractsById(Stream<Long> contractIds) {
         Set<Long> distinct = contractIds
                 .filter(java.util.Objects::nonNull)
@@ -146,7 +139,7 @@ public class TradingViewAssembler {
                 .collect(Collectors.toMap(Contract::getId, contract -> contract));
     }
 
-    /** Listing id to the enterprise that published it. */
+    /** 挂牌 id 到发布它的企业。 */
     private Map<Long, Long> listerOf(Stream<Long> listingIds) {
         Set<Long> distinct = listingIds
                 .filter(java.util.Objects::nonNull)
@@ -158,7 +151,7 @@ public class TradingViewAssembler {
                 .collect(Collectors.toMap(Listing::getId, Listing::getEnterpriseId));
     }
 
-    /** Spec values stored as jsonb, as a map for the client. */
+    /** 以 jsonb 存储的规格值，转成供客户端使用的 map。 */
     public Map<String, Object> readSpec(String json) {
         if (json == null || json.isBlank()) {
             return Map.of();

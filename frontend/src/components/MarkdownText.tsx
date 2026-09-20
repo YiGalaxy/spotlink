@@ -2,15 +2,14 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 /**
- * Renders an advisor answer.
+ * 渲染顾问的回答。
  *
- * <p>Assistants emit Markdown because it is the cheapest way to get a readable
- * table or list out of a language model — but Markdown is also a plain string
- * that can carry raw HTML, so it is rendered through react-markdown rather than
- * injected as HTML. react-markdown builds React elements and drops anything it
- * does not recognise, so a `<script>` in a tool result cannot become markup.
+ * <p>助手输出 Markdown，因为这是让语言模型吐出可读表格或列表最省事的方式
+ * ——但 Markdown 同时也是一段可以夹带原生 HTML 的纯字符串，所以这里走
+ * react-markdown 渲染，而不是作为 HTML 注入。react-markdown 构建的是 React
+ * 元素，并丢弃一切它不认识的东西，因此工具结果里的 `<script>` 无法变成标记。
  *
- * <p>No `rehype-raw`: allowing raw HTML would undo exactly that protection.
+ * <p>不用 `rehype-raw`：允许原生 HTML 恰好会抵消掉这层保护。
  */
 export default function MarkdownText({ content }: { content: string }) {
   return (
@@ -18,9 +17,8 @@ export default function MarkdownText({ content }: { content: string }) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          // Tables are the main reason Markdown is worth rendering here, so
-          // they get a scroll container: a wide table must not stretch the
-          // whole chat column on a narrow screen.
+          // 表格正是这里值得渲染 Markdown 的主要原因，所以给它一个滚动容器：
+          // 在窄屏上，一张宽表格不能把整个对话栏撑开。
           table: ({ children }) => (
             <div className="md-table-wrap">
               <table>{children}</table>

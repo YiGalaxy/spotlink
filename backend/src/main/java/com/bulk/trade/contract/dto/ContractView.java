@@ -9,11 +9,10 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 
 /**
- * A contract as the client sees it.
+ * 客户端看到的合同。
  *
- * <p>{@code mySigned} and {@code counterpartySigned} are resolved per caller so
- * the UI can say "waiting for the other side" without the client having to work
- * out which side it is.
+ * <p>{@code mySigned} 和 {@code counterpartySigned} 按调用方逐个解析，这样
+ * 界面就能显示“等待对方签署”，而无需客户端自己去算清楚它是哪一方。
  */
 public record ContractView(
         @JsonSerialize(using = ToStringSerializer.class) Long id,

@@ -9,17 +9,14 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * A retrievable passage.
+ * 一段可被检索的文本。
  *
- * <p><b>The embedding is not mapped, and under MySQL that is still the right
- * call.</b> On PostgreSQL it was because pgvector's type had no MyBatis
- * handler. Here the column is a plain {@code BLOB} that a handler <em>could</em>
- * map — but retrieval does not want it mapped. Scoring happens in Java over
- * every embedded chunk at once, and hydrating a 4 KB blob into a {@code float[]}
- * for each of them through the entity pipeline would allocate the whole corpus
- * to answer one question. The retrieval path reads blobs directly and decodes
- * them one at a time; this entity covers the ordinary reads, which never need
- * the vector.
+ * <p><b>嵌入向量没有被映射；在 MySQL 下这仍然是正确的做法。</b>在 PostgreSQL 上这么
+ * 做，是因为 pgvector 的类型没有对应的 MyBatis 处理器。而在这里，该列只是一个普通的
+ * {@code BLOB}，处理器<em>本可以</em>映射它——但检索并不希望它被映射。打分是在 Java
+ * 里一次性对全部已嵌入分块进行的，若让这些分块逐个经过实体管线把 4 KB 的 blob 还原成
+ * {@code float[]}，那么为了回答一个问题就要把整个语料库都分配出来。检索路径直接读
+ * blob，一次解码一个；而本实体负责的是普通读取，那些读取从不需要这个向量。
  */
 @Getter
 @Setter
@@ -34,7 +31,7 @@ public class KnowledgeChunk {
     private String content;
     private Integer tokenCount;
 
-    /** Never hydrated by the entity path; see the class comment. */
+    /** 实体路径永远不会把它加载出来；见类注释。 */
     @com.baomidou.mybatisplus.annotation.TableField(exist = false)
     private float[] embedding;
 

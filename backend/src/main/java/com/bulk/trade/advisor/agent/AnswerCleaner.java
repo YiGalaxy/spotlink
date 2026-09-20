@@ -3,50 +3,41 @@ package com.bulk.trade.advisor.agent;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Removes a model's leaked working notes from the front of an answer.
+ * 去掉模型泄漏在答案开头的草稿内容。
  *
- * <p><b>Why this exists rather than a stronger instruction.</b> The system
- * prompt already says, at length, to output only the finished answer. It works
- * for short questions and fails for hard ones: asked to review a contract, a
- * reasoning model drafts a plan — "The caller is X, the seller. Now compose the
- * review. Contract review structure: 1. Basic info…" — and the draft reaches
- * the user. No wording fixes this reliably, because the failure is not
- * disobedience; it is that the model's scratchpad and its output share one
- * channel on the gateway this deployment talks to.
+ * <p><b>为什么需要它，而不是写一句更强的指令。</b>系统提示词已经长篇要求只输出最终答案。
+ * 这对简短问题有效，对困难问题失效：被要求审查一份合同时，推理型模型会先起草一份计划 ——
+ * "The caller is X, the seller. Now compose the review. Contract review structure:
+ * 1. Basic info…" —— 而这份草稿会送到用户面前。没有任何措辞能可靠地解决它，因为这不是
+ * 不服从指令；而是模型的草稿与它的输出，在本部署所对接的网关上共用同一条通道。
  *
- * <p>So the guard is deterministic code, and it has to be a heuristic. The one
- * that works here is the language: {@link #CJK_RATIO} of the answer is
- * guaranteed Chinese by rule 3 of the prompt, while planning happens in
- * English. A line that is mostly not Chinese, before any line that is, is
- * working notes.
+ * <p>所以这道防线是确定性的代码，而且它只能是一条启发式规则。这里有效的判据是语言：
+ * 提示词第 3 条保证了答案中有 {@link #CJK_RATIO} 以上的比例是中文，而计划推演是用英文写的。
+ * 出现在第一行实质中文之前、且自身大多不是中文的行，就是草稿。
  *
- * <p><b>Deliberately conservative.</b> Everything before the first
- * substantially-Chinese line is dropped, and nothing else is touched — no
- * middle-of-answer edits, no rewrites. A cleaner that reached further into the
- * text would eventually delete a sentence someone needed; this one can only
- * ever remove a prefix, and it logs each time it does, so the rate is visible
- * rather than a silent habit.
+ * <p><b>刻意保守。</b>第一个实质为中文的行之前的内容全部丢弃，其余一律不动 —— 不做答案
+ * 中段的修改，不做重写。一个把手伸进正文更深处的清理器，早晚会删掉某个人需要的句子；
+ * 这一个只可能删掉一段前缀，而且每次删都会记日志，所以发生频率是可见的，而不是一个
+ * 悄无声息的习惯。
  */
 @Slf4j
 public final class AnswerCleaner {
 
     /**
-     * Fraction of a line that must be Chinese for it to count as the answer.
+     * 一行中中文占比达到多少，才算得上答案。
      *
-     * <p>Chosen from real output rather than taste. Leaked planning lines sit
-     * near 0.1 — "The caller is 华东金属材料有限公司, the seller" is mostly English
-     * with a company name embedded — while answer lines sit above 0.4, even
-     * table rows, which carry a label per column. 0.35 separates them with room
-     * on both sides.
+     * <p>这个数值取自真实输出，而不是凭喜好定的。泄漏出来的计划行大约在 0.1 附近 ——
+     * "The caller is 华东金属材料有限公司, the seller" 大部分是英文，只嵌了一个公司名 ——
+     * 而答案行都在 0.4 以上，连表格行也是，因为每列都带一个列名。0.35 能把两者分开，
+     * 两侧都留有余量。
      */
     private static final double CJK_RATIO = 0.35;
 
     /**
-     * A line must carry at least this much Chinese to be considered the answer.
+     * 一行至少要带有这么多中文，才会被当作答案。
      *
-     * <p>Guards the ratio against short lines: "OK。" is 100% Chinese and means
-     * nothing, and a stray interjection must not be mistaken for the start of
-     * the reply.
+     * <p>用它防住比例判据在短行上失效："OK。" 是 100% 中文却毫无意义，
+     * 一句无关的插入语不能被误当成回复的开头。
      */
     private static final int MIN_CJK_CHARS = 4;
 
@@ -54,13 +45,11 @@ public final class AnswerCleaner {
     }
 
     /**
-     * Returns the answer with any leading working notes removed.
+     * 返回去掉开头草稿之后的答案。
      *
-     * @param raw whatever the model produced, possibly prefixed with planning
-     * @return the answer; the input unchanged when it already reads as one; and
-     *         <b>null</b> when nothing in it reads as an answer at all, so the
-     *         caller can decide what to do about that — which is not this
-     *         class's decision to make
+     * @param raw 模型产出的原始内容，开头可能带着计划推演
+     * @return 答案；如果输入本身读起来就是答案，则原样返回；如果其中没有任何内容读起来
+     *         像答案，则返回 <b>null</b>，好让调用方决定怎么处理 —— 那不是本类该做的决定
      */
     public static String clean(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -77,21 +66,16 @@ public final class AnswerCleaner {
         }
 
         if (start < 0) {
-            // Not one line anywhere reads as an answer. Two ways that happens,
-            // and they are worth telling apart: the model answered in a
-            // language the prompt forbids, or it produced only its scratchpad
-            // and stopped. The second is the one seen in practice — a contract
-            // review that returned fifteen hundred characters of English
-            // planning and never reached a conclusion.
+            // 通篇没有一行读起来像答案。这有两种成因，值得区分开：模型用了提示词禁止的
+            // 语言作答，或者它只产出了草稿就停下了。实际见到的是第二种 —— 一次合同审查
+            // 返回了一千五百个字符的英文推演，始终没有得出结论。
             //
-            // Both mean there is no answer to show, so neither is returned.
-            // Emptiness would be worse than an apology, and the raw text is
-            // worse than both.
+            // 两种情况都意味着没有答案可展示，所以两者都不返回。返回空内容比一句道歉
+            // 更糟，而返回原文比两者都更糟。
             log.warn("Advisor produced no answer line in {} characters; suppressed",
                     raw.length());
-            // The text is logged in full, because the alternative is guessing
-            // twice about what shape a suppressed answer had — which is exactly
-            // what happened the first time this fired in earnest.
+            // 全文记入日志，因为另一种选择是对被抑制的答案长什么样做两次猜测 ——
+            // 而这个分支第一次真正触发时，发生的正是这样的事。
             log.warn("Suppressed advisor text:\n{}", raw);
             return null;
         }
@@ -107,25 +91,20 @@ public final class AnswerCleaner {
     }
 
     /**
-     * Whether a line reads as the start of the answer rather than as planning.
+     * 判断一行读起来是答案的开头，还是计划推演。
      *
-     * <p>Blank lines are never the answer, so they never start it — which is
-     * what lets the dropped prefix take the blank line between the notes and
-     * the reply along with it, without a special case.
+     * <p>空行永远不是答案，所以它永远不会成为答案的开头 —— 正是这一点让被丢弃的前缀能
+     * 顺带带走草稿与回复之间的那个空行，而不需要任何特例。
      *
-     * <p><b>Two conditions, and the second was added after the first failed on
-     * real output.</b> Chinese-ness alone was not enough: planning a contract
-     * review, the model wrote "- 数量 20 吨，单价 68000 元/吨" as a note, and that
-     * line is 47% Chinese — above any ratio that a genuine answer line would
-     * also clear. What separates them is shape rather than language. A line
-     * that <em>opens</em> a reply is a heading, a table row, or a sentence that
-     * finishes its thought; a line of notes is a fragment that trails off into a
-     * number or a unit.
+     * <p><b>两个条件，第二个是在第一个于真实输出上失效之后才补上的。</b>只看中文程度
+     * 并不够：在规划一次合同审查时，模型把 "- 数量 20 吨，单价 68000 元/吨" 写成了一行草稿，
+     * 而这一行有 47% 是中文 —— 高于任何一条真正的答案行也能达到的比例。区分二者的是形态
+     * 而不是语言。开启一段回复的行是标题、表格行，或者一个把意思讲完的句子；一行草稿则是
+     * 一个断片，末尾拖着一个数字或单位就断了。
      *
-     * <p>So an answer line must additionally either carry Markdown structure
-     * that a reader would recognise as the start of something, or end in the
-     * punctuation a finished Chinese sentence ends in. Checked against every
-     * line of a real leaked response and against ordinary answers.
+     * <p>所以答案行还必须额外满足其中一条：带有读者会认作某物之开头的 Markdown 结构，
+     * 或者以一句写完的中文句子该有的标点结尾。这一条对照过一份真实泄漏响应的每一行，
+     * 也对照过普通答案。
      */
     private static boolean isAnswerLine(String line) {
         if (line.isBlank()) {
@@ -153,24 +132,22 @@ public final class AnswerCleaner {
                 || ENDS_A_SENTENCE.indexOf(trimmed.charAt(trimmed.length() - 1)) >= 0;
     }
 
-    /** Markdown that opens something: a heading, a quote, a table row. */
+    /** 开启某个结构的 Markdown：标题、引用、表格行。 */
     private static final java.util.regex.Pattern STARTS_A_BLOCK =
             java.util.regex.Pattern.compile("^(#{1,6}\\s|>|\\|)");
 
-    /** Sentence-final Chinese punctuation. A fragment does not have one. */
+    /** 中文的句末标点。断片不会有。 */
     private static final String ENDS_A_SENTENCE = "。！？：；…";
 
     /**
-     * Chinese, plus the full-width punctuation that comes with it.
+     * 中文，以及随中文一起出现的全角标点。
      *
-     * <p>Punctuation is counted as Chinese because it is a strong tell: leaked
-     * English planning uses ASCII commas and periods even when it quotes a
-     * Chinese name, so counting full-width marks as Chinese makes the two cases
-     * separate more cleanly rather than less.
+     * <p>标点算作中文，因为它是很强的信号：泄漏出来的英文计划即使引用了中文名称，用的也是
+     * ASCII 的逗号和句点，所以把全角标点计入中文，会让这两种情况分得更开，而不是更混。
      */
     private static boolean isCjk(char c) {
-        return (c >= 0x4E00 && c <= 0x9FFF)      // unified ideographs
-                || (c >= 0x3000 && c <= 0x303F)  // CJK punctuation
-                || (c >= 0xFF00 && c <= 0xFFEF); // full-width forms
+        return (c >= 0x4E00 && c <= 0x9FFF)      // 统一表意文字
+                || (c >= 0x3000 && c <= 0x303F)  // CJK 标点
+                || (c >= 0xFF00 && c <= 0xFFEF); // 全角字符
     }
 }

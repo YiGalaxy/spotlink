@@ -4,7 +4,7 @@ import com.bulk.trade.warehouse.entity.Warehouse;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 
-/** A warehouse as the client sees it. Ids travel as strings — see CategoryNode. */
+/** 客户端看到的仓库视图。ID 以字符串传输——参见 CategoryNode。 */
 public record WarehouseView(
         @JsonSerialize(using = ToStringSerializer.class) Long id,
         String code,

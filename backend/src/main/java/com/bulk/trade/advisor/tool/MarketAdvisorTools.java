@@ -13,19 +13,15 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Market data for the advisor.
+ * 供顾问使用的行情数据。
  *
- * <p>Unlike every other tool here, this one is <b>not tenant-scoped</b> — and
- * that is correct rather than an oversight. Prices are public: the listing hall
- * shows them to every authenticated enterprise, and a market where one company
- * could see prices and another could not would not be a market. Nothing here
- * touches inventory, orders or contracts, so there is no tenant data to leak.
+ * <p>与这里的其他每个工具都不同，这一个<b>不做租户隔离</b> —— 而这是正确的，不是疏忽。
+ * 价格是公开的：挂牌大厅把它们展示给每一个已认证的企业，而一个某家公司看得见价格、另一家
+ * 看不见的市场就不成其为市场。这里不碰库存、订单或合同，所以没有租户数据可泄露。
  *
- * <p>The tool deliberately reports how many trades stand behind an average. On
- * a spot market most grades trade once or twice a day, and "the average price
- * is 66,800" means something very different when it comes from one trade than
- * from forty. An advisor that omits that context invites the user to treat a
- * single data point as a trend.
+ * <p>这个工具刻意报告一个均价背后站着多少笔成交。在现货市场上，多数品种一天只成交一两次，
+ * 而「均价 66800」来自一笔成交和来自四十笔成交，含义完全不同。省略掉这个上下文的顾问，
+ * 等于在请用户把一个单独的数据点当成趋势。
  */
 @Component
 @RequiredArgsConstructor

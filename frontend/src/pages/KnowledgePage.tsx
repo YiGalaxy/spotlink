@@ -28,7 +28,7 @@ export default function KnowledgePage() {
   const [searching, setSearching] = useState(false)
   const [embedding, setEmbedding] = useState(false)
   const queryClient = useQueryClient()
-  // The rulebook is public; only maintaining the index needs an account.
+  // 规则手册是公开的；只有维护索引才需要一个账号。
   const signedIn = Boolean(useAuthStore((state) => state.accessToken))
 
   const { data: stats } = useQuery({
@@ -106,9 +106,8 @@ export default function KnowledgePage() {
         </Col>
       </Row>
 
-      {/* The rulebook is public; maintaining the index is not. A visitor
-          reading the rules has no business triggering a re-embed, and the
-          button would only earn them a 401. */}
+      {/* 规则手册是公开的；维护索引不是。一个只是来读规则的访客没有理由去
+          触发重新嵌入，那个按钮只会给他换来一个 401。 */}
       {signedIn && noVector && (
         <Alert
           type="warning"

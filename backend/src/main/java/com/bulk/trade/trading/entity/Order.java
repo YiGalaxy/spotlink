@@ -15,16 +15,15 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 /**
- * A contract-to-be between two named parties.
+ * 两个具名主体之间的一份待成合同。
  *
- * <p><b>Either side can read this row</b>, which is why the tenant filter is
- * {@code buyer_id = ? OR seller_id = ?} rather than a single owner column. A
- * single {@code enterprise_id} would have made one party a second-class reader
- * of their own deal.
+ * <p><b>双方都能读到这一行</b>，这正是租户过滤条件写成
+ * {@code buyer_id = ? OR seller_id = ?} 而不是单一属主列的原因。若只用一个
+ * {@code enterprise_id}，就会让其中一方沦为读自己交易的二等读者。
  *
- * <p><b>{@code amount} is stored, not recomputed.</b> It is what was agreed. If
- * a price or quantity were ever corrected, a derived total would silently
- * restate the history of a deal that has already been invoiced.
+ * <p><b>{@code amount} 是存储下来的，而不是重新计算的。</b>它是当初约定的
+ * 金额。若价格或数量日后被更正，推导出来的总额会无声地改写一笔已经开过票
+ * 的交易的历史。
  */
 @Getter
 @Setter
@@ -36,7 +35,7 @@ public class Order {
 
     private String orderNo;
 
-    /** The listing this order accepted; null for a negotiated deal. */
+    /** 本订单所摘的那份挂牌；议价成交的订单为 null。 */
     private Long listingId;
 
     private Long buyerId;
@@ -50,20 +49,20 @@ public class Order {
     private String unit;
     private BigDecimal price;
 
-    /** {@code quantity * price}, frozen at the moment of agreement. */
+    /** {@code quantity * price}，在达成一致的那一刻凝固。 */
     private BigDecimal amount;
 
     private Long warehouseId;
     private String deliveryMethod;
     private String paymentTerms;
 
-    /** Goods freeze on the seller's side. */
+    /** 卖方一侧的货物冻结。 */
     private Long goodsFreezeId;
 
-    /** Margin freeze on the buyer's side. */
+    /** 买方一侧的保证金冻结。 */
     private Long marginFreezeId;
 
-    /** See {@link OrderStatus}. */
+    /** 参见 {@link OrderStatus}。 */
     private String status;
 
     private Long contractId;
@@ -72,20 +71,19 @@ public class Order {
     private String cancelReason;
 
     /**
-     * When the lister's answer is due.
+     * 挂牌方答复的截止时间。
      *
-     * <p>Null for any order that never waits — every order under an AUTO
-     * listing, and every order past the point of confirmation. Set only while
-     * the order sits in {@link OrderStatus#PENDING_CONFIRM}, which is what
-     * makes it a deadline rather than a timestamp.
+     * <p>对任何从不等待的订单均为 null——AUTO 挂牌下的每一笔订单、以及
+     * 每一笔已过确认环节的订单都是如此。只有在订单停留在
+     * {@link OrderStatus#PENDING_CONFIRM} 期间才会被设置，这正是它算一个
+     * 截止期限而非一个时间戳的原因。
      *
-     * <p><b>{@code updateStrategy = ALWAYS} is load-bearing.</b> MyBatis-Plus
-     * omits null fields from generated UPDATE statements by default, which
-     * quietly turns "clear this column" into "leave whatever was there". The
-     * entity would read {@code null} and the API would return {@code null}
-     * while the row kept the old value — a lie that survives every test that
-     * inspects the response instead of the database. This is the one field on
-     * this entity that is ever cleared, so it is the one that opts out.
+     * <p><b>{@code updateStrategy = ALWAYS} 是关键所在。</b>MyBatis-Plus
+     * 默认会把 null 字段从生成的 UPDATE 语句中略去，这就悄悄地把“清空这一
+     * 列”变成了“保持原值不动”。实体读出来是 {@code null}，API 也返回
+     * {@code null}，而数据库行里还留着旧值——一个能骗过所有只检查响应、
+     * 不检查数据库的测试的谎言。本实体上只有这一个字段会被清空，所以也只有
+     * 它需要退出默认策略。
      */
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private OffsetDateTime confirmDeadline;
@@ -110,13 +108,13 @@ public class Order {
     @TableLogic
     private Integer deleted;
 
-    /** True when the given enterprise is a party to this order. */
+    /** 当给定企业是本订单的当事方之一时为 true。 */
     public boolean involves(Long enterpriseId) {
         return enterpriseId != null
                 && (enterpriseId.equals(buyerId) || enterpriseId.equals(sellerId));
     }
 
-    /** Which side the given enterprise is on, for rendering. */
+    /** 给定企业所处的一方，用于界面呈现。 */
     public String roleOf(Long enterpriseId) {
         if (enterpriseId == null) {
             return "—";

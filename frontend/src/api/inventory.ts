@@ -26,11 +26,10 @@ export function registerInventory(payload: InventoryRegisterPayload) {
 }
 
 /**
- * Edits descriptive fields only.
+ * 只编辑描述性字段。
  *
- * Quantity, warehouse and unit are absent by design: those are physical facts
- * about goods in a named place, and changing them would make the platform
- * disagree with the warehouse rather than change what is actually stored.
+ * 数量、仓库和单位是刻意缺席的：它们是关于某个具名场所内货物的物理事实，
+ * 改动它们只会让平台与仓库的记录互相矛盾，而不会改变实际存放的东西。
  */
 export interface InventoryUpdatePayload {
   categoryId: EntityId

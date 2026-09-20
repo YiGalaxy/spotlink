@@ -3,18 +3,17 @@ package com.bulk.trade.trading.event;
 import java.math.BigDecimal;
 
 /**
- * Raised when a trade completes, so the market feed can update.
+ * 交易达成时抛出，以便行情推送得以更新。
  *
- * <p>An event rather than a direct call from the order service into the market
- * module: the order service does not need to know a market feed exists, and the
- * feed can be removed or replaced without the trading code changing.
+ * <p>用事件而不是由订单服务直接调用行情模块：订单服务不需要知道行情推送的
+ * 存在，而行情推送可以被移除或替换，交易代码不必改动。
  *
- * @param categoryId  which grade traded
- * @param price       price per unit
- * @param quantity    quantity traded
- * @param buyerId     buyer enterprise
- * @param sellerId    seller enterprise
- * @param orderNo     for the audit trail
+ * @param categoryId  成交的是哪个品级
+ * @param price       单价
+ * @param quantity    成交数量
+ * @param buyerId     买方企业
+ * @param sellerId    卖方企业
+ * @param orderNo     供审计轨迹使用
  */
 public record OrderTradedEvent(
         Long categoryId,

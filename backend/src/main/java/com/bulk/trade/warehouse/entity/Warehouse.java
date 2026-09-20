@@ -12,11 +12,10 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * A designated delivery warehouse (指定交收仓库).
+ * 指定交收仓库。
  *
- * <p>Goods sit here, not on the platform. The platform records where they are
- * and what happened to them; it never holds them. That separation is what keeps
- * the platform a registry rather than a counterparty.
+ * <p>货物放在这里，而不是放在平台上。平台记录货物在哪里、经历过什么，但它从不持有
+ * 货物。正是这种分离，让平台保持为一个登记机构，而不是交易的对手方。
  */
 @Getter
 @Setter
@@ -35,7 +34,7 @@ public class Warehouse {
     private String contactName;
     private String contactPhone;
 
-    /** 0=disabled, 1=enabled. */
+    /** 0=禁用，1=启用。 */
     private Integer status;
 
     private String remark;

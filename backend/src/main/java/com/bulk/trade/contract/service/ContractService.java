@@ -28,12 +28,11 @@ import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Contracts: turning an agreement into an obligation.
+ * 合同：把一项共识变成一项义务。
  *
- * <p>An order says two parties intend to trade. A contract is what makes them
- * obliged to. The order state machine refuses to move from {@code CONFIRMED} to
- * {@code DELIVERING} without passing through {@code CONTRACTED}, so nothing
- * here is decorative — without a signature from both sides, goods never move.
+ * <p>订单说明双方有意交易。合同才是让他们负有义务的东西。订单状态机拒绝从
+ * {@code CONFIRMED} 不经 {@code CONTRACTED} 直接进入 {@code DELIVERING}，
+ * 所以这里没有任何东西是装饰性的——没有双方的签署，货物永远不会移动。
  */
 @Slf4j
 @Service
@@ -43,7 +42,7 @@ public class ContractService {
     private static final DateTimeFormatter NO_FORMAT =
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
-    /** Default weighing variance allowance, in percent. */
+    /** 默认允许的过磅差异，百分比。 */
     private static final String DEFAULT_WEIGHT_TOLERANCE = "3.00";
 
     private final ContractMapper contractMapper;
@@ -53,11 +52,10 @@ public class ContractService {
     private final ApplicationEventPublisher eventPublisher;
 
     /**
-     * Draws up a contract for a confirmed order.
+     * 为一份已确认的订单拟定合同。
      *
-     * <p>Either party may trigger it. The terms are copied from the order, not
-     * referenced — a contract records what was agreed at a moment, and must not
-     * change if the order is later corrected.
+     * <p>任何一方都可以发起。条款是从订单复制过来的，而不是引用——合同记录
+     * 的是某一刻约定的内容，若订单日后被更正，它绝不能跟着变。
      */
     @Transactional
     public Contract draftForOrder(Long orderId, LoginUser user) {
@@ -100,17 +98,17 @@ public class ContractService {
         orderMapper.updateById(order);
 
         log.info("Contract {} drafted for order {}", contract.getContractNo(), order.getOrderNo());
-        // Both sides: one now has a contract to sign, the other has one to watch.
+        // 双方都要通知：一方现在有合同要签，另一方有合同要看。
         publishTaskChange("合同已起草", order);
         return contract;
     }
 
     /**
-     * Records one party's signature.
+     * 记录一方的签署。
      *
-     * <p>When the second signature lands, the contract becomes effective and the
-     * order advances to {@code CONTRACTED} — in the same transaction, so an
-     * order can never be contracted without a fully signed contract behind it.
+     * <p>当第二个签名落下时，合同生效，订单进入 {@code CONTRACTED}——在同一个
+     * 事务里完成，因此一笔订单绝不可能在其背后没有一份双方签妥的合同的情况下
+     * 进入已签约。
      */
     @Transactional
     public Contract sign(Long contractId, LoginUser user) {
@@ -179,10 +177,10 @@ public class ContractService {
     // ------------------------------------------------------------------
 
     /**
-     * Moves the order to CONTRACTED once the contract is effective.
+     * 合同生效后把订单推进到 CONTRACTED。
      *
-     * <p>Routed through the same transition table the order service uses, so the
-     * legal-move rule has exactly one definition in the codebase.
+     * <p>走的是订单服务所用的同一张迁移表，因此这条合法迁移规则在整个代码库中
+     * 只有一个定义。
      */
     private void advanceOrder(Contract contract, LoginUser user) {
         Order order = orderMapper.selectById(contract.getOrderId());
@@ -206,24 +204,23 @@ public class ContractService {
     }
 
     /**
-     * Builds the terms document.
+     * 构建条款文档。
      *
-     * <p>Stored as JSON rather than columns: terms are written once, read whole,
-     * and never queried by individual field.
+     * <p>以 JSON 存储而不是拆成列：条款一次写入、整体读出，从不按单个字段查询。
      */
     /**
-     * Tells both parties their pending work changed.
+     * 通知双方他们的待办发生了变化。
      *
-     * <p>Carries no task data — recomputing it here would put a second copy of
-     * "what counts as pending" in the event, and the two copies would drift.
-     * Each client refetches through {@code TaskService} instead.
+     * <p>不携带任何任务数据——在这里重算会把第二份“什么算作待办”的定义放进
+     * 事件里，而这两份副本会发生偏移。每个客户端改为通过 {@code TaskService}
+     * 重新拉取。
      */
     private void publishTaskChange(String reason, Order order) {
         eventPublisher.publishEvent(
                 new TaskChangedEvent(reason, order.getBuyerId(), order.getSellerId()));
     }
 
-    /** The same, for the two places that hold a contract but not its order. */
+    /** 同上，供那两个持有合同却拿不到其订单的地方使用。 */
     private void publishTaskChange(String reason, Contract contract) {
         eventPublisher.publishEvent(
                 new TaskChangedEvent(reason, contract.getBuyerId(), contract.getSellerId()));

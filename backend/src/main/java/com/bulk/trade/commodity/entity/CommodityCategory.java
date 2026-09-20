@@ -12,12 +12,11 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * A node in the platform's commodity catalogue tree.
+ * 平台商品品类树中的一个节点。
  *
- * <p>{@code path} is a materialised ancestor chain such as {@code /1001/1002/}.
- * Subtree queries become a prefix match ({@code path LIKE '/1001/%'}) rather
- * than a recursive walk, which matters once the tree is deep enough that a
- * recursive CTE per request stops being free.
+ * <p>{@code path} 是物化出来的祖先链，形如 {@code /1001/1002/}。于是子树查询变成
+ * 一次前缀匹配（{@code path LIKE '/1001/%'}），而不是递归遍历；当树足够深、以至于
+ * 每个请求都跑一次递归 CTE 不再免费时，这一点就重要了。
  */
 @Getter
 @Setter
@@ -27,24 +26,24 @@ public class CommodityCategory {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    /** 0 for a root node. */
+    /** 根节点为 0。 */
     private Long parentId;
 
     private String code;
     private String name;
     private Integer level;
 
-    /** Materialised ancestors, e.g. {@code /1001/1002/}. */
+    /** 物化的祖先链，例如 {@code /1001/1002/}。 */
     private String path;
 
     private Integer sortOrder;
 
-    /** JSON array describing the spec fields a commodity here must supply. */
+    /** JSON 数组，描述该品类下的商品必须提供哪些规格字段。 */
     private String specSchema;
 
     private String unit;
 
-    /** 0=disabled, 1=enabled. */
+    /** 0=禁用，1=启用。 */
     private Integer status;
 
     private String remark;

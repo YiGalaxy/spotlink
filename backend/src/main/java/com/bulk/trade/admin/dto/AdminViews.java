@@ -9,18 +9,17 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * What the operator console renders.
+ * 运营后台所渲染的内容。
  *
- * <p>All in one file because they are one thing seen from several angles: every
- * view here exists to answer a question an operator asks, and they share the
- * same conventions — ids as strings, nulls written rather than omitted, labels
- * resolved on the server. Splitting them across a dozen files would make the
- * shared conventions harder to notice and easier to break in one of them.
+ * <p>全部放在一个文件里，因为它们本质上是同一件事从若干个角度看到的样子：这里的
+ * 每个视图都是为了回答运营人员提出的某个问题而存在，而且它们遵循同一套约定——
+ * ID 用字符串表示、null 要写出来而不是省略、文案标签在服务端解析好。把它们拆到
+ * 十几个文件里，只会让这些共同约定更难被注意到，也更容易在其中的某个文件里被
+ * 破坏。
  *
- * <p><b>Ids are serialised as strings.</b> A snowflake is nineteen digits and
- * JavaScript is exact to sixteen, so an id sent as a number comes back changed
- * — and in a console where every action names a row, an id that has drifted by
- * four is an action taken on the wrong enterprise.
+ * <p><b>ID 一律序列化为字符串。</b>Snowflake 是 19 位，而 JavaScript 只精确到
+ * 16 位，所以以数字形式发出去的 ID 回来时已经变了样——而在一个每个操作都要指名
+ * 某一行的运营台里，一个漂移了 4 的 ID 就意味着操作落在了错误的企业上。
  */
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public final class AdminViews {
@@ -28,7 +27,7 @@ public final class AdminViews {
     private AdminViews() {
     }
 
-    /** The console's landing screen. */
+    /** 运营后台的首页。 */
     public record Overview(
             long enterpriseCount,
             long pendingEnterpriseCount,
@@ -40,7 +39,7 @@ public final class AdminViews {
             BigDecimal tradedAmount,
             String tradedAmountText,
             long auditCount,
-            /** The advisor's readiness, carried here from the old dashboard. */
+            /** 顾问的就绪状态，从旧看板搬过来的。 */
             String advisorModel,
             boolean advisorAvailable,
             List<String> advisorTools
@@ -48,12 +47,11 @@ public final class AdminViews {
     }
 
     /**
-     * One enterprise, as the review screen shows it.
+     * 一家企业，即审核页面所展示的样子。
      *
-     * <p>Carries the contact details and the qualification metadata rather than
-     * a link to them: an operator deciding whether to approve is deciding
-     * whether this company is who it says it is, and hiding the evidence
-     * behind another click makes the decision a formality.
+     * <p>这里直接携带联系方式和资质元数据，而不是给一个跳转链接：运营人员在做
+     * 是否通过审核的判断时，判断的正是这家公司是不是它自称的那一家；把证据藏在
+     * 又一次点击之后，会让这个判断沦为走形式。
      */
     public record EnterpriseRow(
             @JsonSerialize(using = ToStringSerializer.class) Long id,
@@ -78,7 +76,7 @@ public final class AdminViews {
     ) {
     }
 
-    /** One order, across every tenant. */
+    /** 一笔订单，横跨全部租户。 */
     public record OrderRow(
             @JsonSerialize(using = ToStringSerializer.class) Long id,
             String orderNo,
@@ -98,7 +96,7 @@ public final class AdminViews {
     ) {
     }
 
-    /** One account. */
+    /** 一个账号。 */
     public record UserRow(
             @JsonSerialize(using = ToStringSerializer.class) Long id,
             String username,
@@ -117,7 +115,7 @@ public final class AdminViews {
     ) {
     }
 
-    /** One recorded action. */
+    /** 一条已记录的操作。 */
     public record AuditRow(
             @JsonSerialize(using = ToStringSerializer.class) Long id,
             String username,
@@ -134,7 +132,7 @@ public final class AdminViews {
     ) {
     }
 
-    /** A role, with the codes it carries. */
+    /** 一个角色，以及它携带的权限码。 */
     public record RoleRow(
             @JsonSerialize(using = ToStringSerializer.class) Long id,
             String code,
@@ -145,7 +143,7 @@ public final class AdminViews {
     ) {
     }
 
-    /** A grantable permission, for the checkbox list. */
+    /** 一个可授予的权限，供勾选列表使用。 */
     public record PermissionRow(
             @JsonSerialize(using = ToStringSerializer.class) Long id,
             String code,

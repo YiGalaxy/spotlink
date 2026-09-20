@@ -30,16 +30,14 @@ import java.util.List;
 public class ConversationService {
 
     /**
-     * How many prior messages are replayed as context.
+     * 作为上下文回放的历史消息条数。
      *
-     * <p>Bounded on purpose. The whole history is re-sent on every turn, so an
-     * unbounded transcript grows the input bill quadratically while adding
-     * little: what happened twenty turns ago rarely bears on the current
-     * question.
+     * <p>刻意设了上限。每轮都会把全部历史重发一遍，所以不加限制的对话记录会让输入开销按平方
+     * 增长，而收益很小：二十轮之前发生的事很少与当前这个问题有关。
      */
     private static final int MAX_HISTORY_MESSAGES = 20;
 
-    /** Characters of the first question used as the conversation title. */
+    /** 用作会话标题的首个问题的截取字符数。 */
     private static final int TITLE_MAX_LENGTH = 24;
 
     private final ConversationMapper conversationMapper;
@@ -48,7 +46,7 @@ public class ConversationService {
     private final ObjectMapper objectMapper;
 
     // ------------------------------------------------------------------
-    // Conversation management
+    // 会话管理
     // ------------------------------------------------------------------
 
     public List<ConversationSummary> listMine(Long userId) {
@@ -70,8 +68,8 @@ public class ConversationService {
         conversation.setEnterpriseId(enterpriseId);
         conversation.setTitle(title == null || title.isBlank() ? "新对话" : title.trim());
         conversation.setMessageCount(0);
-        // Stamped at creation rather than left null so ordering is a plain
-        // descending sort with no null-handling special case.
+        // 创建时就写入时间戳而不是留空，这样排序就是一个普通的倒序排序，
+        // 不必为 null 单独开一个分支。
         conversation.setLastMessageAt(OffsetDateTime.now());
         conversationMapper.insert(conversation);
 
@@ -93,26 +91,23 @@ public class ConversationService {
 
     public void delete(Long conversationId, Long userId) {
         requireOwned(conversationId, userId);
-        // Soft delete on the conversation; its messages stay as history.
+        // 对会话做软删除；它的消息作为历史保留下来。
         conversationMapper.deleteById(conversationId);
         log.info("Conversation {} deleted by user {}", conversationId, userId);
     }
 
     // ------------------------------------------------------------------
-    // Chat
+    // 对话
     // ------------------------------------------------------------------
 
     /**
-     * Runs one turn and persists it.
+     * 执行一轮对话并持久化。
      *
-     * <p>The model is called <em>before</em> anything is written. Persisting the
-     * user's question first would leave a dangling question behind whenever the
-     * upstream call fails, and a transcript full of unanswered questions is
-     * worse than one missing the turn that failed.
+     * <p>模型是在写入任何东西<em>之前</em>调用的。如果先把用户的问题写进去，上游调用失败时
+     * 就会留下一个悬空的问题，而一份满是无人应答问题的对话记录，比缺少失败那一轮的记录更糟。
      *
-     * <p>The two inserts are not wrapped in a transaction. They are independent
-     * writes with no invariant between them — losing one leaves a shorter
-     * transcript, not corrupt data.
+     * <p>两次插入没有包在同一个事务里。它们是相互独立的写入，彼此之间没有不变式 ——
+     * 丢掉一条只会让对话记录变短，不会产生脏数据。
      */
     public MessageView sendMessage(Long conversationId, String userMessage, LoginUser user) {
         Conversation conversation = requireOwned(conversationId, user.getUserId());
@@ -128,10 +123,10 @@ public class ConversationService {
     }
 
     /**
-     * Loads the tail of the transcript as plain-text turns.
+     * 以纯文本轮次的形式加载对话记录的末尾一段。
      *
-     * <p>Read newest-first with a limit, then reversed, so the cut keeps the
-     * most recent messages rather than the oldest.
+     * <p>先按由新到旧并带上 limit 读取，然后反转，这样截断保留下来的是最近的消息，
+     * 而不是最早的消息。
      */
     public List<ConversationTurn> loadHistory(Long conversationId) {
         List<AdvisorMessage> recent = messageMapper.selectList(
@@ -149,15 +144,14 @@ public class ConversationService {
     }
 
     // ------------------------------------------------------------------
-    // Internals
+    // 内部实现
     // ------------------------------------------------------------------
 
     /**
-     * Loads a conversation only if the caller owns it.
+     * 只在调用方拥有该会话时才加载它。
      *
-     * <p>A conversation belonging to someone else reports "not found" rather
-     * than "forbidden": a distinct error would confirm that the id exists, which
-     * is information the caller has no business having.
+     * <p>属于别人的会话报「不存在」而不是「无权限」：一个单独的错误码等于确认这个 id 确实
+     * 存在，而这是调用方没有资格获得的信息。
      */
     private Conversation requireOwned(Long conversationId, Long userId) {
         Conversation conversation = conversationMapper.selectById(conversationId);
@@ -183,8 +177,8 @@ public class ConversationService {
         message.setToolCalls(serialiseToolCalls(result));
         message.setInputTokens(toLong(result.inputTokens()));
         message.setOutputTokens(toLong(result.outputTokens()));
-        // Spring AI reports neither cached-token counts nor loop iterations, so
-        // these stay null rather than being filled with a misleading zero.
+        // Spring AI 既不报告缓存 token 数，也不报告循环轮数，所以这几项保持为 null，
+        // 而不是填一个会误导人的 0。
         message.setCacheReadTokens(null);
         message.setCacheCreationTokens(null);
         message.setIterations(null);
@@ -201,10 +195,10 @@ public class ConversationService {
     }
 
     /**
-     * Bumps counters and, on the very first question, derives a title.
+     * 累加计数，并在第一个问题时推导出标题。
      *
-     * <p>{@code message_count} is incremented in SQL rather than read into Java
-     * and written back, so two turns arriving together cannot lose an update.
+     * <p>{@code message_count} 是在 SQL 里自增的，而不是读进 Java 再写回去，
+     * 所以两轮对话同时到达也不会丢掉一次更新。
      */
     private void touchConversation(Conversation conversation, String firstQuestion) {
         boolean isFirstTurn = conversation.getMessageCount() == null
@@ -236,7 +230,7 @@ public class ConversationService {
         try {
             return objectMapper.writeValueAsString(result.toolInvocations());
         } catch (Exception e) {
-            // The answer still matters; a missing trail only costs detail.
+            // 答案本身仍然重要；缺了轨迹只是损失一点细节。
             log.warn("Could not serialise tool-call trail", e);
             return null;
         }

@@ -12,14 +12,13 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 /**
- * One movement of money. Append-only.
+ * 一次资金变动。只追加。
  *
- * <p>Never updated, never deleted. A mistake is corrected by writing a
- * compensating row, because a ledger that can be edited cannot be audited — and
- * on a trading platform the ledger is the artefact a dispute is settled with.
+ * <p>从不更新，从不删除。错误通过写入一条冲正记录来更正，因为一本能被编辑的
+ * 账本无法被审计——而在一个交易平台上，账本正是用来了结争议的那件东西。
  *
- * <p>{@code balanceAfter} is snapshotted so a statement can be printed without
- * replaying history, while remaining checkable by replaying it.
+ * <p>{@code balanceAfter} 被快照下来，这样打印一份对账单无需重放历史，同时
+ * 它又仍然可以通过重放历史来核对。
  */
 @Getter
 @Setter
@@ -33,10 +32,10 @@ public class FundFlow {
     private Long accountId;
     private Long enterpriseId;
 
-    /** {@link Direction}. */
+    /** {@link Direction}。 */
     private String direction;
 
-    /** {@link BizType}. */
+    /** {@link BizType}。 */
     private String bizType;
 
     private BigDecimal amount;

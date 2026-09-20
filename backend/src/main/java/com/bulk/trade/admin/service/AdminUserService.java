@@ -35,24 +35,21 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Accounts, and what they are allowed to be.
+ * 账号，以及它们被允许是什么。
  *
- * <p>Two guards run through everything here, and both exist to stop an operator
- * locking themselves out of the console they are standing in: you may not
- * disable your own account, and the platform may not be left with nobody able
- * to assign roles.
+ * <p>这里的一切都贯穿着两道防线，二者的存在都是为了不让运营人员把自己锁在脚下这
+ * 个运营台之外：你不能禁用自己的账号，平台也不能落到没人能分配角色的地步。
  *
- * <p>The second is the one that is easy to miss. Dropping your own admin role
- * is a perfectly reasonable-looking click and it is unrecoverable from the
- * console — the only way back is SQL against the database. Refusing one click
- * is cheaper than an outage only a DBA can fix.
+ * <p>第二道是容易被忽略的那一道。去掉自己的管理员角色，看起来是一次再合理不过的
+ * 点击，而它从运营台里是救不回来的——唯一的路子是直接对数据库执行 SQL。拒绝一次
+ * 点击，比等来一场只有 DBA 才能修好的故障要便宜得多。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminUserService {
 
-    /** The authority whose holders can hand it to others. */
+    /** 持有该权限的人可以把它授予他人。 */
     private static final String PERMISSION_ASSIGN_ROLE = "admin:user:role";
 
     private final UserMapper userMapper;
@@ -93,12 +90,11 @@ public class AdminUserService {
     }
 
     /**
-     * Enables or disables an account.
+     * 启用或禁用一个账号。
      *
-     * <p>Takes effect on the account's next request rather than when its token
-     * expires: the authority the filter reads includes status, so a disabled
-     * account is declined immediately. That is what "disable" has to mean for
-     * the button to be worth having.
+     * <p>在该账号的下一次请求上就生效，而不是等它的令牌过期：过滤器读取的权限里
+     * 包含状态，所以被禁用的账号会立刻被拒。只有当"禁用"是这个意思时，这个按钮才
+     * 值得存在。
      */
     @Transactional
     public AdminViews.UserRow changeStatus(Long id, Integer status, String reason) {
@@ -115,8 +111,8 @@ public class AdminUserService {
         if (userMapper.updateById(user) == 0) {
             throw BusinessException.of(ResultCode.CONFLICT, "该账号正在被其他操作修改，请重试");
         }
-        // Without this the change waits for the cache TTL — five minutes of a
-        // disabled account continuing to work.
+        // 不做这一步，改动就得等缓存 TTL 到期——那意味着一个已被禁用的账号还能
+        // 继续用上五分钟。
         authorityProvider.evict(id);
 
         audit.record("user", "change-status", "USER", id, before,
@@ -127,12 +123,11 @@ public class AdminUserService {
     }
 
     /**
-     * Replaces an account's platform roles.
+     * 整体替换一个账号的平台角色。
      *
-     * <p>Hard delete then insert, which is what the join table is shaped for: it
-     * has no soft-delete column because a revoked grant has to actually be
-     * revoked rather than marked, or every query would have to remember to
-     * filter and one that forgot would leave the role in force.
+     * <p>先物理删除再插入，关联表本就是为此设计的：它没有软删除列，因为被撤销的授权
+     * 必须真的被撤销，而不是被标记一下；否则每个查询都得记得去过滤，而一旦有一个查询
+     * 忘了，那个角色就仍然在生效。
      */
     @Transactional
     public AdminViews.UserRow assignRoles(Long userId, List<Long> roleIds) {
@@ -166,7 +161,7 @@ public class AdminUserService {
         return toRow(user, enterpriseName(user.getEnterpriseId()));
     }
 
-    /** Every platform role, with the authorities it carries. */
+    /** 全部平台角色，以及每个角色携带的权限。 */
     public List<AdminViews.RoleRow> roles() {
         List<Role> roles = roleMapper.selectList(Wrappers.<Role>lambdaQuery()
                 .isNull(Role::getEnterpriseId).orderByAsc(Role::getId));
@@ -184,7 +179,7 @@ public class AdminUserService {
                 .toList();
     }
 
-    /** Everything that can be granted, for the checkbox list. */
+    /** 所有可授予的权限，供勾选列表使用。 */
     public List<AdminViews.PermissionRow> permissions() {
         return permissionMapper.selectList(Wrappers.<Permission>lambdaQuery()
                         .orderByAsc(Permission::getSortOrder).orderByAsc(Permission::getId)).stream()
@@ -197,10 +192,10 @@ public class AdminUserService {
     // ------------------------------------------------------------------
 
     /**
-     * Whether this account is the only one that could still hand out roles.
+     * 这个账号是不是唯一还能发放角色的那一个。
      *
-     * <p>Asked before a change rather than after, because the state it guards
-     * against is one the console cannot leave.
+     * <p>在变更之前问，而不是变更之后，因为它所防范的那个状态，是运营台本身走不
+     * 出来的。
      */
     private boolean isLastRoleHolder(Long exceptUserId) {
         List<User> candidates = userMapper.selectList(Wrappers.<User>lambdaQuery()
@@ -217,7 +212,7 @@ public class AdminUserService {
         return true;
     }
 
-    /** Whether the proposed role set still carries the ability to assign roles. */
+    /** 拟定的角色集合是否仍然带有分配角色的能力。 */
     private boolean proposedKeepsAssignRole(List<Long> roleIds) {
         return !roleIds.isEmpty()
                 && permissionCodesByRole(new HashSet<>(roleIds)).values().stream()

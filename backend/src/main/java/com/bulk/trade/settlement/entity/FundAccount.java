@@ -14,16 +14,14 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 /**
- * An enterprise's fund account.
+ * 企业的资金账户。
  *
- * <p><b>The balance columns are a cache; the ledger is the truth.</b> Every
- * movement writes to {@link FundFlow} and updates these totals in the same
- * transaction. If they ever disagree, the ledger is right and this row is
- * wrong — which is a reconciliation, not a loss.
+ * <p><b>余额列是缓存；流水账才是真相。</b>每一次资金变动都写入 {@link FundFlow}
+ * 并在同一事务里更新这些总额。若两者出现分歧，流水账是对的，这一行是错的
+ * ——那是一件需要对账的事，不是一笔损失。
  *
- * <p>{@code available + frozen = balance} is enforced by the database, so a
- * slip is rejected on write rather than discovered when someone tries to spend
- * money that was already promised.
+ * <p>{@code available + frozen = balance} 由数据库强制执行，因此一处失手会在
+ * 写入时被拒绝，而不是等到有人试图花掉早已被许诺出去的钱时才发现。
  */
 @Getter
 @Setter
@@ -42,7 +40,7 @@ public class FundAccount {
 
     private String currency;
 
-    /** 0=disabled, 1=active. */
+    /** 0=停用，1=正常。 */
     private Integer status;
 
     @Version

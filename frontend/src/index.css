@@ -20,7 +20,7 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
-/* Advisor: conversation sidebar                                       */
+/* 顾问：会话侧边栏                                                    */
 /* ------------------------------------------------------------------ */
 
 .conv-sidebar {
@@ -81,7 +81,7 @@ body {
   margin-top: 2px;
 }
 
-/* The delete button only appears on hover, so the list stays quiet. */
+/* 删除按钮只在悬停时出现，这样列表才能保持安静。 */
 .conv-item .ant-btn {
   opacity: 0;
   transition: opacity 0.15s;
@@ -92,7 +92,7 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
-/* Advisor: chat area                                                  */
+/* 顾问：聊天区域                                                      */
 /* ------------------------------------------------------------------ */
 
 .chat-header {
@@ -149,10 +149,10 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
-/* Markdown rendering                                                  */
+/* Markdown 渲染                                                       */
 /*                                                                     */
-/* Ant Design resets margins on headings, lists and paragraphs, so the  */
-/* rhythm has to be restored explicitly or answers read as one block.  */
+/* Ant Design 会重置标题、列表和段落的 margin，因此必须显式恢复        */
+/* 这段节奏，否则整段回答会挤成一整块。                                */
 /* ------------------------------------------------------------------ */
 
 .markdown-body > *:first-child {
@@ -229,8 +229,8 @@ body {
 .md-table-wrap {
   overflow-x: auto;
   margin: 12px 0;
-  /* Rounded corners on the scroll container, so the table looks like a card
-     rather than a grid floating in the answer. */
+  /* 滚动容器上的圆角，让表格看起来像一张卡片，而不是漂在回答里
+     的一片网格。 */
   border: 1px solid #e4e7ec;
   border-radius: 8px;
 }
@@ -239,8 +239,8 @@ body {
   border-collapse: collapse;
   width: 100%;
   font-size: 13px;
-  /* Figures in a column of prices or tonnages are compared by eye; proportional
-     digits make 1,111 narrower than 9,999 and destroy that. */
+  /* 一列价格或吨位里的数字是靠眼睛去比的；比例数字会让 1,111 比 9,999
+     还窄，正好毁掉这种比较。 */
   font-variant-numeric: tabular-nums;
 }
 
@@ -248,18 +248,17 @@ body {
 .markdown-body td {
   padding: 7px 12px;
   text-align: left;
-  /* The single most important line here. Cells used to be `nowrap`, which
-     meant a seven-column table could not narrow by a single pixel — it
-     overflowed the chat column and had to be scrolled sideways to be read at
-     all, which is what made these tables look wrong. Body cells wrap; only the
-     header stays on one line, where wrapping helps nothing. */
+  /* 这里是全文件最重要的一行。单元格以前是 `nowrap`，意味着一张七列的表格
+     连一个像素都窄不下来——它会溢出对话栏，必须横向滚动才能读全，而这些
+     表格看上去不对，原因就在这里。正文单元格换行；只有表头保持一行，
+     因为在那里换行毫无帮助。 */
   white-space: normal;
   word-break: break-word;
-  /* Below this, columns collapse to one character per line. */
+  /* 低于这个宽度，每一列会塌缩成每行一个字。 */
   min-width: 72px;
   vertical-align: top;
-  /* Row rules only: no vertical lines. A grid of boxes around every cell is
-     what makes a small table look like a spreadsheet. */
+  /* 只画行分隔线：不要竖线。给每个单元格都套上框，正是让一张小表格
+     看起来像电子表格的原因。 */
   border-bottom: 1px solid #eef0f4;
 }
 
@@ -279,15 +278,14 @@ body {
   background: #fafbfc;
 }
 
-/* The first column is usually the label — a commodity name or an order number
-   — and reads better distinguishing itself from the figures beside it. */
+/* 第一列通常是标签——品名或订单号——让它与旁边的数字区分开，
+   读起来更清楚。 */
 .markdown-body td:first-child {
   color: #1f2329;
 }
 
-/* On a phone the chat column is narrow enough that horizontal scroll is
-   unavoidable for any table; tightening the padding buys back a column or two
-   before it starts. */
+/* 在手机上，对话栏窄到任何表格都免不了横向滚动；收紧内边距，可以在
+   它开始滚动之前多换回一两列。 */
 @media (max-width: 600px) {
   .markdown-body th,
   .markdown-body td {

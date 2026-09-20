@@ -11,21 +11,18 @@ import MarketPage from '@/pages/MarketPage'
 import TradingPage from '@/pages/TradingPage'
 
 /**
- * Routing, split by who can read what.
+ * 路由，按「谁能读到什么」来划分。
  *
- * <p><b>The split follows what a page would show, not a wish to protect it.</b>
- * A marketplace and a price chart describe the venue, so a visitor reads them
- * and gets a complete answer. The rulebook is no longer here: it is the
- * operator's own corpus, it moves to the console, and the endpoint behind it
- * was removed from the public list at the same time — hiding a page while
- * leaving its API open is not a smaller change, it is an inconsistent one. Inventory, orders, contracts and the
- * advisor describe one enterprise — rendered for someone with no enterprise
- * they are not guarded pages, they are empty ones, and an empty page is a worse
- * answer than a login prompt.
+ * <p><b>这种划分依据的是页面会展示什么，而不是想不想保护它。</b>市场行情和价格
+ * 走势图描述的是交易场所本身，访客读到它们就能得到完整答案。规则手册不在这里了：
+ * 它是运营方自己的语料，已移到控制台，而它背后的接口也同时从公开清单中移除——
+ * 藏起一个页面却把它的 API 敞着，不是更小的改动，而是自相矛盾的改动。库存、
+ * 订单、合同和顾问描述的是某一家企业——把它们渲染给一个没有企业的人看，它们
+ * 就不是被守卫的页面，而是空页面，而空页面比一句登录提示更糟。
  *
- * <p>None of this is a security boundary, and that is the second time this
- * comment exists in this directory on purpose: every route here is enforced
- * server-side too, and a guard that looks like security is one nobody checks.
+ * <p>所有这些都不是安全边界，而且这是这段注释在本目录中第二次出现，是故意的：
+ * 这里的每一条路由在服务端同样强制执行，而一个看起来像安全的守卫，恰恰是没人
+ * 会去检查的守卫。
  */
 export const router = createBrowserRouter([
   {
@@ -36,8 +33,8 @@ export const router = createBrowserRouter([
     path: '/',
     element: <MainLayout />,
     children: [
-      // The homepage stays public even for signed-in users: a venue's
-      // description of itself is not a reward for logging in.
+      // 首页对已登录用户同样保持公开：交易场所对自身的介绍，不该是登录之后的
+      // 奖励。
       { index: true, element: <LandingPage /> },
       { path: 'market', element: <MarketPage /> },
       { path: 'trading', element: <TradingPage /> },

@@ -15,28 +15,24 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
- * Records what operators did, so that what they did can be checked later.
+ * 记录运营人员的操作，以便日后可以核查他们做过什么。
  *
- * <p><b>Written after the transaction commits, in its own transaction.</b> Both
- * halves matter and they guard opposite failures:
+ * <p><b>在事务提交之后写入，并且使用自己的事务。</b>这两半都重要，而且各自防住的是相反的
+ * 失败：
  *
  * <ul>
- *   <li>Written <em>inside</em> the business transaction, a rolled-back approval
- *       would leave a row saying it happened. The audit would then be evidence
- *       of something that did not occur, which is worse than no audit at all —
- *       it is a false accusation with a timestamp.</li>
- *   <li>Written <em>in</em> that transaction, an audit failure would roll back a
- *       successful approval. A record-keeping problem must not be able to stop
- *       trading, so the insert does not join and cannot poison anything.</li>
+ *   <li>如果写在业务事务<em>内部</em>，一次回滚掉的审批会留下一条声称它发生过的记录。
+ *       这样的审计就成了某件并未发生之事的证据，那比没有审计更糟 —— 那是一份带时间戳的
+ *       诬告。</li>
+ *   <li>如果写在那个事务<em>里</em>，一次审计写入失败会把一次成功的审批一起回滚。
+ *       记录环节的问题绝不应该有能力让交易停下来，所以这条插入不加入该事务，也就毒不到
+ *       任何东西。</li>
  * </ul>
  *
- * <p>The result is the property worth having: a row exists exactly when the
- * change happened.
+ * <p>结果正是那个值得拥有的性质：这一行存在，当且仅当该变更确实发生了。
  *
- * <p>Called explicitly rather than through an aspect, because the fields worth
- * recording include the state <em>before</em> the change, and only the call site
- * knows it. An aspect could capture that the method ran; it could not capture
- * what the enterprise's status used to be.
+ * <p>显式调用而不是通过切面，因为值得记录的字段包含变更<em>之前</em>的状态，而只有调用点
+ * 知道它。切面能捕捉到方法执行过；它捕捉不到该企业之前的状态是什么。
  */
 @Slf4j
 @Service
@@ -47,18 +43,17 @@ public class AuditService {
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
-    /** Records a successful action. */
+    /** 记录一次成功的操作。 */
     public void record(String module, String action, String targetType, Long targetId,
                        Object before, Object after) {
         write(module, action, targetType, targetId, before, after, true, null, null);
     }
 
     /**
-     * Records an action that was attempted and refused.
+     * 记录一次被尝试过并被拒绝的操作。
      *
-     * <p>Refusals are worth keeping. A run of failed approvals from one account
-     * is the shape of someone probing what they are allowed to do, and it is
-     * invisible in any log that only records successes.
+     * <p>拒绝也是值得保留的。同一个账号连续出现一批失败的审批，正是有人在试探自己权限边界
+     * 的样子，而它在任何只记录成功的日志里都看不见。
      */
     public void recordFailure(String module, String action, String targetType, Long targetId,
                               String errorMessage, Object before) {
@@ -74,8 +69,8 @@ public class AuditService {
         LoginUser user = SecurityUtils.currentUserOrNull();
         row.setUserId(user == null ? null : user.getUserId());
         row.setUsername(user == null ? null : user.getUsername());
-        // The tenant this row is *about*, which for a review is the enterprise
-        // being reviewed rather than the operator's — an operator has none.
+        // 这一行所*关于*的那个租户；就一次审核而言，是被审核的企业而不是操作人所属的企业 ——
+        // 操作人没有企业。
         row.setEnterpriseId(user == null ? null : user.getEnterpriseId());
         row.setModule(module);
         row.setAction(action);
@@ -93,8 +88,7 @@ public class AuditService {
     }
 
     /**
-     * Defers the insert until the surrounding transaction has committed, or runs
-     * it now when there is no transaction to wait for.
+     * 把插入推迟到外层事务提交之后；没有事务可等时则立即执行。
      */
     private void runAfterCommit(AuditLog row) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -110,18 +104,15 @@ public class AuditService {
     }
 
     /**
-     * The insert itself, in a transaction of its own.
+     * 插入本身，运行在它自己的事务里。
      *
-     * <p><b>{@code TransactionTemplate} rather than {@code @Transactional}.</b>
-     * Spring's annotation works through a proxy, and a call from one method of
-     * this class to another does not go through it — so an annotated private or
-     * self-invoked method runs with whatever transaction the caller has, which
-     * here is none, and the annotation would be decoration. Calling the
-     * template explicitly does what the annotation appears to promise.
+     * <p><b>用 {@code TransactionTemplate} 而不是 {@code @Transactional}。</b>
+     * Spring 的注解通过代理生效，而本类中一个方法调用另一个方法并不经过代理 —— 所以一个加了
+     * 注解的私有方法或自调用方法，会运行在调用方当前所在的事务里，而这里调用方没有事务，那个
+     * 注解就只是装饰。显式调用模板，才真正做到了注解表面上承诺的事。
      *
-     * <p>Failures are logged and swallowed. A platform that refuses a
-     * legitimate approval because it could not write a log line has its
-     * priorities backwards.
+     * <p>失败会被记入日志并吞掉。一个因为写不下一行日志就拒绝一次合法审批的平台，
+     * 优先级是反的。
      */
     private void insert(AuditLog row) {
         try {
@@ -138,18 +129,16 @@ public class AuditService {
         }
         HttpServletRequest request = attrs.getRequest();
         row.setIp(clientIp(request));
-        // 512 in the schema; a truncated user agent is still useful, a failed
-        // insert is not.
+        // schema 里是 512；截断的 user agent 仍然有用，而插入失败没有用。
         row.setUserAgent(clip(request.getHeader("User-Agent"), 500));
     }
 
     /**
-     * The caller's address, reading the forwarded header first.
+     * 调用方的地址，优先读取转发头。
      *
-     * <p>Behind a proxy the socket address is the proxy's, which makes an audit
-     * trail of who did what into a trail of which load balancer forwarded it.
-     * The header is trivially forgeable and is trusted only because it is being
-     * read for a record, never for an authorization decision.
+     * <p>在代理之后，套接字地址是代理的地址，这会把一份关于「谁做了什么」的审计轨迹，变成
+     * 一份关于「哪个负载均衡转发了它」的轨迹。这个头极易伪造，之所以信任它，仅仅因为它被
+     * 读取只是为留档，从不用于任何鉴权判断。
      */
     private String clientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
@@ -167,14 +156,13 @@ public class AuditService {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (Exception e) {
-            // A value that cannot be serialised is worth knowing about, but not
-            // worth losing the audit row over.
+            // 无法序列化的值值得知道，但不值得为它丢掉整条审计记录。
             log.warn("Could not serialise an audit value of type {}", value.getClass().getName());
             return null;
         }
     }
 
-    /** Column widths are finite; a long stack trace must not fail the insert. */
+    /** 列宽是有限的；再长的堆栈也不能让这条插入失败。 */
     private String clip(String value, int limit) {
         if (value == null) {
             return null;

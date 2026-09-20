@@ -15,31 +15,24 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * Listings, from both sides of the shop window.
+ * 挂牌，覆盖橱窗的两侧。
  *
- * <p><b>Two tools, and the difference between them is the point.</b>
- * {@code list_my_listings} reads the caller's own book — including listings that
- * are filled, withdrawn or expired, which nobody else can see.
- * {@code query_market_listings} reads the public hall: what every enterprise
- * currently has on offer, which an anonymous visitor can already browse on the
- * marketplace page.
+ * <p><b>两个工具，而它们之间的区别正是重点。</b>{@code list_my_listings} 读的是调用方
+ * 自己的账本 —— 包括已成交、已撤牌、已过期的挂牌，这些别人看不到。
+ * {@code query_market_listings} 读的是公共大厅：所有企业当前挂出来的货，匿名访客在
+ * 交易市场页面上本来就能浏览。
  *
- * <p>The second was added because the assistant was asked what the cheapest
- * thing on the platform was and had to say it could not look — a question about
- * <em>public</em> information that the platform publishes to the street. The
- * first tool does not cover it: that answers "what have I listed", not "what is
- * on offer".
+ * <p>第二个工具是后加的，因为助手被问到平台上最便宜的东西是什么时，只能回答它看不了 ——
+ * 而那是一个关于<em>公开</em>信息的问题，平台本来就把这些信息对外发布。第一个工具覆盖不了它：
+ * 那个工具回答的是「我挂了什么」，而不是「市场上有什么在挂」。
  *
- * <p><b>Returning other companies' names and prices is not a leak.</b> The hall
- * is public by design, and a venue that hid who was selling what would not be a
- * venue. What stays private is everything behind those offers — inventory,
- * orders, contracts, funds — and none of it is reachable from here. Worth
- * stating, because "the tool returns other enterprises' data" reads like a
- * violation until you notice which data.
+ * <p><b>返回其他公司的名称和价格不是泄露。</b>大厅本来就是公开设计的，一个连谁在卖什么都
+ * 藏起来的市场就不成其为市场。需要保密的是这些报价背后的东西 —— 库存、订单、合同、资金 ——
+ * 而这里一个都够不到。这一点值得写明，因为「这个工具会返回其他企业的数据」读起来像是违规，
+ * 直到你注意到它返回的是哪一类数据。
  *
- * <p>Both tools are scoped the way everything else is: neither accepts an
- * enterprise as an argument, so there is no way to ask for one company's
- * listings rather than the market's.
+ * <p>两个工具的权限范围和其他一切逻辑一致：都不接受企业作为参数，所以没有任何办法去索要
+ * 某一家公司的挂牌，而不是市场的挂牌。
  */
 @Component
 @RequiredArgsConstructor
@@ -47,7 +40,7 @@ public class ListingAdvisorTools {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    /** Enough to compare offers, few enough that the answer stays readable. */
+    /** 多到足以比较报价，又少到能让回答保持可读。 */
     private static final int MARKET_ROWS = 15;
 
     private final ListingService listingService;
@@ -152,31 +145,28 @@ public class ListingAdvisorTools {
               .append(" | ").append(confirmModeText(listing))
               .append(" | 挂牌方 ").append(enterpriseName(listing.getEnterpriseId()));
             if (enterpriseId != null && enterpriseId.equals(listing.getEnterpriseId())) {
-                // Marked because the caller is usually about to compare prices,
-                // and without it the assistant will cheerfully recommend
-                // accepting an offer that cannot be accepted — it is their own.
+                // 加这个标记，是因为调用方接下来通常就要比价，而没有它，助手会兴高采烈地
+                // 建议去接受一个根本接受不了的报价 —— 那是他们自己挂的。
                 sb.append("（本方）");
             }
             sb.append('\n');
         }
 
-        // Said because the caller is usually about to judge a price, and a list
-        // of asking prices is not a list of trades.
+        // 加上这句，是因为调用方接下来通常就要判断价格高低，而一串报价不等于一串成交。
         sb.append("以上是挂牌报价，不是成交价。判断价位是否合理要用 query_market_price 看实际成交。");
         return sb.toString();
     }
 
     // ------------------------------------------------------------------
-    // Internals
+    // 内部实现
     // ------------------------------------------------------------------
 
     /**
-     * Whether a listing answers to the requested filter.
+     * 判断某条挂牌是否满足所请求的过滤条件。
      *
-     * <p>{@code OPEN} covers {@code PARTIALLY_FILLED} as well, because "still on
-     * offer" is what the caller means and a partly-sold listing qualifies. A
-     * literal status comparison would hide exactly the listings with the most
-     * to say.
+     * <p>{@code OPEN} 也把 {@code PARTIALLY_FILLED} 包含在内，因为调用方真正想表达的是
+     * 「还挂着可以买」，而部分成交的挂牌符合这一点。按状态字面量比较，恰恰会把最有话可说的
+     * 那些挂牌藏起来。
      */
     private boolean matches(Listing listing, String status) {
         if (Listing.Status.OPEN.equals(status)) {
@@ -190,8 +180,7 @@ public class ListingAdvisorTools {
     }
 
     /**
-     * A negotiable listing has no price, and saying "0 元" would be a worse
-     * answer than saying there is none.
+     * 面议的挂牌没有价格，这时说「0 元」比说没有价格更糟。
      */
     private String priceText(Listing listing) {
         if (listing.getPrice() == null) {
@@ -200,7 +189,7 @@ public class ListingAdvisorTools {
         return plain(listing.getPrice()) + " 元/" + listing.getUnit();
     }
 
-    /** Whose agreement closes the deal — the fact a buyer most needs first. */
+    /** 成交需要哪一方同意 —— 买方最先需要知道的事实。 */
     private String confirmModeText(Listing listing) {
         return listing.awaitsListerConfirm() ? "需挂牌方确认" : "摘牌即成交";
     }

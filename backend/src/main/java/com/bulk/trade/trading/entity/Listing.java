@@ -14,28 +14,24 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 /**
- * An offer to sell (卖方挂牌) or a request to buy (买方挂牌).
+ * 卖出要约（卖方挂牌）或买入请求（买方挂牌）。
  *
- * <p><b>Publishing a listing is making an offer; accepting it is an
- * acceptance.</b> That is the legal shape of trade here, and it is why there is
- * no matching engine anywhere in this codebase. A central engine that discovers
- * prices makes a venue an exchange in the futures sense; two named parties
- * agreeing one contract at a time is ordinary spot trade.
+ * <p><b>挂牌即发出要约，摘牌即作出承诺。</b>这是本平台交易的法定形态，
+ * 也正是本代码库中任何地方都不存在撮合引擎的原因。一个负责发现价格的
+ * 中央引擎会让交易场所成为期货意义上的交易所；而两个具名主体每次就一份
+ * 合同达成一致，则属于普通的现货交易。
  *
- * <p><b>{@code confirmMode} chooses which of the two market conventions this
- * offer follows.</b> Under {@link ConfirmMode#AUTO} the paragraph above is
- * literally true: the listing <em>is</em> the offer, acceptance forms the
- * contract, and the lister gets no second veto. Under
- * {@link ConfirmMode#MANUAL} the listing is only an invitation to treat — an
- * acceptance reserves the goods and asks the lister to agree, and nothing is
- * agreed until they do. Both are real conventions; conflating them is what
- * makes a platform's rules impossible to explain.
+ * <p><b>{@code confirmMode} 决定该要约遵循两种市场惯例中的哪一种。</b>
+ * 在 {@link ConfirmMode#AUTO} 下，上一段所述字面成立：挂牌<em>就是</em>
+ * 要约，摘牌即构成合同，挂牌方没有二次否决权。在
+ * {@link ConfirmMode#MANUAL} 下，挂牌仅仅是要约邀请——摘牌会锁定货物并
+ * 请求挂牌方同意，在挂牌方同意之前什么都没有达成。两者都是真实存在的
+ * 惯例；把二者混为一谈，正是让平台规则无法解释清楚的原因。
  *
- * <p>A SELL listing freezes the seller's goods for as long as it is open — the
- * goods stay theirs, but they are reserved. A BUY listing is the mirror: it
- * reserves the buyer's margin instead, which is why {@code freezeId} is null
- * for one side and set for the other. That asymmetry is also why MANUAL is
- * SELL-only: only frozen goods can wait safely for an answer.
+ * <p>SELL 挂牌在其存续期间冻结卖方的货物——货物仍归卖方所有，但已被
+ * 预留。BUY 挂牌则是镜像：它改为预留买方的保证金，这就是为什么
+ * {@code freezeId} 对其中一方为 null 而对另一方有值。这一不对称同样是
+ * MANUAL 仅限 SELL 的原因：只有被冻结的货物才能安全地等待一个答复。
  */
 @Getter
 @Setter
@@ -48,7 +44,7 @@ public class Listing {
     private String listingNo;
     private Long enterpriseId;
 
-    /** {@link Side#SELL} or {@link Side#BUY}. */
+    /** {@link Side#SELL} 或 {@link Side#BUY}。 */
     private String side;
 
     private Long categoryId;
@@ -59,30 +55,30 @@ public class Listing {
 
     private BigDecimal quantity;
 
-    /** Still open to acceptance; a listing may be taken in several parts. */
+    /** 仍可被摘牌；一份挂牌可能分多次被摘走。 */
     private BigDecimal remainingQuantity;
 
     private String unit;
 
-    /** Null for a negotiable listing. */
+    /** 议价挂牌为 null。 */
     private BigDecimal price;
 
-    /** {@link PriceType#FIXED} or {@link PriceType#NEGOTIABLE}. */
+    /** {@link PriceType#FIXED} 或 {@link PriceType#NEGOTIABLE}。 */
     private String priceType;
 
-    /** {@link ConfirmMode#AUTO} or {@link ConfirmMode#MANUAL}. */
+    /** {@link ConfirmMode#AUTO} 或 {@link ConfirmMode#MANUAL}。 */
     private String confirmMode;
 
     private Long warehouseId;
     private String deliveryMethod;
     private String paymentTerms;
 
-    /** Goods freeze backing a SELL listing; released when the listing closes. */
+    /** 支撑 SELL 挂牌的货物冻结；挂牌关闭时释放。 */
     private Long freezeId;
 
     private OffsetDateTime validUntil;
 
-    /** {@link Status}. */
+    /** {@link Status}。 */
     private String status;
 
     @Version
@@ -130,25 +126,25 @@ public class Listing {
     }
 
     /**
-     * Whether acceptance alone closes the deal, or the lister must agree.
+     * 仅凭摘牌即可成交，还是必须经挂牌方同意。
      *
-     * <p>Not a cosmetic flag: it decides the moment title moves. Getting it
-     * wrong in one direction sells a party's goods without their consent, and
-     * in the other leaves a buyer holding a deal the lister can ignore.
+     * <p>这不是一个装饰性的开关：它决定所有权转移的时刻。弄错一个方向，
+     * 会在未经当事人同意的情况下卖掉其货物；弄错另一个方向，则会让买方
+     * 持有一笔挂牌方可以无视的交易。
      */
     public static final class ConfirmMode {
 
-        /** 摘牌即成交: the listing is an offer, acceptance forms the contract. */
+        /** 摘牌即成交: 挂牌就是要约，摘牌即构成合同。 */
         public static final String AUTO = "AUTO";
 
-        /** 摘牌待确认: acceptance reserves, the lister's answer decides. */
+        /** 摘牌待确认: 摘牌先锁定，由挂牌方的答复定夺。 */
         public static final String MANUAL = "MANUAL";
 
         private ConfirmMode() {
         }
     }
 
-    /** True when an acceptance must wait for this listing's owner to agree. */
+    /** 当摘牌必须等待该挂牌的所有者同意时为 true。 */
     public boolean awaitsListerConfirm() {
         return ConfirmMode.MANUAL.equals(confirmMode);
     }
@@ -157,9 +153,9 @@ public class Listing {
         public static final String OPEN = "OPEN";
         public static final String PARTIALLY_FILLED = "PARTIALLY_FILLED";
         public static final String FILLED = "FILLED";
-        /** Withdrawn by its owner. */
+        /** 由其所有者撤回。 */
         public static final String CLOSED = "CLOSED";
-        /** Reached its valid-until without being fully taken. */
+        /** 到达有效期截止时仍未被全部摘走。 */
         public static final String EXPIRED = "EXPIRED";
 
         private Status() {

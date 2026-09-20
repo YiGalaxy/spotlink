@@ -14,77 +14,67 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Retrieval over the platform's rule documents.
+ * 在平台规则文档之上的检索。
  *
- * <p><b>Hybrid search, fused by reciprocal rank.</b> Vector search finds
- * paraphrases; trigram similarity finds exact terms. Neither covers both:
- * "履约担保金" and "保证金" are semantically close but lexically distinct, while
- * a question naming a specific clause is answered by the literal string rather
- * than by embedding proximity. Fusing the two ranked lists by reciprocal rank —
- * {@code sum(1 / (k + rank))} — needs no score calibration between two
- * incomparable scales, which is precisely the problem a weighted sum would
- * create.
+ * <p><b>混合检索，按倒数名次融合。</b>向量检索能找到换了说法的表达；trigram 相似度
+ * 能找到确切的词。两者都覆盖不了全部："履约担保金"和"保证金"语义上接近，字面上却是
+ * 两回事；而一个点名某条具体条款的问题，靠的是字面字符串，而不是嵌入上的接近程度。
+ * 把两份按名次排好的列表用倒数名次融合——{@code sum(1 / (k + rank))}——就不需要在
+ * 两个不可比的量纲之间做分数校准，而加权求和恰恰会引出这个问题。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class KnowledgeService {
 
-    /** Candidates pulled from each method before fusion. */
+    /** 融合之前，从每种检索方式各取多少个候选。 */
     private static final int CANDIDATES_PER_METHOD = 15;
 
-    /** RRF damping constant from the original paper. Blunts the top ranks' advantage. */
+    /** 原论文中的 RRF 阻尼常数。用来削弱靠前名次的优势。 */
     private static final int RRF_K = 60;
 
     /**
-     * Relative weight of each retrieval method in the fusion.
+     * 融合时每种检索方式的相对权重。
      *
-     * <p><b>The keyword half is heavily discounted because it does not work
-     * well on Chinese, and that was measured, not assumed.</b> For the question
-     * "货到了发现重量不对怎么办", trigram similarity scored the correct passage
-     * — the one defining 磅差 — at 0.0000, while scoring two unrelated passages
-     * at 0.0769. pg_trgm builds character trigrams for spelling tolerance in
-     * Latin scripts; a Chinese multi-character term produces few shared
-     * trigrams, so the ranking is close to noise.
+     * <p><b>关键词这一路被大幅打折，因为它在中文上效果不好，而这是量出来的，不是
+     * 猜的。</b>对于问题"货到了发现重量不对怎么办"，trigram 相似度给正确的那一段
+     * ——也就是定义磅差的那一段——打出的分数是 0.0000，却给两段毫不相干的文本打了
+     * 0.0769。pg_trgm 构造的是字符级 trigram，为的是容忍拉丁文字里的拼写差异；而一个
+     * 中文多字词能产生的公共 trigram 很少，所以这个排序接近于噪声。
      *
-     * <p>Rank fusion rewards a document that appears in <em>both</em> lists, so
-     * that noise did not merely fail to help — it actively displaced the
-     * correct answer by promoting unrelated passages to the top of the keyword
-     * ranking. Weighting is a mitigation, not a fix: real Chinese keyword
-     * search needs segmentation (zhparser or pg_jieba) producing a tsvector,
-     * which is the documented next step rather than a claim that this is
-     * already right.
+     * <p>名次融合会奖励<em>同时</em>出现在两份列表里的文档，所以那些噪声不只是没帮上
+     * 忙——它还把不相干的段落推到关键词排序的顶部，从而把正确答案挤了下去。加权是一种
+     * 缓解，不是修复：真正的中文关键词检索需要分词（zhparser 或 pg_jieba）来产生
+     * tsvector，这是记录在案的下一步，而不是断言现在这样已经对了。
      *
-     * <p>The keyword path keeps real value as a <em>fallback</em>: when the
-     * embedding service is down it is the only retrieval available, and poor
-     * recall beats none.
+     * <p>关键词这一路作为<em>兜底</em>仍有实际价值：嵌入服务挂掉时，它是唯一可用的
+     * 检索手段，而召回差总好过没有。
      */
     private static final double VECTOR_WEIGHT = 1.0;
     private static final double KEYWORD_WEIGHT = 0.25;
 
-    /** Passages handed to the model. More context is not better: it dilutes. */
+    /** 交给模型的段落数。上下文不是越多越好：多了会被稀释。 */
     private static final int DEFAULT_TOP_K = 4;
 
     private final KnowledgeChunkMapper chunkMapper;
     private final EmbeddingService embeddingService;
 
     /**
-     * A retrieved passage with its provenance.
+     * 一段被检索到的文本，连同它的出处。
      *
-     * @param docCode source document code, shown to the user as the citation
-     * @param title   source document title
-     * @param content the passage itself
-     * @param score   fused score, for ranking and for explaining why this came back
+     * @param docCode 来源文档编号，作为引用展示给用户
+     * @param title   来源文档标题
+     * @param content 段落本身
+     * @param score   融合后的分数，用于排序，也用于解释它为什么会被返回
      */
     public record Passage(Long chunkId, String docCode, String title, String content, double score) {
     }
 
     /**
-     * Finds the passages most likely to answer a question.
+     * 找出最有可能回答某个问题的段落。
      *
-     * <p>Degrades rather than fails: with no embedding service the keyword half
-     * still returns results, which is why ingestion stores unembedded chunks
-     * instead of skipping them.
+     * <p>是降级而不是失败：没有嵌入服务时，关键词那一路仍然能返回结果，这正是入库时
+     * 要把未能嵌入的分块存下来、而不是跳过的原因。
      */
     public List<Passage> search(String question, int topK) {
         if (question == null || question.isBlank()) {
@@ -117,7 +107,7 @@ public class KnowledgeService {
                 .toList();
     }
 
-    /** Fills embeddings for chunks ingested before the service was available. */
+    /** 为嵌入服务还不可用时就已入库的分块补算向量。 */
     @Transactional
     public int embedPending(int limit) {
         List<KnowledgeChunk> pending = chunkMapper.findUnembedded(limit);
@@ -125,8 +115,7 @@ public class KnowledgeService {
         for (KnowledgeChunk chunk : pending) {
             float[] vector = embeddingService.embed(chunk.getContent());
             if (vector == null) {
-                // The service is down or the model is missing; stop rather than
-                // hammer it once per chunk.
+                // 服务挂了，或者模型不存在；就此停下，而不是为每一个分块都硬砸一次。
                 log.warn("Embedding unavailable, stopping after {} chunk(s)", done);
                 break;
             }
@@ -153,22 +142,20 @@ public class KnowledgeService {
     // ------------------------------------------------------------------
 
     /**
-     * Nearest chunks by cosine similarity, scored in Java.
+     * 按余弦相似度取最近的若干分块，在 Java 中打分。
      *
-     * <p>PostgreSQL did this in one indexed query with pgvector's {@code <=>}.
-     * MySQL has no vector type, so the comparison moved here and this is now a
-     * scan: every embedded chunk is read, scored, and sorted.
+     * <p>PostgreSQL 用 pgvector 的 {@code <=>} 一条走索引的查询就能做完。MySQL 没有
+     * 向量类型，所以比较挪到了这里，于是它变成了一次扫描：读出每一个已嵌入的分块，
+     * 逐个打分再排序。
      *
-     * <p><b>Correct, and honestly bounded.</b> At the current corpus — a dozen
-     * passages — the scan is free and the ranking is exact, which is strictly
-     * better than an approximate index would be. The failure mode is size, not
-     * logic: at ten thousand chunks this reads ten thousand blobs per question.
-     * The fix at that point is a vector store, not a bigger {@code LIMIT},
-     * which is why {@code loadEmbedded} deliberately returns everything.
+     * <p><b>结果正确，边界也交代得诚实。</b>在当前语料下——十几段文本——这次扫描没有
+     * 开销，排序也是精确的，这严格优于近似索引所能给出的结果。它的失效模式是数据规模，
+     * 不是逻辑：到了一万个分块，每问一个问题就要读一万个 blob。到那时候该做的是上向量
+     * 库，而不是把 {@code LIMIT} 调大——这正是 {@code loadEmbedded} 刻意返回全部的
+     * 原因。
      *
-     * <p>A chunk whose stored blob is the wrong width yields a similarity of
-     * zero rather than an exception — a corrupt row should cost one candidate,
-     * not the whole answer.
+     * <p>某个分块存下来的 blob 宽度不对时，得到的是相似度为零，而不是抛异常——一行坏
+     * 数据应该只损失一个候选，而不是毁掉整个答案。
      */
     private List<Map<String, Object>> vectorSearch(String question) {
         float[] query = embeddingService.embed(question);
@@ -186,8 +173,8 @@ public class KnowledgeService {
                 .filter(scored -> scored.score() > 0)
                 .sorted(Comparator.comparingDouble(Scored::score).reversed())
                 .limit(CANDIDATES_PER_METHOD)
-                // The embedding is dropped here: it is the largest field by far
-                // and nothing downstream reads it.
+                // 在这里把嵌入向量丢掉：它是体积上遥遥领先的最大字段，而下游没有任何
+                // 地方会读它。
                 .map(scored -> {
                     Map<String, Object> row = new LinkedHashMap<>(scored.row());
                     row.remove("embedding");
@@ -197,13 +184,11 @@ public class KnowledgeService {
     }
 
     /**
-     * Adds one ranked list into the fused scores.
+     * 把一份排好序的列表并入融合分数。
      *
-     * <p>Rank, not raw score: a cosine similarity and a trigram similarity are
-     * not comparable numbers, and blending those by weight would be a guess
-     * dressed up as arithmetic. Weighting the <em>contributions</em> of each
-     * list is a different thing — that is a statement about how much the list
-     * can be trusted, which is measurable.
+     * <p>用的是名次，不是原始分数：余弦相似度和 trigram 相似度不是可比的数字，按权重
+     * 把它们混起来，等于把一次猜测包装成算术。而给每份列表的<em>贡献</em>加权是另一回
+     * 事——那是在说明这份列表有多可信，而这是可以量化的。
      */
     private void accumulate(List<Map<String, Object>> hits,
                             double weight,

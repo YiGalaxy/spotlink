@@ -15,25 +15,21 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 /**
- * An electronic inventory note (电子库存单) — the subject of a trade.
+ * 电子库存单——交易标的。
  *
- * <p><b>It is not a warehouse receipt.</b> Under the Civil Code a warehouse
- * receipt is a document of title: pledgeable and endorsable. Trading a document
- * of title as a standardised instrument is what gets a spot platform
- * reclassified as a de facto futures exchange. This entity is defined as
- * nothing more than a digital record of goods held in a named warehouse, which
- * is the whole reason it carries that name.
+ * <p><b>它不是仓单。</b>按《民法典》，仓单是一种物权凭证：可以质押、可以背书转让。
+ * 把物权凭证当作标准化合约来交易，正是让一个现货平台被重新定性为事实上的期货交易所
+ * 的原因。本实体被定义为"存放在指定仓库中的货物的数字记录"，仅此而已——这也正是它
+ * 采用现在这个名字的全部理由。
  *
- * <p><b>Quantity is three numbers, not one.</b> {@code totalQuantity} is what
- * the owner has; {@code availableQuantity} is what can still be offered;
- * {@code frozenQuantity} is reserved by an active listing or order. A database
- * check constraint enforces {@code available + frozen = total}, so an
- * accounting mistake is rejected at write time rather than discovered during a
- * settlement.
+ * <p><b>数量是三个数，不是一个。</b>{@code totalQuantity} 是货主拥有的量；
+ * {@code availableQuantity} 是还能报出去的量；{@code frozenQuantity} 是被生效中的
+ * 挂牌或订单占用的量。数据库 CHECK 约束强制 {@code available + frozen = total}，
+ * 于是记账错误会在写入时就被拒绝，而不是等到交收的时候才被发现。
  *
- * <p><b>Concurrent changes go through the optimistic lock.</b> Every quantity
- * update is {@code UPDATE ... WHERE id = ? AND version = ?}; two requests
- * racing for the same available quantity cannot both succeed.
+ * <p><b>并发修改走乐观锁。</b>每一次数量更新都是
+ * {@code UPDATE ... WHERE id = ? AND version = ?}；两个争抢同一份可用量的请求不可能
+ * 同时成功。
  */
 @Getter
 @Setter
@@ -45,7 +41,7 @@ public class InventoryNote {
 
     private String noteNo;
 
-    /** The owning enterprise — the tenant key. */
+    /** 归属企业——即租户键。 */
     private Long enterpriseId;
 
     private Long categoryId;
@@ -55,7 +51,7 @@ public class InventoryNote {
     private String brand;
     private String origin;
 
-    /** Specification values keyed by the category's spec schema, as JSON. */
+    /** 规格取值，以 JSON 存储，按品类的规格 schema 组织。 */
     private String spec;
 
     private BigDecimal totalQuantity;
@@ -66,13 +62,12 @@ public class InventoryNote {
     private String qualityReportKey;
     private LocalDate productionDate;
 
-    /** See {@link Status}. */
+    /** 参见 {@link Status}。 */
     private Integer status;
 
     /**
-     * Optimistic lock. MyBatis-Plus appends {@code AND version = ?} to updates
-     * and bumps it, turning a lost update into a zero-row result the caller
-     * can detect.
+     * 乐观锁。MyBatis-Plus 会在更新语句后追加 {@code AND version = ?} 并递增版本号，
+     * 从而把一次丢失的更新变成一个调用方能检测到的"影响行数为 0"的结果。
      */
     @Version
     private Integer version;
@@ -94,7 +89,7 @@ public class InventoryNote {
     @TableLogic
     private Integer deleted;
 
-    /** True when nothing is reserved against this note. */
+    /** 当这张库存单上没有任何被占用的量时为 true。 */
     public boolean isFullyAvailable() {
         return frozenQuantity == null || frozenQuantity.signum() == 0;
     }
@@ -111,7 +106,7 @@ public class InventoryNote {
         private Status() {
         }
 
-        /** Notes in these states can be listed or sold. */
+        /** 处于这些状态的库存单可以挂牌或卖出。 */
         public static boolean isTradable(Integer status) {
             return status != null
                     && (status == IN_STOCK || status == FULLY_FROZEN || status == PARTIALLY_FROZEN);

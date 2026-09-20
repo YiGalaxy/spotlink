@@ -17,13 +17,11 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * Reviewing who may trade.
+ * 审核谁可以交易。
  *
- * <p><b>The half of the审核 feature that did not exist.</b> The platform has
- * always refused to let an unapproved enterprise log in — and had no way at all
- * to approve one. `pending01` is the demonstration account for a state nothing
- * could leave. Every method here is the other half of a rule that was already
- * being enforced.
+ * <p><b>这是审核功能中原本缺失的那一半。</b>平台一直拒绝让未通过审核的企业登录，
+ * 却完全没有办法让任何一家通过审核。`pending01` 就是那个演示账号，它处于一个谁也
+ * 走不出去的状态。这里的每个方法，都是一条早已在被执行的规则的另一半。
  */
 @Slf4j
 @Service
@@ -39,7 +37,7 @@ public class AdminEnterpriseService {
             query.eq(Enterprise::getStatus, status);
         }
         if (keyword != null && !keyword.isBlank()) {
-            // The trigram index on name was built for exactly this box.
+            // name 上的 trigram 索引就是为这个搜索框而建的。
             query.and(w -> w.like(Enterprise::getName, keyword.trim())
                     .or().like(Enterprise::getEnterpriseCode, keyword.trim())
                     .or().like(Enterprise::getUnifiedSocialCreditCode, keyword.trim()));
@@ -48,13 +46,12 @@ public class AdminEnterpriseService {
     }
 
     /**
-     * Approves an application, and issues a trading seat.
+     * 通过一份申请，并发放一个交易席位。
      *
-     * <p>The seat code is derived from the id rather than counted, so approving
-     * the same enterprise twice yields the same code instead of burning the
-     * next one. A real venue issues these from a sequence and can reassign a
-     * released seat; that is a gap, and it is noted rather than hidden behind
-     * something that looks like a sequence.
+     * <p>席位号是从 id 推导出来的，而不是靠自增计数，所以对同一家企业重复通过审核
+     * 得到的还是同一个号，而不会白白消耗掉下一个号。真实的市场会从序列里发放席位，
+     * 并且能把已释放的席位重新分配出去；那是一个缺口，这里把它记下来，而不是用某种
+     * 看起来像序列的东西把它遮住。
      */
     @Transactional
     public AdminViews.EnterpriseRow approve(Long id, String traderCode) {
@@ -67,9 +64,9 @@ public class AdminEnterpriseService {
         enterprise.setStatus(Enterprise.Status.APPROVED);
         enterprise.setApprovedAt(OffsetDateTime.now());
         enterprise.setApprovedBy(SecurityUtils.currentUserId());
-        // Cleared, so an enterprise that was once rejected and is now approved
-        // does not carry the old reason into its record. updateById ignores
-        // nulls unless the field opts in, which Enterprise.rejectReason does.
+        // 这里要清空，这样一家曾被驳回、如今又通过审核的企业，就不会把当年那条
+        // 理由一直带在记录里。updateById 默认会忽略 null 字段，除非该字段主动声明
+        // 要参与更新，而 Enterprise.rejectReason 正是这样声明的。
         enterprise.setRejectReason(null);
         if (enterprise.getTraderCode() == null || enterprise.getTraderCode().isBlank()) {
             enterprise.setTraderCode(issueTraderCode(enterprise, traderCode));
@@ -85,8 +82,8 @@ public class AdminEnterpriseService {
     @Transactional
     public AdminViews.EnterpriseRow reject(Long id, String reason) {
         if (reason == null || reason.isBlank()) {
-            // The column exists and has never been written. Leaving it empty
-            // would show the applicant a rejection nobody can explain.
+            // 这一列存在，但从来没有被写入过。留空的话，就等于给申请方看一条没人
+            // 解释得清的驳回。
             throw BusinessException.of(ResultCode.ADMIN_REJECT_REASON_REQUIRED);
         }
         Enterprise enterprise = require(id);
@@ -149,7 +146,7 @@ public class AdminEnterpriseService {
         }
     }
 
-    /** Deterministic from the id, so re-approving does not issue a second seat. */
+    /** 由 id 确定性地推导，所以重复通过审核不会发第二个席位出去。 */
     private String issueTraderCode(Enterprise enterprise, String requested) {
         if (requested != null && !requested.isBlank()) {
             return requested.trim();
@@ -157,7 +154,7 @@ public class AdminEnterpriseService {
         return "T" + String.format("%06d", Math.floorMod(enterprise.getId(), 1_000_000));
     }
 
-    /** The audited state, small enough to read in a log and specific enough to matter. */
+    /** 参与审计的状态快照：小到能在日志里一眼读完，又具体到足以说明问题。 */
     private String state(Enterprise enterprise) {
         return "status=" + enterprise.getStatus()
                 + (enterprise.getTraderCode() == null ? "" : ", traderCode=" + enterprise.getTraderCode())

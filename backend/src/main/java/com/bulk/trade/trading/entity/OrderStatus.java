@@ -4,13 +4,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The order lifecycle, as an explicit transition table.
+ * 订单生命周期，以一张显式的状态迁移表表达。
  *
- * <p><b>Why a table and not if-statements.</b> When transitions live in the
- * service as scattered {@code if (status == ...)} checks, the set of legal moves
- * exists only in the author's head, and every new status is a chance to introduce
- * a path nobody intended. Here the legal moves are data: one place to read, one
- * place to test, and a transition that is not listed simply cannot happen.
+ * <p><b>为什么用表而不是 if 语句。</b>当迁移逻辑以零散的
+ * {@code if (status == ...)} 判断散落在 service 中时，合法动作的集合只存在
+ * 于作者脑中，每新增一个状态都有机会引入一条谁也不想要的路径。在这里，合法
+ * 动作就是数据：一处可读，一处可测，而一条没被列出的迁移就是无法发生。
  *
  * <pre>
  *   PENDING_CONFIRM ──→ CONFIRMED ──→ CONTRACTED ──→ DELIVERING ──→ COMPLETED
@@ -18,14 +17,13 @@ import java.util.Set;
  *         └─────────────────┴─────────────┴──→ CANCELLED
  * </pre>
  *
- * <p><b>{@code PENDING_CONFIRM} is entered only by a MANUAL listing</b> — one
- * whose terms say an acceptance must be answered by the lister. A listing that
- * is itself the offer ({@code AUTO}) goes straight to {@code CONFIRMED} at
- * acceptance, because there the contract is already formed and a "waiting for
- * confirmation" state would describe a question nobody is asking.
+ * <p><b>{@code PENDING_CONFIRM} 只由 MANUAL 挂牌进入</b>——即条款要求摘牌须
+ * 由挂牌方答复的挂牌。本身就构成要约的挂牌（{@code AUTO}）在摘牌时直接进入
+ * {@code CONFIRMED}，因为那里合同已然成立，而一个“等待确认”状态描述的会是
+ * 一个根本没人在问的问题。
  *
- * <p>Cancelling is allowed until delivery starts, because that is when goods
- * physically move. After that the remedy is not an order state change.
+ * <p>在交收开始前都允许取消，因为交收开始才是货物实际移动的时刻。此后，
+ * 救济手段就不再是订单状态变更了。
  */
 public final class OrderStatus {
 
@@ -37,9 +35,8 @@ public final class OrderStatus {
     public static final String CANCELLED = "CANCELLED";
 
     /**
-     * Legal moves. Immutable and total: every status appears as a key, terminal
-     * states map to an empty set, so a missing entry is a compile-time-visible
-     * omission rather than a silent "anything goes".
+     * 合法动作。不可变且完整：每个状态都作为键出现，终态映射到空集合，因此
+     * 一处遗漏的条目会是编译期可见的疏漏，而不是无声的“什么都可以”。
      */
     private static final Map<String, Set<String>> TRANSITIONS = Map.of(
             PENDING_CONFIRM, Set.of(CONFIRMED, CANCELLED),
@@ -67,32 +64,28 @@ public final class OrderStatus {
     }
 
     /**
-     * Legal moves for a particular caller.
+     * 针对特定调用方的合法动作。
      *
-     * <p><b>Three states are role-sensitive, and for one reason: a step that
-     * either party could take is a step nobody owns.</b>
+     * <p><b>有三个状态对角色敏感，原因只有一个：双方都能做的步骤就是没人
+     * 负责的步骤。</b>
      *
      * <ul>
-     *   <li>{@code PENDING_CONFIRM} — only the lister answers. Letting the
-     *       counterparty press confirm would let the party who proposed the
-     *       deal accept it on the other's behalf, which is the same as having
-     *       no confirmation step at all.</li>
-     *   <li>{@code CONTRACTED} — only the seller releases the goods. Delivery
-     *       starts when the goods move, and only their owner can move them.
-     *       The buyer pressing this would be the buyer announcing that someone
-     *       else has shipped.</li>
-     *   <li>{@code DELIVERING} — only the buyer receives. Completion means the
-     *       goods arrived and were accepted, which is a statement about what
-     *       the receiver got. The seller confirming their own delivery is a
-     *       party marking their own homework.</li>
+     *   <li>{@code PENDING_CONFIRM} ——只有挂牌方来答复。若允许对手方按下
+     *       确认，就等于让提出交易的一方替对方接受了这笔交易，这与根本没有
+     *       确认环节是一回事。</li>
+     *   <li>{@code CONTRACTED} ——只有卖方可以放货。交收始于货物移动，而只有
+     *       其所有者才能移动它。买方按下这个按钮，等于买方在宣布别人已经
+     *       发货。</li>
+     *   <li>{@code DELIVERING} ——只有买方可以收货。完成意味着货物送到并被
+     *       接受，这是关于收货方拿到了什么的陈述。卖方确认自己完成的交收，
+     *       就是当事人自己给自己批改作业。</li>
      * </ul>
      *
-     * <p>In every case the counterparty may still walk away while the order is
-     * cancellable — declining your own deal is not something anyone needs
-     * protecting from.
+     * <p>在以上每一种情况下，对手方只要订单仍可取消就仍可退出——否定自己
+     * 的交易，不是谁需要被保护免受其害的事。
      *
-     * @param callerIsLister published the listing this order accepted
-     * @param callerIsSeller is the party releasing the goods
+     * @param callerIsLister 发布了本订单所摘的那份挂牌
+     * @param callerIsSeller 是放货的一方
      */
     public static Set<String> allowedFrom(String status, boolean callerIsLister, boolean callerIsSeller) {
         if (PENDING_CONFIRM.equals(status) && !callerIsLister) {
@@ -102,9 +95,9 @@ public final class OrderStatus {
             return Set.of(CANCELLED);
         }
         if (DELIVERING.equals(status) && callerIsSeller) {
-            // Nothing to offer the seller here: the goods are out and the next
-            // move is the receiver's. An empty set is the honest answer, and
-            // the screen shows the wait rather than a button that would fail.
+            // 这里没有什么可以给卖方的：货已发出，下一步轮到收货方。空集合
+            // 就是诚实的答案，界面显示等待状态，而不是显示一个按下去会失败
+            // 的按钮。
             return Set.of();
         }
         return allowedFrom(status);
@@ -115,8 +108,8 @@ public final class OrderStatus {
             return "未知";
         }
         return switch (status) {
-            // Named for who owes the answer, not merely that one is owed: the
-            // reader's next move differs depending on which side they are.
+            // 命名依据是谁欠一个答复，而不仅仅是有答复待给出：读者的下一步
+            // 动作取决于他站在哪一方。
             case PENDING_CONFIRM -> "待挂牌方确认";
             case CONFIRMED -> "已确认";
             case CONTRACTED -> "已签约";

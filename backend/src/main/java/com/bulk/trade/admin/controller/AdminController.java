@@ -22,19 +22,17 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * The operator console.
+ * 运营控制台。
  *
- * <p><b>Every method names the authority it requires.</b> There is no
- * class-level rule and no "is an operator" check, because a role is a bag of
- * authorities and testing the bag would make its contents decorative. An
- * auditor holds the read codes and none of the write ones, so read-only is a
- * fact the server enforces rather than a promise about a role's name.
+ * <p><b>每个方法都点名声明自己所需的权限。</b>这里没有类级别的规则，也没有
+ * "是不是运营人员"这种检查，因为角色只是一堆权限的集合，而去检验这个集合本身
+ * 只会让集合里的内容沦为摆设。审计员持有读权限码、不持有任何写权限码，所以
+ * "只读"是服务端强制出来的事实，而不是对某个角色名称的承诺。
  *
- * <p>All of it sits under {@code /api/admin/}, which is the one prefix where an
- * enterprise id may come from a request parameter. That exception is bounded by
- * two tests rather than by this comment: one asserts every handler in this
- * package carries a {@code @PreAuthorize}, and one asserts no handler outside
- * it accepts an enterprise id at all.
+ * <p>这些接口全部位于 {@code /api/admin/} 之下，这里是唯一允许从请求参数中
+ * 取得企业 ID 的前缀。该例外由两个测试来约束，而不是靠这段注释：一个测试断言
+ * 本包中每个处理器都带有 {@code @PreAuthorize}，另一个断言本包之外的处理器
+ * 一律不接受企业 ID。
  */
 @Tag(name = "运营后台", description = "平台侧管理：概览、企业审核、订单查询、用户权限、审计日志")
 @RestController
@@ -48,7 +46,7 @@ public class AdminController {
     private final AdminUserService userService;
     private final AdminAuditService auditService;
 
-    // ---------------------------------------------------------------- overview
+    // ---------------------------------------------------------------- 概览
 
     @Operation(summary = "平台概览")
     @GetMapping("/overview")
@@ -57,7 +55,7 @@ public class AdminController {
         return ApiResponse.success(overviewService.load());
     }
 
-    // ---------------------------------------------------------------- enterprises
+    // ---------------------------------------------------------------- 企业
 
     @Operation(summary = "企业列表", description = "可按状态与关键词筛选")
     @GetMapping("/enterprises")
@@ -105,7 +103,7 @@ public class AdminController {
         return ApiResponse.success(enterpriseService.unfreeze(id));
     }
 
-    // ---------------------------------------------------------------- orders
+    // ---------------------------------------------------------------- 订单
 
     @Operation(summary = "订单查询",
             description = "跨全部企业的订单查询。enterpriseId 是全平台唯一允许从请求参数读取企业的地方，"
@@ -127,7 +125,7 @@ public class AdminController {
         return ApiResponse.success(orderService.orderParties());
     }
 
-    // ---------------------------------------------------------------- users
+    // ---------------------------------------------------------------- 用户
 
     @Operation(summary = "账号列表")
     @GetMapping("/users")
@@ -170,7 +168,7 @@ public class AdminController {
         return ApiResponse.success(userService.permissions());
     }
 
-    // ---------------------------------------------------------------- audit
+    // ---------------------------------------------------------------- 审计
 
     @Operation(summary = "审计日志", description = "写操作留痕，倒序；只记录写操作，不记录读取")
     @GetMapping("/audit-logs")
@@ -184,9 +182,9 @@ public class AdminController {
         return ApiResponse.success(auditService.search(module, action, username, success, limit));
     }
 
-    // ---------------------------------------------------------------- payloads
+    // ---------------------------------------------------------------- 请求体
 
-    /** Shared by approve, reject and freeze: each reads one field and ignores the rest. */
+    /** approve、reject 与 freeze 三处共用：各自只读取其中一个字段，其余一概忽略。 */
     public record ReviewRequest(String traderCode, String reason) {
     }
 

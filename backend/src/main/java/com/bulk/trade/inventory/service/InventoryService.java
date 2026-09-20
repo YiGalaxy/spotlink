@@ -38,13 +38,12 @@ public class InventoryService {
     private final ObjectMapper objectMapper;
 
     /**
-     * Registers goods and creates the note.
+     * 登记货物并创建库存单。
      *
-     * <p>Simplification: the note goes straight to {@code IN_STOCK}. A real
-     * platform has the designated warehouse confirm receipt before goods become
-     * tradable — the platform records what a warehouse tells it, it does not
-     * take the depositor's word. That confirmation step is where a
-     * {@code PENDING_REVIEW} state would sit; the enum already reserves it.
+     * <p>这是一处简化：库存单直接进入 {@code IN_STOCK}。真实平台会先由指定仓库确认
+     * 收货，货物才可交易——平台记录的是仓库告诉它的结果，而不是听信存货方的一面之词。
+     * 那个确认环节正是 {@code PENDING_REVIEW} 状态该待的位置；枚举里已经为它留好了
+     * 位置。
      */
     @Transactional
     public InventoryNote register(InventoryRegisterRequest request, Long enterpriseId) {
@@ -70,8 +69,8 @@ public class InventoryService {
 
         BigDecimal quantity = request.quantity();
         note.setTotalQuantity(quantity);
-        // Nothing is reserved yet, so available equals total and the database
-        // check constraint is satisfied from the first write.
+        // 此时还没有任何占用，所以可用量等于总量，数据库的 CHECK 约束从第一次写入
+        // 起就是满足的。
         note.setAvailableQuantity(quantity);
         note.setFrozenQuantity(BigDecimal.ZERO);
         note.setUnit(request.unit() == null || request.unit().isBlank()
@@ -103,15 +102,14 @@ public class InventoryService {
     }
 
     /**
-     * Corrects the descriptive fields of a note.
+     * 纠正库存单的描述性字段。
      *
-     * <p>Quantity, warehouse and unit are not editable — see
-     * {@link com.bulk.trade.inventory.dto.InventoryUpdateRequest} for why. What
-     * changes here is only what a clerk could have mistyped.
+     * <p>数量、仓库和单位不可编辑——原因见
+     * {@link com.bulk.trade.inventory.dto.InventoryUpdateRequest}。这里能改的，只有
+     * 文员可能打错的东西。
      *
-     * <p>Editing stays possible while goods are frozen: a wrong brand name does
-     * not affect how much is reserved, and blocking the correction would leave
-     * the error in place until the listing ended.
+     * <p>货物处于冻结状态时仍然允许编辑：品牌名写错并不影响被占用的数量，而禁止纠正
+     * 只会让这个错误一直留在那里，直到挂牌结束为止。
      */
     @Transactional
     public InventoryNote update(Long id, InventoryUpdateRequest request, Long enterpriseId) {
@@ -138,8 +136,7 @@ public class InventoryService {
         note.setSpec(writeSpec(request.spec()));
         note.setRemark(request.remark());
 
-        // Quantities are untouched, so the balance constraint cannot be
-        // affected; the optimistic lock still guards against a concurrent edit.
+        // 数量没有被触碰，所以那个平衡约束不可能受影响；乐观锁依然在防着并发编辑。
         if (inventoryNoteMapper.updateById(note) == 0) {
             throw BusinessException.of(ResultCode.CONFLICT, "该库存单正在被其他操作修改，请重试");
         }
@@ -148,10 +145,9 @@ public class InventoryService {
     }
 
     /**
-     * Cancels a note, but only when nothing is reserved against it.
+     * 注销一张库存单，但仅限它上面没有任何占用时。
      *
-     * <p>Cancelling with an active freeze would leave that freeze pointing at
-     * goods that no longer exist.
+     * <p>带着生效中的冻结去注销，会让那个冻结指向已经不存在的货物。
      */
     @Transactional
     public void cancel(Long id, Long enterpriseId) {
@@ -192,7 +188,7 @@ public class InventoryService {
         }
     }
 
-    /** Human-readable document number; the primary key stays a snowflake. */
+    /** 便于人读的单据编号；主键仍然是 Snowflake。 */
     private String nextNoteNo() {
         return "IN" + LocalDateTime.now().format(NO_FORMAT)
                 + String.format("%04d", ThreadLocalRandom.current().nextInt(10_000));

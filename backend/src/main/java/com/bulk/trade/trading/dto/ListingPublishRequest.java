@@ -10,24 +10,21 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 
 /**
- * Publishes a listing.
+ * 发布一份挂牌。
  *
- * <p>A SELL listing must name the inventory note it is backed by: publishing an
- * offer to sell goods you have not identified is not an offer, it is an
- * advertisement. The note's goods are frozen for as long as the listing is open.
+ * <p>SELL 挂牌必须指明它所依托的库存单：发布一个出售你尚未指明的货物的
+ * 要约，不是要约，而是广告。在挂牌存续期间，该库存单上的货物被冻结。
  *
- * <p>{@code confirmMode} decides what accepting the listing means, which makes
- * it the most consequential field here. {@code AUTO} (the default) makes the
- * listing an offer that closes on acceptance. {@code MANUAL} makes it an
- * invitation to treat that waits for the lister's answer, and is accepted for
- * SELL listings only.
+ * <p>{@code confirmMode} 决定摘牌意味着什么，这使它成为这里最要害的字段。
+ * {@code AUTO}（默认值）使该挂牌成为一份摘牌即成交的要约。{@code MANUAL}
+ * 使其成为一份等待挂牌方答复的要约邀请，且仅对 SELL 挂牌接受。
  */
 public record ListingPublishRequest(
 
         @NotBlank(message = "请指定挂牌方向")
         String side,
 
-        /** Required for SELL listings; ignored for BUY. */
+        /** SELL 挂牌必填；BUY 忽略。 */
         Long inventoryNoteId,
 
         @NotNull(message = "请选择品类")
@@ -47,24 +44,23 @@ public record ListingPublishRequest(
 
         @Size(max = 16) String unit,
 
-        /** Null when the price type is NEGOTIABLE. */
+        /** 价格类型为 NEGOTIABLE 时为 null。 */
         BigDecimal price,
 
-        /** FIXED or NEGOTIABLE. */
+        /** FIXED 或 NEGOTIABLE。 */
         String priceType,
 
         /**
-         * AUTO or MANUAL. Blank means AUTO.
+         * AUTO 或 MANUAL。留空表示 AUTO。
          *
-         * <p>Optional rather than required so that an existing client that
-         * knows nothing about confirmation keeps the behaviour it had, instead
-         * of silently acquiring a waiting step it has no UI for.
+         * <p>设为可选而非必填，是为了让一个完全不知道确认环节的既有客户端
+         * 保持它原有的行为，而不是悄悄多出一个它没有界面支撑的等待步骤。
          */
         String confirmMode,
 
         Long warehouseId,
 
-        /** SELF_PICKUP or DELIVERED. */
+        /** SELF_PICKUP 或 DELIVERED。 */
         String deliveryMethod,
 
         String paymentTerms,

@@ -31,13 +31,12 @@ export default function LoginPage() {
       const data = await loginApi(values.username, values.password)
       login(data)
       notifySuccess('登录成功')
-      // Back where a guard interrupted them, or the workbench. Not the
-      // homepage: someone who has just signed in came here to work, and the
-      // public page is one click away in the menu.
+      // 回到守卫当初打断他们的地方，或者工作台。不是首页：刚刚登录的人是
+      // 来这里干活的，而公开页面在菜单里只差一次点击。
       const from = (location.state as { from?: string } | null)?.from
       navigate(from ?? '/dashboard', { replace: true })
     } catch {
-      // The axios layer already surfaced the reason.
+      // axios 层已经把原因提示出来了。
     } finally {
       setLoading(false)
     }

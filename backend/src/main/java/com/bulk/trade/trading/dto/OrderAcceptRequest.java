@@ -7,12 +7,11 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
 /**
- * Accepting a listing (摘牌).
+ * 摘牌。
  *
- * <p>Quantity is the only real input: everything else — price, goods,
- * warehouse, delivery terms — comes from the listing being accepted. Letting a
- * buyer restate the terms would mean they are no longer accepting an offer but
- * proposing a different one.
+ * <p>数量是唯一真正的输入：其余一切——价格、货物、仓库、交收条款——都来自
+ * 被摘的那份挂牌。允许买方重述条款，就意味着他不再是在接受一份要约，而是在
+ * 提出另一份要约。
  */
 public record OrderAcceptRequest(
 

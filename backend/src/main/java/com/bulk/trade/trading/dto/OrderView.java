@@ -12,26 +12,24 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * An order as the client sees it.
+ * 客户端看到的订单。
  *
- * <p>{@code myRole} is resolved per caller so the UI can label the counterparty
- * correctly without guessing which side the viewer is on, and {@code
- * allowedActions} carries the transitions this caller may actually perform —
- * the same table the server enforces, so a button shown is a button that works.
+ * <p>{@code myRole} 按调用方逐个解析，这样界面无需猜测查看者站在哪一方就能
+ * 正确标注对手方；而 {@code allowedActions} 携带的是该调用方实际可执行的
+ * 迁移——与服务端强制执行的是同一张表，因此显示出来的按钮就是按下去管用的
+ * 按钮。
  *
- * <p>That second guarantee is why {@code callerIsLister} exists. Answering a
- * waiting acceptance is one named party's move alone, so an action list
- * computed without knowing who is looking would offer the other side a button
- * the server then rejects — worse than hiding it, because a button reads as a
- * promise.
+ * <p>这后一项保证正是 {@code callerIsLister} 存在的原因。答复一个等待中的
+ * 摘牌是某一个具名主体独有的动作，因此在不清楚查看者是谁的情况下算出的动作
+ * 列表，会给另一方一个随后被服务端拒绝的按钮——这比不显示更糟，因为按钮读
+ * 起来像一句承诺。
  *
- * <p><b>Nulls are written, not omitted.</b> The application-wide Jackson
- * setting drops null properties, which for a view DTO makes the response shape
- * depend on the data: a field that is null one moment and absent the next
- * forces every client to treat "missing" and "null" as the same thing, and they
- * are not — {@code confirmDeadline: null} means "no answer is awaited", while a
- * missing key means the client has no idea what the server said. The client
- * declares these fields as nullable, so the server should say so out loud.
+ * <p><b>null 值是写出，而不是省略。</b>应用级的 Jackson 配置会丢弃 null
+ * 属性，这对一个视图 DTO 而言会让响应形状取决于数据：一个此刻为 null、下一
+ * 刻就消失的字段，迫使每个客户端把“缺失”和“null”当成同一回事，而它们不是
+ * 一回事——{@code confirmDeadline: null} 的意思是“没有在等任何答复”，而键
+ * 的缺失意味着客户端根本不知道服务端说了什么。客户端把这些字段声明为可空，
+ * 那么服务端就应该明明白白地讲出来。
  */
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public record OrderView(
@@ -44,7 +42,7 @@ public record OrderView(
         @JsonSerialize(using = ToStringSerializer.class) Long sellerId,
         String sellerName,
 
-        /** BUYER or SELLER, from the caller's point of view. */
+        /** BUYER 或 SELLER，从调用方的视角看。 */
         String myRole,
         String counterpartyName,
 
@@ -65,22 +63,21 @@ public record OrderView(
         String statusText,
 
         /**
-         * Whose move it is, from this caller's side — "待我签署" against the same
-         * order's "等对方签署". Null once nothing is pending from anyone.
+         * 现在轮到谁，从该调用方的角度——同一笔订单对一方是“待我签署”，对
+         * 另一方是“等对方签署”。当没有任何待办时则为 null。
          */
         String statusHint,
-        /** True when the next move is the caller's. Drives sorting and colour. */
+        /** 当下一步轮到调用方时为 true。用于排序和配色。 */
         boolean statusHintMine,
         /**
-         * Label for the button that performs the next move, or null when it is
-         * not the caller's. Distinct from {@code statusHint}: that describes a
-         * situation, this performs an act.
+         * 执行下一步动作的按钮标签，当不轮到调用方时为 null。与
+         * {@code statusHint} 不同：那个描述一种处境，这个执行一个动作。
          */
         String nextAction,
 
         List<String> allowedActions,
 
-        /** When the lister's answer is due; null unless one is awaited. */
+        /** 挂牌方答复的截止时间；未在等待答复时为 null。 */
         OffsetDateTime confirmDeadline,
 
         OffsetDateTime confirmedAt,

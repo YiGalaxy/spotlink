@@ -24,11 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * Inventory notes (电子库存单).
+ * 电子库存单。
  *
- * <p>No endpoint takes an enterprise id. The owner always comes from the
- * authenticated principal, so a caller cannot read or act on another company's
- * goods by supplying a different id.
+ * <p>没有任何接口接收企业 ID。归属方永远取自已认证的主体身份，所以调用方无法通过
+ * 传入另一个 ID 来读取或操作别家公司的货物。
  */
 @Tag(name = "电子库存单", description = "入库、查询与注销")
 @RestController

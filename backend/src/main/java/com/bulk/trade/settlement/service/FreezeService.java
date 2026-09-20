@@ -17,18 +17,17 @@ import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Reserves and releases goods and money.
+ * 预留与释放货物和资金。
  *
- * <p>Both kinds of freeze follow the same path, which is why one service and
- * one table cover them. What differs is only the unit being reserved.
+ * <p>两种冻结走的是同一条路径，这正是由一个 service 和一张表覆盖它们的
+ * 原因。不同的只是被预留的单位。
  *
- * <p><b>Every quantity change is a compare-and-set.</b> The note is read, its
- * new figures computed, and the write issued as {@code UPDATE ... WHERE id = ?
- * AND version = ?} by way of the {@code @Version} field. If another request
- * changed the row in between, zero rows are affected and the caller is told to
- * retry rather than silently overwriting the other change. Without this, two
- * listings created at the same moment could each reserve the same goods and
- * both appear valid until settlement failed.
+ * <p><b>每一次数量变更都是一次比较并设置（compare-and-set）。</b>读出库存单，
+ * 算出新数字，然后依靠 {@code @Version} 字段把写入表达为
+ * {@code UPDATE ... WHERE id = ? AND version = ?}。如果期间有另一个请求改动了
+ * 该行，受影响行数为零，调用方会被告知重试，而不是无声地覆盖掉另一处改动。
+ * 没有这一层，两份在同一时刻创建的挂牌可能各自预留同一批货物，而且两者都会
+ * 看起来有效，直到结算失败为止。
  */
 @Slf4j
 @Service
@@ -42,23 +41,23 @@ public class FreezeService {
     private final FreezeRecordMapper freezeRecordMapper;
 
     /**
-     * Reads a live freeze without touching it.
+     * 读取一笔仍然有效的冻结，不做任何改动。
      *
-     * <p>Callers need it to find which note a listing's goods actually sit on:
-     * a freeze stores the note id, and a listing does not.
+     * <p>调用方需要它来找出某份挂牌的货物究竟落在哪张库存单上：冻结记录存有
+     * 库存单 id，而挂牌没有。
      */
     public FreezeRecord findFrozen(Long enterpriseId, Long freezeId) {
         return loadFrozen(enterpriseId, freezeId);
     }
 
     // ------------------------------------------------------------------
-    // Goods
+    // 货物
     // ------------------------------------------------------------------
 
     /**
-     * Reserves goods from an inventory note.
+     * 从一张库存单中预留货物。
      *
-     * @param quantity must be positive and no greater than the available amount
+     * @param quantity 必须为正，且不大于可用数量
      */
     @Transactional
     public FreezeRecord freezeInventory(Long enterpriseId,
@@ -105,10 +104,9 @@ public class FreezeService {
     }
 
     /**
-     * Returns reserved goods to the available pool.
+     * 把预留的货物退回可用池。
      *
-     * <p>Used when the thing a freeze was made for goes away — a listing is
-     * cancelled or expires, an order falls through.
+     * <p>用于一笔冻结所服务的对象消失了的时候——挂牌被取消或过期，订单落空。
      */
     @Transactional
     public void releaseInventory(Long enterpriseId, Long freezeId) {
@@ -127,10 +125,10 @@ public class FreezeService {
     }
 
     /**
-     * Spends reserved goods on the deal they were reserved for.
+     * 把预留的货物花在它们当初为之预留的那笔交易上。
      *
-     * <p>The goods leave the note entirely rather than returning to available —
-     * this is what distinguishes a completed sale from a cancelled listing.
+     * <p>货物彻底离开这张库存单，而不是退回可用——这正是已完成的销售与一纸
+     * 被撤销的挂牌之间的区别。
      */
     @Transactional
     public void consumeInventory(Long enterpriseId, Long freezeId) {
@@ -141,11 +139,11 @@ public class FreezeService {
             throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_FOUND);
         }
 
-        // Quantity leaves both pools: total drops by the consumed amount.
+        // 数量从两个池子里同时离开：总量按被消耗的数量下降。
         note.setTotalQuantity(note.getTotalQuantity().subtract(record.getQuantity()));
         applyQuantityChange(note, BigDecimal.ZERO, record.getQuantity().negate());
 
-        // A note with nothing left is delivered, not merely fully frozen.
+        // 一点都不剩的库存单是已交付，而不仅仅是被全部冻结。
         if (note.getTotalQuantity().signum() == 0) {
             note.setStatus(InventoryNote.Status.DELIVERED);
             if (inventoryNoteMapper.updateById(note) == 0) {
@@ -162,26 +160,23 @@ public class FreezeService {
     }
 
     /**
-     * Spends part of a freeze.
+     * 消耗一笔冻结的一部分。
      *
-     * <p>Needed because a listing reserves a whole batch while trades take it in
-     * parts: a seller lists 100 tonnes, a buyer takes 30, and 70 must stay
-     * reserved for the next buyer.
+     * <p>之所以需要它，是因为一份挂牌预留的是一整批货，而交易是分批摘走的：
+     * 卖方挂出 100 吨，一个买方摘走 30 吨，剩下的 70 吨必须继续为下一位买方
+     * 预留着。
      *
-     * <p><b>Implemented by closing the original record and opening a new one for
-     * the remainder</b>, rather than by editing the quantity in place. A freeze
-     * row is a statement that a specific amount was reserved at a specific
-     * moment; rewriting its amount would erase what was reserved when, which is
-     * exactly the question asked when two parties disagree later. Two rows cost
-     * nothing and keep the trail honest.
+     * <p><b>实现方式是关闭原记录、为剩余部分另开一条新记录</b>，而不是就地
+     * 改写数量。一条冻结记录是一个陈述：某个具体数量在某个具体时刻被预留了；
+     * 改写它的数量会抹掉“何时预留了多少”，而这恰恰是日后双方产生分歧时要问
+     * 的那个问题。多用一行不花什么代价，却能让这条轨迹保持诚实。
      *
-     * @param quantity must be positive and no greater than the frozen amount
-     * @return the id of the freeze now holding the remainder, or null when the
-     *         whole reservation was spent. <b>The caller must keep this.</b>
-     *         The original record is closed rather than rewritten, so a caller
-     *         that still points at it is pointing at a settled reservation —
-     *         which is how a partly-sold listing ended up unable to sell again
-     *         or to release what was left.
+     * @param quantity 必须为正，且不大于已冻结的数量
+     * @return 现在持有剩余部分的那条冻结记录的 id；若整笔预留都被消耗光则为
+     *         null。<b>调用方必须保存它。</b>原记录是被关闭而不是被改写，因此
+     *         仍然指向它的调用方，指向的是一笔已结清的预留——一份被部分售出
+     *         的挂牌，正是这样落到了既无法再次出售、也无法释放剩余货物的
+     *         境地。
      */
     @Transactional
     public Long consumeInventoryPartial(Long enterpriseId, Long freezeId, BigDecimal quantity) {
@@ -202,7 +197,7 @@ public class FreezeService {
             throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_FOUND);
         }
 
-        // The goods leave: total drops, frozen drops by the same amount.
+        // 货物离开：总量下降，冻结量下降同样的数额。
         note.setTotalQuantity(note.getTotalQuantity().subtract(quantity));
         applyQuantityChange(note, BigDecimal.ZERO, quantity.negate());
 
@@ -239,12 +234,11 @@ public class FreezeService {
     }
 
     /**
-     * Records which business object a freeze was made for.
+     * 记录一笔冻结是为哪个业务对象而做。
      *
-     * <p>Separate from creation because the two are not always known at the
-     * same moment: a listing is frozen before it is inserted, so its id does
-     * not exist yet. An explicit follow-up makes that ordering visible instead
-     * of leaving a null that looks like "this freeze belongs to nothing".
+     * <p>与创建分开，是因为这两件事并不总在同一时刻已知：挂牌在被插入之前
+     * 就被冻结了，所以它的 id 当时还不存在。一个显式的后续调用让这个先后次序
+     * 可见，而不是留下一个看起来像“这笔冻结不属于任何东西”的 null。
      */
     @Transactional
     public void attributeTo(Long freezeId, Long bizId) {
@@ -257,16 +251,15 @@ public class FreezeService {
     }
 
     // ------------------------------------------------------------------
-    // Internals
+    // 内部实现
     // ------------------------------------------------------------------
 
     /**
-     * Applies a quantity change under the optimistic lock.
+     * 在乐观锁之下施加一次数量变更。
      *
-     * <p>A zero-row result means the row changed since it was read, so the
-     * computed figures are stale. Retrying is the caller's decision — a human
-     * pressing a button can simply press it again, and inventing an automatic
-     * retry here would hide the contention instead of surfacing it.
+     * <p>返回零行意味着该行自读出之后已被改动，因此算出的数字已经过时。是否
+     * 重试由调用方决定——一个按下按钮的人再按一次就行了，而在这里发明一套
+     * 自动重试，只会掩盖竞争而不是把它暴露出来。
      */
     private void applyQuantityChange(InventoryNote note,
                                      BigDecimal availableDelta,
@@ -291,10 +284,10 @@ public class FreezeService {
     }
 
     /**
-     * Loads a note only if the caller's enterprise owns it.
+     * 仅在调用方企业拥有该库存单时才加载它。
      *
-     * <p>Reporting "not found" rather than "forbidden" avoids confirming that
-     * another company's note id exists.
+     * <p>报告“未找到”而不是“无权访问”，可以避免确认其他公司的库存单 id
+     * 确实存在。
      */
     private InventoryNote loadOwnedNote(Long enterpriseId, Long noteId) {
         InventoryNote note = inventoryNoteMapper.selectById(noteId);
@@ -333,8 +326,8 @@ public class FreezeService {
     }
 
     /**
-     * Business-facing document number. Snowflake ids are the primary key; this
-     * is what a person reads out over the phone.
+     * 面向业务的单据编号。Snowflake id 是主键；而这个编号是人会在电话里念
+     * 出来的那个。
      */
     private String nextNo(String prefix) {
         return prefix + LocalDateTime.now().format(NO_FORMAT)

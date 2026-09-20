@@ -19,8 +19,8 @@ export function createConversation(title?: string) {
   return api.post<ConversationDetail>('/advisor/conversations', { title })
 }
 
-// Ids stay strings end to end. Converting one to a number here would silently
-// change its value and every lookup would miss.
+// Id 从头到尾都保持字符串。在这里把某个 Id 转成数字会悄悄改变它的值，
+// 于是每一次查找都会落空。
 export function getConversation(id: EntityId) {
   return api.get<ConversationDetail>(`/advisor/conversations/${id}`)
 }

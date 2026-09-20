@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/auth'
 import { notifyError } from '@/utils/notify'
 import type { ApiResponse } from '@/types/api'
 
-/** Thrown when the backend answers with a non-zero business code. */
+/** 后端返回非零业务码时抛出。 */
 export class ApiError extends Error {
   constructor(
     public readonly code: number,
@@ -16,8 +16,7 @@ export class ApiError extends Error {
 
 const instance = axios.create({
   baseURL: '/api',
-  // Advisor replies run a multi-turn tool loop upstream, so they can take far
-  // longer than a normal CRUD call.
+  // 顾问回复在上游要跑一个多轮工具循环，所以耗时可能远超过普通的 CRUD 调用。
   timeout: 180_000,
 })
 
@@ -35,9 +34,8 @@ instance.interceptors.response.use(
     const status = error.response?.status
 
     if (status === 401) {
-      // A 401 only happens when a token was present and rejected, so clearing
-      // the session here is safe — a failed login returns HTTP 200 with a
-      // business code instead.
+      // 只有 token 存在且被拒绝时才会出现 401，所以在这里清理会话是安全的
+      // ——登录失败返回的是 HTTP 200 加一个业务码，而不是 401。
       useAuthStore.getState().clear()
       if (!window.location.pathname.startsWith('/login')) {
         notifyError('登录已过期，请重新登录')
@@ -54,9 +52,9 @@ instance.interceptors.response.use(
 )
 
 /**
- * Unwraps the response envelope and turns a business failure into a rejection.
+ * 拆开响应信封，并把业务失败转成 rejection。
  *
- * <p>Doing this once here is why no page has to inspect `code` itself.
+ * <p>正因为在这里统一做了一次，才没有任何一个页面需要自己去检查 `code`。
  */
 async function request<T>(config: AxiosRequestConfig): Promise<T> {
   const response = await instance.request<ApiResponse<T>>(config)

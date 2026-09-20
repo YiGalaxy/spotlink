@@ -6,12 +6,11 @@ import org.apache.ibatis.annotations.Select;
 import java.math.BigDecimal;
 
 /**
- * The console's headline counts.
+ * 运营后台的头部统计数字。
  *
- * <p>SQL rather than entity reads, for the same reason as the public stats: a
- * count over a table is not a reason to load the table. One statement per figure
- * keeps each legible; six small aggregates over indexed columns are cheaper than
- * the joins it would take to return them as one row.
+ * <p>用 SQL 而不是读实体，理由与公开统计接口相同：要对一张表做计数，并不构成把
+ * 整张表加载出来的理由。每个数字一条语句是为了让每条都清晰可读；六个走索引列的
+ * 小聚合，比为了凑成一行返回而不得不写的那些 join 更便宜。
  */
 @Mapper
 public interface AdminStatsMapper {
@@ -32,12 +31,11 @@ public interface AdminStatsMapper {
     long orderCount();
 
     /**
-     * Orders still in flight.
+     * 仍在流转中的订单。
      *
-     * <p>Cancelled is finished, and so is completed; everything else is a deal
-     * somebody still has to move. This is the number an operator watches,
-     * because a rising one means the market is working and a stuck one means
-     * something is not.
+     * <p>已取消算结束，已完成也算结束；其余的都还是一笔有人要去推动的交易。这个
+     * 数字是运营人员会盯着的那个，因为它往上走说明市场在运转，而卡住不动则说明
+     * 有地方出了问题。
      */
     @Select("""
             SELECT COUNT(*) FROM t_order

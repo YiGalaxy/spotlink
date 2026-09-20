@@ -12,8 +12,8 @@ import {
 import { CanvasRenderer } from 'echarts/renderers'
 import type { EChartsCoreOption } from 'echarts/core'
 
-// Registered individually rather than importing all of echarts. The full
-// bundle is around a megabyte; these are the only pieces any chart here uses.
+// 逐个注册，而不是整包引入 echarts。完整包大约有一兆字节；而这里是本项目中
+// 任何图表用到的全部组件。
 echarts.use([
   LineChart,
   BarChart,
@@ -34,12 +34,11 @@ interface Props {
 }
 
 /**
- * A thin wrapper around ECharts.
+ * ECharts 的一层薄封装。
  *
- * <p>The chart instance is created once and updated through `setOption`. It is
- * deliberately not recreated when the option changes: recreating would drop
- * zoom state and replay the entry animation on every data refresh, which on a
- * live feed means the chart never settles.
+ * <p>图表实例只创建一次，之后通过 `setOption` 更新。option 变化时刻意不重建
+ * 实例：重建会丢掉缩放状态，并在每次数据刷新时重放入场动画，而在实时数据流上
+ * 这意味着图表永远静不下来。
  */
 export default function EChart({ option, height = 320, loading }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -52,8 +51,8 @@ export default function EChart({ option, height = 320, loading }: Props) {
     const chart = echarts.init(containerRef.current)
     chartRef.current = chart
 
-    // Resize with the container, not with the data: a sidebar collapsing
-    // changes the width without changing anything the data depends on.
+    // 跟随容器变化调整尺寸，而不是跟随数据：侧边栏收起会改变宽度，
+    // 却不改变数据所依赖的任何东西。
     const observer = new ResizeObserver(() => chart.resize())
     observer.observe(containerRef.current)
 
@@ -66,8 +65,8 @@ export default function EChart({ option, height = 320, loading }: Props) {
 
   useEffect(() => {
     if (chartRef.current) {
-      // `true` replaces the option rather than merging: a shorter series
-      // merged into a longer one leaves stale points behind.
+      // 传 `true` 是替换整个 option 而非合并：把较短的 series 合并进较长的
+      // 那个，会留下过期的数据点。
       chartRef.current.setOption(option, true)
     }
   }, [option])

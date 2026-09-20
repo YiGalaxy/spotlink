@@ -18,17 +18,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * What the caller has to act on, and a stream that says when that changes.
+ * 调用方需要处理的事项，以及一条在该事项变化时发出通知的推送流。
  *
- * <p>The list and the stream are two halves of one feature. The list answers
- * "what is pending"; without the stream the answer is only true as of the last
- * time the user thought to reload — which is exactly the complaint that led
- * here. A seller who has to refresh to discover a buyer accepted is a seller
- * who finds out too late.
+ * <p>列表和推送流是同一个功能的两半。列表回答“有什么待办”；没有推送流，这个
+ * 答案只在用户上次想起来刷新时的那一刻成立——而正是这种抱怨把设计引到了
+ * 这里。一个必须靠刷新才能发现买方已经摘牌的卖方，就是一个知道得太晚的
+ * 卖方。
  *
- * <p>The same aggregation is reachable through the AI advisor, and that is
- * deliberate: the screen and the assistant must not disagree about what is
- * pending. Both call {@code TaskService}.
+ * <p>同一套汇总结果也能通过 AI 顾问拿到，这是有意为之：界面和助手对“有何
+ * 待办”的说法不能不一致。两者都调用 {@code TaskService}。
  */
 @Tag(name = "待办", description = "当前需要本企业处理的事项，及变更推送")
 @RestController
@@ -50,10 +48,8 @@ public class TaskController {
             description = "服务器单向推送。事件只说明「你的待办变了」，不带内容——客户端收到后重新拉取列表。")
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream() {
-        // The tenant comes from the token, so a connection can only ever
-        // receive its own enterprise's events. There is no parameter here to
-        // misuse, which is why this endpoint needs no permission beyond being
-        // signed in.
+        // 租户来自令牌，因此一条连接只可能收到本企业自己的事件。这里没有任何
+        // 可供误用的参数，这正是该端点除登录之外无需额外权限的原因。
         return taskBroadcaster.register(SecurityUtils.currentEnterpriseIdOrNull());
     }
 

@@ -20,19 +20,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Tools that expose orders.
+ * 暴露订单的工具。
  *
- * <p>Written because the advisor could not answer "我有多少订单" at all — orders
- * were the one first-class object of the platform with no tool behind them, and
- * a question that should have taken one call became an explanation of what the
- * advisor could not do. The gap was not in the model's reasoning; it was in
- * what it had to reason with.
+ * <p>写它的原因：顾问此前完全回答不了「我有多少订单」—— 订单是平台上唯一一个背后没有工具的
+ * 一等对象，一个本该一次调用就能回答的问题，变成了对顾问做不到什么的一番解释。缺口不在模型的
+ * 推理能力上，而在它可用于推理的素材上。
  *
- * <p><b>{@code list_my_orders} returns a tally before a list.</b> The common
- * question is "how many", and answering it from twenty rows means the model
- * counts — which it may do wrongly, and which costs a paragraph to show. The
- * counts are computed in SQL-grouped form here and stated plainly, with the
- * rows as supporting detail.
+ * <p><b>{@code list_my_orders} 先给统计再给列表。</b>最常见的问题是「有多少」，而从二十行
+ * 数据里回答它意味着让模型自己去数 —— 它可能数错，而且还要用一整段文字来展示数数的过程。
+ * 这里把计数用 SQL 分组算好并直接明说，行数据只作为佐证细节。
  */
 @Component
 @RequiredArgsConstructor
@@ -40,7 +36,7 @@ public class OrderAdvisorTools {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    /** Enough rows to be useful, few enough that the answer stays an answer. */
+    /** 行数多到足够有用，又少到能让回答仍然是一个回答。 */
     private static final int MAX_ROWS = 20;
 
     private final OrderService orderService;
@@ -117,18 +113,16 @@ public class OrderAdvisorTools {
             return "请提供订单号。可以先用 list_my_orders 查看你有哪些订单。";
         }
 
-        // Scoped by the listing's own query rather than by a lookup on the
-        // number: an order the caller is not party to must read as absent, and
-        // OrderService.listMine is already the tenant filter everything else
-        // goes through.
+        // 用列表查询本身来限定范围，而不是按单号单独查：调用方不是当事人的订单必须表现为
+        // 不存在，而 OrderService.listMine 本来就是其他所有逻辑都会经过的租户过滤。
         String wanted = orderNo.trim();
         Order found = orderService.listMine(enterpriseId, null).stream()
                 .filter(o -> wanted.equals(o.getOrderNo()))
                 .findFirst()
                 .orElse(null);
         if (found == null) {
-            // One message for "no such order" and "not yours", so a caller
-            // cannot probe for another company's order numbers.
+            // 「没有这个订单」和「不是你的订单」共用同一条消息，这样调用方就无法探测
+            // 其他公司的订单号。
             return "没有找到该编号的订单，或你不是该订单的当事人。";
         }
 
@@ -169,15 +163,14 @@ public class OrderAdvisorTools {
     }
 
     // ------------------------------------------------------------------
-    // Internals
+    // 内部实现
     // ------------------------------------------------------------------
 
     /**
-     * Counts per status, in lifecycle order rather than by size.
+     * 按状态计数，顺序依生命周期而定，而不是按数量多少排。
      *
-     * <p>Ordering by the lifecycle means the same answer reads the same way
-     * every time, and a status that is unexpectedly absent shows up as a
-     * missing line rather than being invisible.
+     * <p>按生命周期排序意味着同一个答案每次读起来都一样，而某个意外缺席的状态会表现为
+     * 少了一行，而不是完全看不见。
      */
     private Map<String, Integer> tally(List<Order> orders) {
         Map<String, Integer> counts = new LinkedHashMap<>();
@@ -207,11 +200,10 @@ public class OrderAdvisorTools {
     }
 
     /**
-     * Maps a status the model may have written either way.
+     * 归一化模型可能用两种写法中任一种给出的状态。
      *
-     * @return the code, or null when nothing was asked for; the caller
-     *         distinguishes "absent" from "unrecognised" and reports the
-     *         difference rather than silently returning everything.
+     * @return 状态码；没有要求过滤时返回 null；调用方区分「未指定」与「无法识别」，
+     *         并把这一差别如实报告出来，而不是悄悄返回全部数据。
      */
     private String normaliseStatus(String raw) {
         if (raw == null || raw.isBlank()) {

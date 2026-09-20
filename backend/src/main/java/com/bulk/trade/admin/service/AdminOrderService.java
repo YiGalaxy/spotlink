@@ -20,24 +20,20 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Orders across every tenant.
+ * 横跨全部租户的订单。
  *
- * <p><b>This is the one place in the platform where an enterprise id may come
- * from a request parameter.</b> Everywhere else it is read from the caller's
- * session and there is no way to express another company's data; here an
- * operator has to be able to ask about a specific one, because "why was this
- * enterprise's deal cancelled" is a question support cannot answer otherwise.
+ * <p><b>这是整个平台里唯一允许企业 ID 来自请求参数的地方。</b>其余各处企业 ID 都
+ * 从调用方的会话中读取，根本表达不出别家公司的数据；而在这里，运营人员必须能够
+ * 针对某一家企业发问，因为"这家企业的单子为什么被取消了"是客服不这么做就答不上来
+ * 的问题。
  *
- * <p>The exception is safe for exactly one reason and it is worth stating: the
- * endpoint is gated by {@code admin:order}, and the absence of the exception
- * everywhere else is asserted by a test rather than promised by a comment. An
- * exception nobody has bounded is not an exception, it is a hole.
+ * <p>这个例外之所以安全，原因只有一个，而且值得讲明：该接口由 {@code admin:order}
+ * 把关，而其他所有地方都不存在这个例外，这一点是由测试断言的，不是靠注释承诺的。
+ * 一个没人划定边界的例外不叫例外，那叫漏洞。
  *
- * <p>Reading without a filter returns the whole platform. That is deliberate —
- * the console's order screen opens on everything — and it means the permission
- * gate is the only thing between an ordinary account and every trade on the
- * venue. Which is why it is a permission of its own rather than folded into the
- * overview.
+ * <p>不带筛选条件读取会返回整个平台的数据。这是有意为之——运营后台的订单页默认就
+ * 展示全部——这也意味着权限关卡是普通账号与平台上每一笔交易之间的唯一屏障。正因
+ * 如此，它是一个独立的权限，而不是并进概览权限里。
  */
 @Service
 @RequiredArgsConstructor
@@ -48,8 +44,8 @@ public class AdminOrderService {
     private final WarehouseMapper warehouseMapper;
 
     /**
-     * @param enterpriseId when present, limits the result to orders that party
-     *                     is on either side of. Absent means the whole platform.
+     * @param enterpriseId 传入时，把结果限定为该企业作为买方或卖方参与的订单；
+     *                     不传则代表整个平台。
      */
     public List<AdminViews.OrderRow> search(Long enterpriseId, String status,
                                             String orderNo, int limit) {
@@ -105,7 +101,7 @@ public class AdminOrderService {
                 .toList();
     }
 
-    /** Every enterprise that appears on an order, for the filter dropdown. */
+    /** 每一家在订单中出现过的企业，供筛选下拉框使用。 */
     public List<AdminViews.EnterpriseRow> orderParties() {
         Set<Long> ids = new HashSet<>();
         orderMapper.selectList(Wrappers.<Order>lambdaQuery()
@@ -129,7 +125,7 @@ public class AdminOrderService {
         return rows.stream().collect(Collectors.toMap(id, name, (a, b) -> a));
     }
 
-    /** A page, not an export. Bounded so a console request cannot pull the table. */
+    /** 是一个页面，不是一次导出。加上上限，避免一个运营后台的请求把整张表拉走。 */
     private int clamp(int limit) {
         return Math.min(Math.max(limit, 1), 200);
     }

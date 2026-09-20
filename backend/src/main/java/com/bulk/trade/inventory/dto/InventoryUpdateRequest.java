@@ -7,17 +7,14 @@ import jakarta.validation.constraints.Size;
 import java.util.Map;
 
 /**
- * Edits the <em>description</em> of an inventory note.
+ * 修改库存单的<em>描述信息</em>。
  *
- * <p><b>Quantity, warehouse and unit are deliberately absent.</b> Those are
- * physical facts about goods sitting in a named place, not attributes of a
- * record. Changing the quantity does not change how much copper is in the shed
- * — it only makes the platform disagree with reality. Goods moving in or out is
- * an inbound or outbound movement, and goods moving between warehouses is a
- * transfer; both are events with their own records, not an edit to a form.
+ * <p><b>数量、仓库和单位刻意不在这里。</b>它们是关于货物实际停放在某个指定地点的
+ * 物理事实，而不是某条记录的属性。改数量并不会改变棚里到底有多少铜——它只会让平台
+ * 和现实不一致。货物进出是入库或出库作业，货物在仓库之间移动是移库；两者都是带自己
+ * 记录的事件，而不是对表单的一次编辑。
  *
- * <p>What can be corrected here is everything a clerk might have mistyped:
- * the commodity name, brand, origin, specification and remark.
+ * <p>这里能纠正的，是文员可能打错的一切：商品名称、品牌、产地、规格和备注。
  */
 public record InventoryUpdateRequest(
 

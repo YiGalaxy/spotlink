@@ -2,11 +2,10 @@ import { api } from './client'
 import type { PublicStats } from '@/types/api'
 
 /**
- * Platform-wide figures, readable without signing in.
+ * 平台整体数据，无需登录即可读取。
  *
- * <p>Everything on this endpoint describes the venue as a whole. Nothing
- * scoped to one enterprise belongs here — a visitor has no enterprise, so
- * there would be nothing to scope it by.
+ * <p>这个接口上的所有内容描述的都是整个交易场所。任何属于某一家企业的东西
+ * 都不该放进来——访客没有企业，也就没有任何可以据以限定范围的主体。
  */
 export function fetchPublicStats() {
   return api.get<PublicStats>('/public/stats')

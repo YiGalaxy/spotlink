@@ -7,15 +7,13 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * Market data shapes.
+ * 行情数据的结构。
  *
- * <p><b>Note what is absent: there is no OHLC bar here.</b> On a futures feed
- * every minute produces a bar, so candles are dense and meaningful. On a spot
- * platform trades are sparse — a quiet grade may see two a day — and drawing
- * candles produces a chart that is almost entirely empty grid with a few
- * isolated sticks. What the data actually supports is an average-price line
- * with individual trades plotted as points, so the sample size behind the line
- * is visible instead of implied.
+ * <p><b>注意这里没有什么：没有 OHLC K 线。</b>在期货行情里，每一分钟都会产生一根
+ * K 线，所以蜡烛图密集且有意义。而在现货平台上成交是稀疏的——一个冷清的品种一天可能
+ * 只成交两笔——画出来的蜡烛图几乎全是空白网格，只有几根孤零零的柱子。数据真正支持的
+ * 是一条均价折线，加上以散点形式画出的逐笔成交，这样折线背后的样本量就看得见，而不是
+ * 只能靠猜。
  */
 public final class MarketDtos {
 

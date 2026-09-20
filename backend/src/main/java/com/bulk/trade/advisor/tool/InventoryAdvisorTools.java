@@ -21,20 +21,18 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Advisor tools over inventory.
+ * 面向库存的顾问工具。
  *
- * <p>Split from {@code AdvisorTools} by subject rather than lumped into one
- * class: each tool's description occupies space in every request, and a class
- * that grows without bound eventually makes the tool list itself a cost.
+ * <p>按主题从 {@code AdvisorTools} 里拆出来，而不是全堆在一个类里：每个工具的 description
+ * 都会占用每一次请求的空间，而一个无上限膨胀的类最终会让工具清单本身变成一项成本。
  *
- * <p>The tenant rule is the same here as everywhere: no tool takes an
- * enterprise id, and the owner is read from the security context.
+ * <p>租户规则这里和其他地方一样：没有工具接收企业 id，所有者一律从安全上下文读取。
  */
 @Component
 @RequiredArgsConstructor
 public class InventoryAdvisorTools {
 
-    /** Tool results are re-sent as input tokens; keep them small. */
+    /** 工具结果会作为输入 token 再次发送；要控制体积。 */
     private static final int MAX_ROWS = 30;
 
     private final InventoryNoteMapper inventoryNoteMapper;
@@ -180,7 +178,7 @@ public class InventoryAdvisorTools {
         };
     }
 
-    /** Drops the trailing zeros BigDecimal keeps, e.g. 100.000 -> 100. */
+    /** 去掉 BigDecimal 保留下来的末尾零，例如 100.000 -> 100。 */
     private String plain(BigDecimal value) {
         return value == null ? "—" : value.stripTrailingZeros().toPlainString();
     }

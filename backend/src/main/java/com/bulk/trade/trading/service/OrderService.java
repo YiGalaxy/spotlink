@@ -32,22 +32,18 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Accepting listings and moving orders through their lifecycle.
+ * 摘牌，以及推动订单走完其生命周期。
  *
- * <p><b>What acceptance does depends on the listing, and this class is where
- * the two conventions meet.</b> Under {@link Listing.ConfirmMode#AUTO} the
- * listing is an offer and acceptance is the contract: everything a trade needs
- * — reserving the goods, moving title, recording the order — happens in one
- * database transaction, because a half-completed acceptance would be the worst
- * possible state, goods that left one party without arriving at the other.
- * Under {@link Listing.ConfirmMode#MANUAL} acceptance only reserves: goods stay
- * put until the lister answers, and the transaction that moves them is the
- * answer, not the acceptance.
+ * <p><b>摘牌做什么取决于挂牌，而本类正是两种惯例交汇之处。</b>在
+ * {@link Listing.ConfirmMode#AUTO} 下，挂牌就是要约，摘牌就是合同：一笔交易
+ * 所需的一切——预留货物、转移所有权、记录订单——都在同一个数据库事务里完成，
+ * 因为一个半途而废的摘牌会是最糟的状态：货物离开了一方却没有到达另一方。
+ * 在 {@link Listing.ConfirmMode#MANUAL} 下，摘牌只是预留：货物原地不动，直到
+ * 挂牌方答复；而真正移动货物的事务是那次答复，不是摘牌。
  *
- * <p>Both paths exist because both are real market conventions, and a platform
- * that quietly picks one and calls it "the rules" cannot explain itself when a
- * party says they never agreed. The mode is set when the listing is published,
- * where the party it protects can see it.
+ * <p>两条路径都存在，因为两者都是真实的市场惯例；而一个悄悄选了其中一条并
+ * 称之为“规则”的平台，在有人站出来说自己从未同意时，是解释不清的。模式在
+ * 挂牌发布时设定，就在它所保护的那一方看得见的地方。
  */
 @Slf4j
 @Service
@@ -66,20 +62,18 @@ public class OrderService {
     private final TradingProperties properties;
 
     // ------------------------------------------------------------------
-    // Acceptance
+    // 摘牌
     // ------------------------------------------------------------------
 
     /**
-     * Accepts a listing, producing an order.
+     * 摘牌，产生一笔订单。
      *
-     * <p><b>Simplification worth naming:</b> under AUTO, title moves here at
-     * acceptance rather than at contract signature. The buyer immediately
-     * receives an inventory note of their own for the accepted quantity, and
-     * the seller's note is reduced. On a real platform title would pass when
-     * the contract takes effect, with acceptance merely reserving. Doing it
-     * here keeps the goods in exactly one place at every moment — which is the
-     * property that makes the rest of the flow checkable — at the cost of a gap
-     * between "accepted" and "contracted" that a real deployment would close.
+     * <p><b>一处值得点明的简化：</b>在 AUTO 下，所有权在摘牌时就在这里转移，
+     * 而不是在合同签署时。买方立即获得一张属于自己的、数量为其所摘数量的库存
+     * 单，卖方的库存单则相应减少。在真实平台上，所有权应当在合同生效时转移，
+     * 摘牌只是预留。在这里这么做，是为了让货物在每一个时刻都恰好待在一个地方
+     * ——正是这一性质让流程的其余部分可被检验——代价是在“已摘牌”与“已签约”
+     * 之间留出一段真实部署会补上的间隙。
      */
     @Transactional
     public Order accept(Long listingId, OrderAcceptRequest request, LoginUser user) {
@@ -120,8 +114,8 @@ public class OrderService {
         Long sellerId = Listing.Side.SELL.equals(listing.getSide())
                 ? listing.getEnterpriseId() : enterpriseId;
 
-        // The one place the two conventions diverge, decided once. Everything
-        // after this point is identical for both.
+        // 两种惯例唯一分道扬镳的地方，只在此处判定一次。此后的每一步对两者
+        // 完全相同。
         boolean awaitsLister = listing.awaitsListerConfirm();
         Long goodsFreezeId = awaitsLister
                 ? null
@@ -138,7 +132,7 @@ public class OrderService {
         order.setQuantity(quantity);
         order.setUnit(listing.getUnit());
         order.setPrice(price);
-        // Stored, not derived: this is the figure the two parties agreed to.
+        // 存储而非推导：这是双方约定下来的那个数额。
         order.setAmount(price.multiply(quantity));
         order.setWarehouseId(listing.getWarehouseId());
         order.setDeliveryMethod(listing.getDeliveryMethod());
@@ -158,15 +152,14 @@ public class OrderService {
 
         reduceListing(listing, quantity);
 
-        // Announced only once a trade actually exists. An unanswered acceptance
-        // is a question, not a price, and putting it on the market chart would
-        // print a number for a deal that may never happen.
+        // 只有交易真正存在之后才对外公布。一笔未获答复的摘牌是一个问题，
+        // 不是一个价格；把它画到行情图上，就是为一个可能永远不会发生的交易
+        // 印出一个数字。
         if (!awaitsLister) {
             publishTraded(order);
         }
-        // Either way somebody's list changed: under MANUAL the lister gained a
-        // question to answer, and under AUTO the buyer gained a contract to
-        // draft.
+        // 无论哪种情形，某一方的列表都变了：MANUAL 下挂牌方多了一个要答复的
+        // 问题，AUTO 下买方多了一份要起草的合同。
         publishTaskChange(awaitsLister ? "摘牌待确认" : "摘牌成交", order);
 
         log.info("Order {} created: {} {} of {} at {} (buyer={}, seller={}, {})",
@@ -177,20 +170,17 @@ public class OrderService {
     }
 
     // ------------------------------------------------------------------
-    // Lifecycle
+    // 生命周期
     // ------------------------------------------------------------------
 
     /**
-     * The lister agrees to an acceptance that was waiting for them.
+     * 挂牌方同意一笔等待他答复的摘牌。
      *
-     * <p><b>Only the lister.</b> The counterparty already said yes by
-     * accepting; letting them also say it on the lister's behalf would turn the
-     * confirmation step into decoration and put goods on the market that their
-     * owner never agreed to sell.
+     * <p><b>只有挂牌方可以。</b>对手方通过摘牌已经说了同意；若再允许他代替
+     * 挂牌方表态，确认环节就沦为摆设，而所有者从未同意出售的货物会流入市场。
      *
-     * <p>This is where the goods move under MANUAL, which is the whole reason
-     * the state exists: an acceptance that has not been answered has not bought
-     * anything yet.
+     * <p>MANUAL 下货物正是在这里移动的，而这正是该状态存在的全部理由：一笔
+     * 未获答复的摘牌，什么都还没有买下。
      */
     @Transactional
     public Order confirm(Long orderId, LoginUser user) {
@@ -199,12 +189,11 @@ public class OrderService {
 
         transition(order, OrderStatus.CONFIRMED, user, "挂牌方确认成交");
 
-        // The acceptance reserved the goods; answering it is what moves them.
+        // 摘牌预留了货物；答复它才是移动货物的动作。
         order.setGoodsFreezeId(transferGoods(
                 listing, order.getQuantity(), order.getBuyerId(), order.getSellerId()));
-        // Written here rather than left to the caller: the reservation the
-        // listing points at may have just moved to a new row, and unlike the
-        // accept path there is no later step that would persist it.
+        // 在这里写入，而不是留给调用方：挂牌所指向的那笔预留可能刚刚转移到
+        // 了新的一行，而与摘牌路径不同，这里没有后续步骤会把它持久化。
         persistListingReservation(listing);
         order.setConfirmedAt(OffsetDateTime.now());
         order.setConfirmDeadline(null);
@@ -218,13 +207,12 @@ public class OrderService {
     }
 
     /**
-     * The lister declines an acceptance.
+     * 挂牌方拒绝一笔摘牌。
      *
-     * <p>A separate act from cancellation, not a flag on it. Refusing happens
-     * before anything has moved — no goods, no money, no contract — while
-     * cancelling unwinds a deal that already exists. They read the same in a
-     * status column and mean different things to the parties, which is exactly
-     * the kind of difference an audit trail exists to preserve.
+     * <p>这是与取消各自独立的一个动作，而不是取消上的一个标志位。拒绝发生在
+     * 任何东西移动之前——没有货物、没有资金、没有合同——而取消则是拆解一笔
+     * 已经存在的交易。两者在一个状态列里读起来一样，对当事方却含义不同，而
+     * 这正是审计轨迹之所以存在要保住的那类差别。
      */
     @Transactional
     public Order reject(Long orderId, String reason, LoginUser user) {
@@ -250,11 +238,10 @@ public class OrderService {
     }
 
     /**
-     * Cancels an order and puts everything back.
+     * 取消一笔订单，并把一切放回原处。
      *
-     * <p>Goods return to the seller's listing if it is still open, otherwise to
-     * the seller's available pool. Either way nothing is left reserved for a
-     * deal that no longer exists.
+     * <p>若卖方的挂牌仍然开放，货物退回该挂牌；否则退回卖方的可用库存池。
+     * 无论哪种情形，都不会有任何东西继续为一笔已不存在的交易被预留。
      */
     @Transactional
     public Order cancel(Long orderId, String reason, LoginUser user) {
@@ -280,14 +267,13 @@ public class OrderService {
     }
 
     /**
-     * Answers the acceptances their lister never answered.
+     * 处理挂牌方从未答复的那些摘牌。
      *
-     * <p>Silence is not agreement. An acceptance past its deadline is declined,
-     * and the goods go back on offer — the alternative is an offer frozen
-     * indefinitely by a question nobody replied to, which is a worse failure
-     * than a deal that simply lapsed.
+     * <p>沉默不等于同意。过了截止时间的摘牌视为被拒绝，货物重新回到待售状态
+     * ——另一条路是一份要约被一个无人回复的问题永久冻结，那比一笔干脆失效的
+     * 交易更糟。
      *
-     * @return how many acceptances lapsed
+     * @return 有多少笔摘牌失效
      */
     @Transactional
     public int expireOverdueConfirmations() {
@@ -313,17 +299,15 @@ public class OrderService {
     }
 
     /**
-     * The seller releases the goods.
+     * 卖方放货。
      *
-     * <p><b>Seller only, and this is a rule rather than a preference.</b>
-     * Delivery starts when the goods move, and only their owner can move them.
-     * A buyer able to press this would be a buyer announcing that somebody else
-     * has shipped — and if both parties can press it, the state it sets means
-     * nothing: an order marked 交收中 would no longer tell either side whether
-     * anything had actually left the warehouse.
+     * <p><b>仅限卖方，而这是一条规则，不是一种偏好。</b>交收始于货物移动，
+     * 而只有其所有者才能移动它。一个能按下这个按钮的买方，就是一个在宣布
+     * 别人已经发货的买方——而如果双方都能按，它设置的状态就毫无意义：一笔
+     * 标记为交收中的订单，将不再能告诉任何一方到底有没有东西真的离开了仓库。
      *
-     * <p>{@code allowedActions} hides the button from the buyer; this is what
-     * refuses them if they call the endpoint anyway.
+     * <p>{@code allowedActions} 负责对买方隐藏这个按钮；而这里负责在他仍然
+     * 调用接口时予以拒绝。
      */
     @Transactional
     public Order startDelivery(Long orderId, LoginUser user) {
@@ -337,12 +321,11 @@ public class OrderService {
     }
 
     /**
-     * The buyer confirms receipt.
+     * 买方确认收货。
      *
-     * <p>Buyer only, for the mirror-image reason: completion means the goods
-     * arrived and were accepted, which is a statement about what the receiver
-     * got. A seller confirming their own delivery is a party marking their own
-     * homework, and the state would stop distinguishing "sent" from "arrived".
+     * <p>仅限买方，理由恰好对称：完成意味着货物送到并被接受，这是关于收货方
+     * 拿到了什么的陈述。卖方确认自己完成的交收，就是当事人自己给自己批改
+     * 作业，而这个状态也就不再能区分“已发出”与“已到达”。
      */
     @Transactional
     public Order complete(Long orderId, LoginUser user) {
@@ -355,14 +338,14 @@ public class OrderService {
         return order;
     }
 
-    /** Refuses a caller who is not the selling party. */
+    /** 拒绝一个不是卖方一方的调用方。 */
     private void requireSeller(Order order, LoginUser user, String message) {
         if (!order.getSellerId().equals(user.getEnterpriseId())) {
             throw BusinessException.of(ResultCode.FORBIDDEN, message);
         }
     }
 
-    /** Refuses a caller who is not the buying party. */
+    /** 拒绝一个不是买方一方的调用方。 */
     private void requireBuyer(Order order, LoginUser user, String message) {
         if (!order.getBuyerId().equals(user.getEnterpriseId())) {
             throw BusinessException.of(ResultCode.FORBIDDEN, message);
@@ -370,10 +353,10 @@ public class OrderService {
     }
 
     // ------------------------------------------------------------------
-    // Queries
+    // 查询
     // ------------------------------------------------------------------
 
-    /** Orders where the caller is either party. */
+    /** 调用方为当事方之一的所有订单。 */
     public List<Order> listMine(Long enterpriseId, String status) {
         var query = Wrappers.<Order>lambdaQuery()
                 .and(w -> w.eq(Order::getBuyerId, enterpriseId)
@@ -398,41 +381,37 @@ public class OrderService {
     }
 
     // ------------------------------------------------------------------
-    // Internals
+    // 内部实现
     // ------------------------------------------------------------------
 
     /**
-     * Moves title for the accepted quantity.
+     * 为所摘数量转移所有权。
      *
-     * <p>Two effects that must both happen or neither: the seller's note loses
-     * the goods, and the buyer gains a note for the same amount in the same
-     * warehouse. They are in one transaction because a trade that took goods
-     * from one party without delivering them to the other is not a trade, it is
-     * a loss.
+     * <p>两个效果必须同时发生，否则都不发生：卖方的库存单减少这些货物，买方
+     * 在同一仓库获得一张等量的库存单。它们同处一个事务，因为一笔从一方拿走
+     * 货物却没有交付给另一方的交易不是交易，而是损失。
      *
-     * @return the seller's freeze that was consumed, for the audit trail
+     * @return 被消耗掉的卖方冻结记录，供审计轨迹使用
      */
     private Long transferGoods(Listing listing, BigDecimal quantity, Long buyerId, Long sellerId) {
         Long goodsFreezeId = listing.getFreezeId();
         Long sellerNoteId = null;
 
         if (goodsFreezeId != null) {
-            // Spend the reservation made when the listing was published. What is
-            // not taken stays frozen and stays on offer.
+            // 花掉发布挂牌时做出的那笔预留。没被摘走的部分继续保持冻结，
+            // 也继续保持待售。
             var freezeBefore = freezeService.findFrozen(sellerId, goodsFreezeId);
             sellerNoteId = freezeBefore.getEntityId();
 
-            // The remainder is a NEW record — partial consumption closes the
-            // original rather than rewriting it — so the listing has to be
-            // pointed at the new one before this method returns. Without this
-            // the listing keeps referring to a settled reservation, and from
-            // then on it can neither be accepted again nor withdrawn: both
-            // paths load the freeze by that id and are refused.
+            // 剩余部分是一条新记录——部分消耗是关闭原记录而不是改写它——
+            // 所以必须在本方法返回之前把挂牌指向新记录。否则挂牌会一直指向
+            // 一笔已结清的预留，从此既不能被再次摘牌也不能撤牌：两条路径都
+            // 按那个 id 加载冻结记录，都会被拒绝。
             Long remainderId = freezeService.consumeInventoryPartial(sellerId, goodsFreezeId, quantity);
             listing.setFreezeId(remainderId);
         } else {
-            // A BUY listing: the goods come from the accepting seller's own
-            // stock, so find a note that can cover it.
+            // BUY 挂牌：货物来自摘牌方（此处即卖方）的自有库存，因此找一张
+            // 足以覆盖的库存单。
             InventoryNote source = findSellableNote(sellerId, listing.getCategoryId(), quantity);
             if (source == null) {
                 throw BusinessException.of(ResultCode.INVENTORY_QUANTITY_INSUFFICIENT,
@@ -454,7 +433,7 @@ public class OrderService {
         return goodsFreezeId;
     }
 
-    /** Gives the buyer their own note for what they just bought. */
+    /** 给买方一张属于自己的、对应其刚买下货物的库存单。 */
     private void createBuyerNote(Listing listing, Long sourceNoteId, Long buyerId, BigDecimal quantity) {
         InventoryNote source = sourceNoteId == null ? null : inventoryNoteMapper.selectById(sourceNoteId);
 
@@ -505,21 +484,19 @@ public class OrderService {
     }
 
     /**
-     * Puts goods back after a cancellation.
+     * 取消之后把货物放回去。
      *
-     * <p>If the listing is still open the goods are re-reserved against it, so
-     * the offer that produced this order stays valid for the next buyer. If it
-     * is not, they simply return to the seller.
+     * <p>若挂牌仍然开放，货物会重新针对它预留，因此产生本订单的那份要约对
+     * 下一位买方依然有效。若已不开放，货物就径直退回卖方。
      */
     private void restoreGoods(Order order) {
         Listing listing = order.getListingId() == null
                 ? null : listingMapper.selectById(order.getListingId());
 
         if (order.getGoodsFreezeId() == null) {
-            // An unconfirmed acceptance: nothing ever moved, so there is
-            // nothing to unfreeze and no note to recreate. Only the offer's
-            // remaining quantity has to come back, or the listing would look
-            // like it sold something it never sold.
+            // 一笔未获确认的摘牌：从来没有什么移动过，因此没有什么需要解冻，
+            // 也没有库存单需要重建。只有那份要约的剩余数量需要还回去，否则
+            // 挂牌会看起来像卖掉了一些它从未卖掉的东西。
             if (canReopen(listing)) {
                 returnQuantityToListing(listing, order.getQuantity());
             }
@@ -538,18 +515,16 @@ public class OrderService {
             return;
         }
 
-        // No listing to go back to, so return the goods outright. A fresh
-        // available balance is created on a new note because the original was
-        // already partially consumed.
+        // 没有可退回的挂牌，于是直接把货物退回去。因为原来的库存单已被部分
+        // 消耗，所以在一张新库存单上重建可用余量。
         createCancellationReturn(order);
     }
 
     /**
-     * Puts quantity back on an offer and restates what the offer is.
+     * 把数量还回一份要约，并重新陈述这份要约是什么。
      *
-     * <p>The status follows from the arithmetic rather than being asserted:
-     * only when the full original quantity is back on the table is the listing
-     * once again simply an open offer.
+     * <p>状态由算术推出，而不是被断言：只有当原始全数都回到台面上时，这份
+     * 挂牌才重新变回一份单纯开放的要约。
      */
     private void returnQuantityToListing(Listing listing, BigDecimal quantity) {
         BigDecimal restored = listing.getRemainingQuantity().add(quantity);
@@ -564,12 +539,11 @@ public class OrderService {
     }
 
     /**
-     * Whether a listing can still take goods back.
+     * 一份挂牌是否还能收回货物。
      *
-     * <p>Looser than {@link Listing#isOpenForTrade()} on purpose: a listing
-     * whose remainder was fully taken reads as FILLED, yet a lapsed acceptance
-     * has to be able to reopen it. Only a listing the owner closed, or one that
-     * ran out of time, is genuinely past accepting anything.
+     * <p>有意比 {@link Listing#isOpenForTrade()} 更宽松：剩余部分被全部摘走的
+     * 挂牌读起来是 FILLED，然而一笔失效的摘牌必须能把它重新打开。只有被所有者
+     * 关闭的挂牌，或者时间耗尽的那种，才真正无法再接受任何东西。
      */
     private boolean canReopen(Listing listing) {
         return listing != null
@@ -577,7 +551,7 @@ public class OrderService {
                 && !Listing.Status.EXPIRED.equals(listing.getStatus());
     }
 
-    /** Re-creates the seller's holding when there is no listing left to restore to. */
+    /** 当没有任何挂牌可供退回时，重建卖方的持仓。 */
     private void createCancellationReturn(Order order) {
         InventoryNote note = new InventoryNote();
         note.setNoteNo(nextNo("IN"));
@@ -598,20 +572,19 @@ public class OrderService {
 
     private Long sellerNoteIdOf(Listing listing) {
         if (listing.getFreezeId() == null) {
-            // Reachable only if a listing is open with nothing reserved behind
-            // it, which the platform does not produce — the freeze is released
-            // only when the remainder is gone, and that is the point at which
-            // the listing stops being open. Said plainly rather than left to
-            // become a null pointer three frames down.
+            // 只有在挂牌开放却背后没有任何预留时才会走到这里，而平台不会
+            // 产生这种状态——只有当剩余量归零时冻结才会释放，而那一刻正是
+            // 挂牌不再开放之时。这里明说，而不是留到三层调用之后再变成一个
+            // 空指针。
             throw BusinessException.of(ResultCode.CONFLICT,
                     "该挂牌没有可归还的冻结货物，请刷新后重试");
         }
-        // The freeze that backed the listing points at the note the goods sit on.
+        // 支撑该挂牌的冻结记录指向货物所依托的那张库存单。
         var freeze = freezeService.findFrozen(listing.getEnterpriseId(), listing.getFreezeId());
         return freeze.getEntityId();
     }
 
-    /** Writes the listing back, so a changed reservation pointer is not lost. */
+    /** 把挂牌写回，以免变更后的预留指针丢失。 */
     private void persistListingReservation(Listing listing) {
         if (listingMapper.updateById(listing) == 0) {
             throw BusinessException.of(ResultCode.CONFLICT, "该挂牌正在被其他操作修改，请重试");
@@ -619,20 +592,19 @@ public class OrderService {
     }
 
     /**
-     * Moves an order to a new status, refusing transitions the table does not
-     * allow. Routing every change through here is what makes the table the
-     * single description of the lifecycle rather than documentation of it.
+     * 把订单迁移到新状态，拒绝状态表不允许的迁移。让每一次状态变更都经由这
+     * 里，正是这张表成为生命周期唯一描述而非其文档的原因。
      */
     private void transition(Order order, String to, LoginUser user, String reason) {
         transition(order, to, user.getUserId(), user.getUsername(), reason);
     }
 
     /**
-     * The same move, attributed to whoever made it.
+     * 同一个动作，但归属到实际做出它的人名下。
      *
-     * <p>Split out for the scheduled sweep, which moves orders on nobody's
-     * behalf. Attributing its work to a real user would be a lie in the one
-     * record that exists to settle disputes, so it signs as {@code system}.
+     * <p>单独拆出来是为了定时扫描，它不代表任何人的意志迁移订单。把它的操作
+     * 归到某个真实用户名下，会是在那份专为裁决争议而存在的记录里撒谎，所以
+     * 它署名 {@code system}。
      */
     private void transition(Order order, String to,
                             Long operatorId, String operatorName, String reason) {
@@ -649,13 +621,11 @@ public class OrderService {
     }
 
     /**
-     * Loads the order's listing and checks the caller owns it.
+     * 加载订单的挂牌，并检查调用方拥有它。
      *
-     * <p>Ownership is read from the listing rather than inferred from the
-     * order's buyer/seller columns. Which of those two the lister is depends on
-     * the listing's direction, and inferring it is the kind of shortcut that is
-     * right until the day someone enables a second direction and silently
-     * checks the wrong party.
+     * <p>所有权从挂牌读出，而不是从订单的买方/卖方列推断。挂牌方是这两者中
+     * 的哪一个取决于挂牌方向，而靠推断就是把那种“一直正确，直到某天有人启用
+     * 了第二个方向，于是悄悄检查了错误的一方”的捷径。
      */
     private Listing requireLister(Order order, LoginUser user, String message) {
         Listing listing = order.getListingId() == null
@@ -670,11 +640,11 @@ public class OrderService {
     }
 
     /**
-     * How long the lister has to answer.
+     * 挂牌方有多长时间可以答复。
      *
-     * <p>Capped at the listing's own expiry: an acceptance that outlives the
-     * offer it accepted would be a question about something no longer on the
-     * table, and the expiry sweep would have released the goods behind it.
+     * <p>以挂牌自身的失效时间为上限：一笔活得比它所摘的要约还久的摘牌，
+     * 就成了一个关于某件已不在台面上的东西的问题，而到期扫描早就会把其背后
+     * 的货物释放掉了。
      */
     private OffsetDateTime answerDeadlineFor(Listing listing) {
         OffsetDateTime byWindow = OffsetDateTime.now().plus(properties.effectiveConfirmWindow());
@@ -683,24 +653,21 @@ public class OrderService {
     }
 
     /**
-     * Tells the named enterprises that their pending work changed.
+     * 通知这些具名企业：他们的待办发生了变化。
      *
-     * <p>Only names them — the event carries no task data. Recomputing the task
-     * here would put a second copy of "what counts as pending" into the event,
-     * and the two copies would eventually disagree; the listener refetches
-     * through {@link TaskService} instead, so that question has one answer.
+     * <p>只是点名而已——事件不携带任何任务数据。在这里重算任务，会把第二份
+     * “什么算作待办”的定义塞进事件里，而这两份定义终将产生分歧；监听方改为
+     * 通过 {@link TaskService} 重新拉取，于是那个问题只有一个答案。
      *
-     * <p>Both parties are told even when only one of them gained work: a move
-     * by one side changes what the other sees, and a stale screen is the
-     * complaint this exists to fix.
+     * <p>即便只有一方新增了工作，也通知双方：一方的动作会改变另一方看到的
+     * 内容，而一个过期的界面正是这套机制存在要解决的抱怨。
      */
     private void publishTaskChange(String reason, Order order) {
         eventPublisher.publishEvent(
                 new TaskChangedEvent(reason, order.getBuyerId(), order.getSellerId()));
     }
 
-    /** Announces a completed trade. The trading module does not know a market
-     * feed exists; whoever cares subscribes. */
+    /** 公布一笔已完成的交易。交易模块不知道行情推送的存在；谁关心谁订阅。 */
     private void publishTraded(Order order) {
         eventPublisher.publishEvent(new OrderTradedEvent(
                 order.getCategoryId(), order.getCommodityName(),

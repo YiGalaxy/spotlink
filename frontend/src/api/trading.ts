@@ -52,7 +52,7 @@ export function acceptListing(id: EntityId, quantity: number, remark?: string) {
   return api.post<OrderView>(`/listings/${id}/accept`, { quantity, remark })
 }
 
-// ---- orders ----
+// ---- 订单 ----
 
 export function fetchMyOrders(status?: string) {
   return api.get<OrderView[]>('/orders', status ? { status } : undefined)
@@ -88,7 +88,7 @@ export function completeOrder(id: EntityId) {
   return api.post<OrderView>(`/orders/${id}/complete`)
 }
 
-// ---- contracts ----
+// ---- 合同 ----
 
 export function fetchOrderContract(orderId: EntityId) {
   return api.get<ContractView>(`/orders/${orderId}/contract`)

@@ -4,23 +4,19 @@ import { notification } from 'antd'
 import { useAuthStore } from '@/store/auth'
 
 /**
- * Keeps the task list current when the other party acts.
+ * 对手方有动作时，保持任务列表最新。
  *
- * <p><b>The event carries no data, and that is the point.</b> The server says
- * only "your pending work changed"; this hook refetches. Sending the task
- * itself would mean the server deciding what counts as pending in a second
- * place, and the screen and the AI advisor would eventually disagree about it.
+ * <p><b>事件本身不携带任何数据，而这正是关键所在。</b>服务端只说了「你的待办
+ * 变了」这一件事，接下来由这个 hook 重新拉取。若把任务本身发过来，就意味着
+ * 服务端要在第二个地方再次判断什么算待办，而界面和 AI 顾问迟早会对此产生分歧。
  *
- * <p>Why a stream rather than polling: the thing being waited on has a
- * deadline. An acceptance the lister has not noticed is an acceptance that
- * expires, and the whole complaint that led here was a seller discovering a
- * sale too late. A poll would make the delay a design choice; this makes it a
- * network round trip.
+ * <p>为什么用流而不是轮询：被等待的这件事是有期限的。挂牌方没注意到的摘牌，
+ * 就是一份终将过期的摘牌，而当初引到这里来的全部抱怨，正是卖方发现成交发现得
+ * 太晚。轮询会把这段延迟变成一种设计选择；用流则把它变成一个网络往返。
  *
- * <p>The token goes in the query string because `EventSource` cannot set
- * headers — the same trade-off, and the same mitigation, as the market feed:
- * the server accepts a query token on a named list of stream paths and nowhere
- * else.
+ * <p>token 放在查询串里，因为 `EventSource` 无法设置请求头——这与行情推送是
+ * 同一个取舍，也用同一种兜底：服务端只在一份具名的流路径清单上接受查询串里的
+ * token，其余地方一律不接受。
  */
 export function useTaskStream() {
   const accessToken = useAuthStore((state) => state.accessToken)
@@ -34,9 +30,8 @@ export function useTaskStream() {
     source.addEventListener('tasks', (event) => {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] })
 
-      // Anything that can change the task list can also change the lists it was
-      // derived from, so those are refreshed too rather than waiting for the
-      // user to navigate.
+      // 凡是能改变任务列表的东西，同样能改变任务列表派生自的那些列表，
+      // 所以这些也一并刷新，而不是等用户自己跳转过去。
       void queryClient.invalidateQueries({ queryKey: ['my-orders'] })
       void queryClient.invalidateQueries({ queryKey: ['my-listings'] })
       void queryClient.invalidateQueries({ queryKey: ['inventory-notes'] })
@@ -54,8 +49,8 @@ export function useTaskStream() {
     })
 
     source.onerror = () => {
-      // EventSource retries on its own; the poll interval on the task query is
-      // the fallback for a server that cannot hold the connection open.
+      // EventSource 会自行重试；任务 query 上的轮询间隔，是为那些撑不住长连接
+      // 的服务器准备的兜底。
     }
 
     return () => source.close()
@@ -63,10 +58,10 @@ export function useTaskStream() {
 }
 
 /**
- * Reads the reason out of the event, tolerating anything unexpected.
+ * 从事件中读出原因，并容忍任何意外情况。
  *
- * <p>A malformed frame should cost a toast, not the notification. The refetch
- * above is the part that matters; the message is a courtesy.
+ * <p>一个格式错乱的帧最多该损失一条提示，而不该损失整个通知。上面那次重新
+ * 拉取才是要紧的部分；这条消息只是顺带的人情。
  */
 function readReason(event: Event): string | null {
   try {

@@ -10,20 +10,17 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 
 /**
- * A listing as the client sees it.
+ * 客户端看到的挂牌。
  *
- * <p>{@code mine} is computed per caller so the market screen can hide the
- * "accept" button on one's own listings without a second request. Accepting
- * your own offer is not a trade.
+ * <p>{@code mine} 按调用方逐个计算，这样行情页无需再发一次请求就能在自己的
+ * 挂牌上隐藏“摘牌”按钮。摘自己的牌不算交易。
  *
- * <p>{@code confirmModeText} is carried to the market screen, not just to the
- * owner's own list. Whether an acceptance closes the deal or waits for the
- * lister is the single fact a buyer most needs before pressing the button, and
- * discovering it afterwards is how a party ends up feeling misled.
+ * <p>{@code confirmModeText} 会一并送到行情页，而不只是送到挂牌方自己的
+ * 列表里。一次摘牌是直接成交还是等待挂牌方，是买方在按下按钮之前最需要知道
+ * 的唯一一件事；事后再发现，正是一方觉得自己被误导的由来。
  *
- * <p>Nulls are written rather than omitted, for the reason given on
- * {@link OrderView}: a response whose shape depends on its values is one every
- * client has to guess at.
+ * <p>null 值是写出而不是省略，原因见 {@link OrderView}：一个形状取决于其
+ * 取值的响应，是每个客户端都得靠猜的响应。
  */
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public record ListingView(
@@ -51,9 +48,9 @@ public record ListingView(
         String priceType,
         String priceText,
 
-        /** AUTO or MANUAL. */
+        /** AUTO 或 MANUAL。 */
         String confirmMode,
-        /** "摘牌即成交" or "需挂牌方确认". */
+        /** "摘牌即成交" 或 "需挂牌方确认"。 */
         String confirmModeText,
 
         @JsonSerialize(using = ToStringSerializer.class) Long warehouseId,
@@ -66,7 +63,7 @@ public record ListingView(
         String status,
         String statusText,
 
-        /** True when the caller owns this listing. */
+        /** 当调用方拥有该挂牌时为 true。 */
         boolean mine,
 
         OffsetDateTime createdAt

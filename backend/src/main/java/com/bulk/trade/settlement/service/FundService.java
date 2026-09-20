@@ -19,16 +19,14 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Money movements.
+ * 资金变动。
  *
- * <p>Every movement does two things in one transaction: appends a ledger row,
- * and updates the account's cached totals. Both or neither — a ledger row with
- * no balance change is as wrong as a balance change with no ledger row, and
- * either one alone makes the account unauditable.
+ * <p>每一次变动都在同一个事务里做两件事：追加一行流水账，并更新账户上缓存的
+ * 各项总额。要么都做，要么都不做——一行没有余额变化的流水，与一次没有流水的
+ * 余额变化一样错，而两者只要单独存在其一，账户就无法被审计。
  *
- * <p>The account's optimistic lock serialises concurrent movements on the same
- * account, so two withdrawals cannot both read the same available balance and
- * both succeed.
+ * <p>账户上的乐观锁把同一账户上的并发变动串行化，因此两笔提现不可能都读到
+ * 同一个可用余额，并且都成功。
  */
 @Slf4j
 @Service
@@ -50,13 +48,12 @@ public class FundService {
     }
 
     /**
-     * The account, or null.
+     * 返回账户，或 null。
      *
-     * <p>For callers that have something sensible to say when there is none.
-     * The advisor is why this exists: a tool that throws reaches the model as
-     * an opaque failure, and "我账上还有多少钱" deserves a sentence rather than
-     * an exception. Nothing that moves money should use this — those want
-     * {@link #requireAccount} and its refusal.
+     * <p>供那些在查无账户时有一句得体话可说的调用方使用。它之所以存在，正是
+     * 因为顾问：一个抛异常的工具到达模型那里只是一个不透明的失败，而
+     * “我账上还有多少钱”值得一句回答，而不是一个异常。任何会动用资金的地方
+     * 都不该用它——那些地方要的是 {@link #requireAccount} 和它的拒绝。
      */
     public FundAccount findAccount(Long enterpriseId) {
         return accountMapper.selectOne(Wrappers.<FundAccount>lambdaQuery()
@@ -71,7 +68,7 @@ public class FundService {
                 .last("limit " + Math.min(Math.max(limit, 1), 200)));
     }
 
-    /** Adds funds. In this build the money arrives from nowhere, which is the point. */
+    /** 增加资金。在本版本中，钱是凭空来的，而这正是要点所在。 */
     @Transactional
     public FundAccount recharge(Long enterpriseId, BigDecimal amount, String remark) {
         requirePositive(amount);
@@ -109,11 +106,10 @@ public class FundService {
     }
 
     /**
-     * Reserves money as margin.
+     * 把资金作为保证金预留起来。
      *
-     * <p>Reserving is not spending: the balance is unchanged, only its split
-     * between available and frozen moves. That distinction is why a cancelled
-     * order can return the money without a refund having occurred.
+     * <p>预留不是支出：总额不变，变的只是它在可用与冻结之间的划分。正是这一
+     * 区别，使得一笔被取消的订单可以在并未发生退款的情况下把钱还回去。
      */
     @Transactional
     public void freezeMargin(Long enterpriseId, BigDecimal amount, Long bizId, String remark) {
@@ -155,11 +151,10 @@ public class FundService {
     }
 
     /**
-     * Pays settled money out of the frozen balance.
+     * 从冻结余额中支付已结算的款项。
      *
-     * <p>Comes out of frozen rather than available: the money was reserved when
-     * the order was placed, and paying it here is what that reservation was for.
-     * Taking it from available would let an account pay for the same deal twice.
+     * <p>从冻结而不是从可用里出：这笔钱在下单时就被预留了，而在这里支付它，
+     * 正是那次预留的目的。若从可用里扣，账户就能为同一笔交易付两次钱。
      */
     @Transactional
     public void payFromMargin(Long enterpriseId, BigDecimal amount, Long bizId, String remark) {
@@ -173,7 +168,7 @@ public class FundService {
                             amount.stripTrailingZeros().toPlainString()));
         }
 
-        // Money leaves the account entirely: both frozen and total drop.
+        // 资金彻底离开账户：冻结额与总额同时下降。
         account.setFrozenBalance(account.getFrozenBalance().subtract(amount));
         account.setBalance(account.getBalance().subtract(amount));
         persist(account);
@@ -181,7 +176,7 @@ public class FundService {
                 remark == null ? "货款支付" : remark);
     }
 
-    /** Credits money received as payment. */
+    /** 记入作为货款收到的资金。 */
     @Transactional
     public void receive(Long enterpriseId, BigDecimal amount, Long bizId, String remark) {
         requirePositive(amount);
@@ -203,11 +198,10 @@ public class FundService {
     }
 
     /**
-     * Appends a ledger row.
+     * 追加一行流水账。
      *
-     * <p>Carries the balance as it stands after the movement, so a statement is
-     * a straight read while still being verifiable by replaying the ledger from
-     * the start.
+     * <p>携带变动之后当下的余额，这样一份对账单是一次直读，同时仍然可以通过
+     * 从头重放流水账来核验。
      */
     private void record(FundAccount account, String direction, String bizType,
                         BigDecimal amount, Long bizId, String remark) {

@@ -18,6 +18,19 @@
     <description>Bulk commodity spot trading platform - backend</description>
 
     <properties>
+        <!--
+            Locked to UTF-8 rather than left to the platform. Maven falls back to
+            the machine's default encoding, which on a Chinese Windows box is
+            GBK — and a source file with Chinese comments then either fails to
+            compile or, worse, compiles into mojibake that nobody notices until
+            a log line or an error message comes out wrong.
+
+            The frontend and the SQL migrations are UTF-8 by their own
+            conventions; this is the one place the build could silently disagree
+            with them.
+        -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <java.version>21</java.version>
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
         <jjwt.version>0.12.6</jjwt.version>
