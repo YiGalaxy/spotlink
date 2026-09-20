@@ -5,6 +5,7 @@ import com.bulk.trade.advisor.tool.AdvisorTools;
 import com.bulk.trade.advisor.tool.ContractAdvisorTools;
 import com.bulk.trade.advisor.tool.InventoryAdvisorTools;
 import com.bulk.trade.advisor.tool.KnowledgeAdvisorTools;
+import com.bulk.trade.advisor.tool.MarketAdvisorTools;
 import com.bulk.trade.advisor.tool.ToolCallRecorder;
 import com.bulk.trade.shared.exception.BusinessException;
 import com.bulk.trade.shared.security.LoginUser;
@@ -46,6 +47,7 @@ public class AdvisorAgent {
     private final InventoryAdvisorTools inventoryAdvisorTools;
     private final KnowledgeAdvisorTools knowledgeAdvisorTools;
     private final ContractAdvisorTools contractAdvisorTools;
+    private final MarketAdvisorTools marketAdvisorTools;
     private final SystemPromptBuilder promptBuilder;
 
     public AgentResult run(String userMessage, List<ConversationTurn> history, LoginUser user) {
@@ -73,7 +75,7 @@ public class AdvisorAgent {
                     .messages(messages)
                     // Every @Tool method on these beans becomes callable.
                     .tools(advisorTools, inventoryAdvisorTools, knowledgeAdvisorTools,
-                            contractAdvisorTools)
+                            contractAdvisorTools, marketAdvisorTools)
                     .call()
                     .chatResponse();
 
