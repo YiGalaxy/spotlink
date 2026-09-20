@@ -35,6 +35,32 @@ public class KnowledgeService {
     /** RRF damping constant from the original paper. Blunts the top ranks' advantage. */
     private static final int RRF_K = 60;
 
+    /**
+     * Relative weight of each retrieval method in the fusion.
+     *
+     * <p><b>The keyword half is heavily discounted because it does not work
+     * well on Chinese, and that was measured, not assumed.</b> For the question
+     * "货到了发现重量不对怎么办", trigram similarity scored the correct passage
+     * — the one defining 磅差 — at 0.0000, while scoring two unrelated passages
+     * at 0.0769. pg_trgm builds character trigrams for spelling tolerance in
+     * Latin scripts; a Chinese multi-character term produces few shared
+     * trigrams, so the ranking is close to noise.
+     *
+     * <p>Rank fusion rewards a document that appears in <em>both</em> lists, so
+     * that noise did not merely fail to help — it actively displaced the
+     * correct answer by promoting unrelated passages to the top of the keyword
+     * ranking. Weighting is a mitigation, not a fix: real Chinese keyword
+     * search needs segmentation (zhparser or pg_jieba) producing a tsvector,
+     * which is the documented next step rather than a claim that this is
+     * already right.
+     *
+     * <p>The keyword path keeps real value as a <em>fallback</em>: when the
+     * embedding service is down it is the only retrieval available, and poor
+     * recall beats none.
+     */
+    private static final double VECTOR_WEIGHT = 1.0;
+    private static final double KEYWORD_WEIGHT = 0.25;
+
     /** Passages handed to the model. More context is not better: it dilutes. */
     private static final int DEFAULT_TOP_K = 4;
 
@@ -72,8 +98,8 @@ public class KnowledgeService {
         Map<Long, Double> fused = new LinkedHashMap<>();
         Map<Long, Map<String, Object>> byId = new LinkedHashMap<>();
 
-        accumulate(vectorHits, fused, byId);
-        accumulate(keywordHits, fused, byId);
+        accumulate(vectorHits, VECTOR_WEIGHT, fused, byId);
+        accumulate(keywordHits, KEYWORD_WEIGHT, fused, byId);
 
         return fused.entrySet().stream()
                 .sorted(Map.Entry.<Long, Double>comparingByValue().reversed())
@@ -138,17 +164,20 @@ public class KnowledgeService {
      * Adds one ranked list into the fused scores.
      *
      * <p>Rank, not raw score: a cosine similarity and a trigram similarity are
-     * not comparable numbers, and blending them by weight would be a guess
-     * dressed up as arithmetic.
+     * not comparable numbers, and blending those by weight would be a guess
+     * dressed up as arithmetic. Weighting the <em>contributions</em> of each
+     * list is a different thing — that is a statement about how much the list
+     * can be trusted, which is measurable.
      */
     private void accumulate(List<Map<String, Object>> hits,
+                            double weight,
                             Map<Long, Double> fused,
                             Map<Long, Map<String, Object>> byId) {
         List<Map<String, Object>> ordered = new ArrayList<>(hits);
         for (int rank = 0; rank < ordered.size(); rank++) {
             Map<String, Object> row = ordered.get(rank);
             Long id = ((Number) row.get("id")).longValue();
-            fused.merge(id, 1.0 / (RRF_K + rank + 1), Double::sum);
+            fused.merge(id, weight / (RRF_K + rank + 1), Double::sum);
             byId.putIfAbsent(id, row);
         }
     }
