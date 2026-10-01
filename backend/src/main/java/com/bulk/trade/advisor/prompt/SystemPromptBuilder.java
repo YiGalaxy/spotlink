@@ -3,34 +3,11 @@ package com.bulk.trade.advisor.prompt;
 import com.bulk.trade.shared.security.LoginUser;
 import org.springframework.stereotype.Component;
 
-/**
- * 把系统提示词组装成两个可以分别发送的块。
- *
- * <p><b>为什么要两个块。</b>提示词缓存按字节前缀匹配，缓存断点落在第一个块之后。断点之前的
- * 内容在请求之间必须逐字节完全一致；断点之后的内容则可以变化。调用方的身份时刻在变，而且
- * 每个用户都不同，所以它属于断点之后 —— 若并入同一个块，每个请求都会缓存未命中。
- *
- * <p>Spring AI 配置了 {@code multi-block-system-caching: true}，因此每个
- * {@code system(...).text(...)} 都成为独立的块，断点落在预期位置，而不是落在合并后文本的
- * 末尾。
- *
- * <pre>
- *   块 1  角色、规则、领域词汇、输出格式      &lt;- 已缓存
- *   块 2  调用方身份与租户范围                &lt;- 不缓存
- * </pre>
- *
- * <p>把调用方那一段独立出来的附带好处：被缓存的前缀由所有用户共享，于是一条缓存就能服务
- * 全部租户，而不是每个账号一条。
- */
+/** 构建可缓存的稳定提示词和按请求变化的调用方信息。 */
 @Component
 public class SystemPromptBuilder {
 
-    /**
-     * 稳定的前缀。
-     *
-     * <p>极少改动，且每次改动都是刻意的：修改这里的任何内容都会让所有已缓存的前缀失效，
-     * 所以一次措辞调整是一次成本事件，而不是一次改错别字。
-     */
+    /** 稳定提示词；修改会使提示词缓存失效。 */
     private static final String STABLE_PREFIX = """
             You are the trading advisor of a Chinese bulk commodity spot trading platform.
 
@@ -151,16 +128,12 @@ public class SystemPromptBuilder {
               a list is clearer.
             """;
 
-    /** 被缓存的那一半。作为独立的内容块发送，缓存断点就落在它上面。 */
+    /** 返回稳定提示词块。 */
     public String stablePrefix() {
         return STABLE_PREFIX;
     }
 
-    /**
-     * 易变的那一半，作为缓存断点之后的第二个块发送。
-     *
-     * <p>刻意保持简短：它每一轮都会以未缓存的方式重新发送。
-     */
+    /** 返回当前调用方信息，作为未缓存块发送。 */
     public String callerSection(LoginUser user) {
         StringBuilder sb = new StringBuilder(256);
         sb.append("## Current caller\n");

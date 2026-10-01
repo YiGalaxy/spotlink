@@ -16,7 +16,7 @@ export class ApiError extends Error {
 
 const instance = axios.create({
   baseURL: '/api',
-  // 顾问回复在上游要跑一个多轮工具循环，所以耗时可能远超过普通的 CRUD 调用。
+  // 顾问请求包含多轮工具调用，超时需长于普通 CRUD。
   timeout: 180_000,
 })
 
@@ -34,8 +34,7 @@ instance.interceptors.response.use(
     const status = error.response?.status
 
     if (status === 401) {
-      // 只有 token 存在且被拒绝时才会出现 401，所以在这里清理会话是安全的
-      // ——登录失败返回的是 HTTP 200 加一个业务码，而不是 401。
+      // 登录失败使用业务码；401 仅表示现有令牌失效。
       useAuthStore.getState().clear()
       if (!window.location.pathname.startsWith('/login')) {
         notifyError('登录已过期，请重新登录')
@@ -51,11 +50,7 @@ instance.interceptors.response.use(
   },
 )
 
-/**
- * 拆开响应信封，并把业务失败转成 rejection。
- *
- * <p>正因为在这里统一做了一次，才没有任何一个页面需要自己去检查 `code`。
- */
+/** 解包响应并统一处理业务错误。 */
 async function request<T>(config: AxiosRequestConfig): Promise<T> {
   const response = await instance.request<ApiResponse<T>>(config)
   const body = response.data

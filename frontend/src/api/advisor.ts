@@ -19,8 +19,7 @@ export function createConversation(title?: string) {
   return api.post<ConversationDetail>('/advisor/conversations', { title })
 }
 
-// Id 从头到尾都保持字符串。在这里把某个 Id 转成数字会悄悄改变它的值，
-// 于是每一次查找都会落空。
+// ID 全程保持字符串，避免精度丢失。
 export function getConversation(id: EntityId) {
   return api.get<ConversationDetail>(`/advisor/conversations/${id}`)
 }

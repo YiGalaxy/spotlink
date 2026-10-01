@@ -148,12 +148,7 @@ body {
   overflow: auto;
 }
 
-/* ------------------------------------------------------------------ */
-/* Markdown 渲染                                                       */
-/*                                                                     */
-/* Ant Design 会重置标题、列表和段落的 margin，因此必须显式恢复        */
-/* 这段节奏，否则整段回答会挤成一整块。                                */
-/* ------------------------------------------------------------------ */
+/* Markdown 渲染。Ant Design 会重置文本间距，需显式恢复。 */
 
 .markdown-body > *:first-child {
   margin-top: 0;
@@ -229,8 +224,7 @@ body {
 .md-table-wrap {
   overflow-x: auto;
   margin: 12px 0;
-  /* 滚动容器上的圆角，让表格看起来像一张卡片，而不是漂在回答里
-     的一片网格。 */
+  /* 圆角与内容区保持一致。 */
   border: 1px solid #e4e7ec;
   border-radius: 8px;
 }
@@ -239,8 +233,7 @@ body {
   border-collapse: collapse;
   width: 100%;
   font-size: 13px;
-  /* 一列价格或吨位里的数字是靠眼睛去比的；比例数字会让 1,111 比 9,999
-     还窄，正好毁掉这种比较。 */
+  /* 等宽数字便于比较价格和数量。 */
   font-variant-numeric: tabular-nums;
 }
 
@@ -248,17 +241,11 @@ body {
 .markdown-body td {
   padding: 7px 12px;
   text-align: left;
-  /* 这里是全文件最重要的一行。单元格以前是 `nowrap`，意味着一张七列的表格
-     连一个像素都窄不下来——它会溢出对话栏，必须横向滚动才能读全，而这些
-     表格看上去不对，原因就在这里。正文单元格换行；只有表头保持一行，
-     因为在那里换行毫无帮助。 */
+  /* 正文允许换行，避免宽表格撑开对话区。 */
   white-space: normal;
   word-break: break-word;
-  /* 低于这个宽度，每一列会塌缩成每行一个字。 */
   min-width: 72px;
   vertical-align: top;
-  /* 只画行分隔线：不要竖线。给每个单元格都套上框，正是让一张小表格
-     看起来像电子表格的原因。 */
   border-bottom: 1px solid #eef0f4;
 }
 
@@ -278,8 +265,7 @@ body {
   background: #fafbfc;
 }
 
-/* 第一列通常是标签——品名或订单号——让它与旁边的数字区分开，
-   读起来更清楚。 */
+/* 第一列作为标签列，保持可读性。 */
 .markdown-body td:first-child {
   color: #1f2329;
 }

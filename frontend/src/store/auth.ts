@@ -12,17 +12,7 @@ interface AuthState {
   isAuthenticated: () => boolean
 }
 
-/**
- * 会话状态。
- *
- * <p>持久化到 localStorage，这样刷新页面不会把用户登出。axios 请求拦截器
- * 就是从这里读取 token 的。
- *
- * <p>写给在意安全的读者：localStorage 可被页面上任意脚本读取，因此一个 XSS
- * 漏洞就等于 token 失窃。生产环境的加固方案是把 refresh token 放进 HttpOnly
- * cookie，并在内存中保留一个短时效的 access token。这个取舍记录在 docs/adr
- * 中，而不是被悄悄做掉。
- */
+/** 持久化会话状态；当前 token 存于 localStorage，生产环境应改用 HttpOnly Cookie。 */
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
