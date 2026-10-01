@@ -28,7 +28,7 @@ export default function KnowledgePage() {
   const [searching, setSearching] = useState(false)
   const [embedding, setEmbedding] = useState(false)
   const queryClient = useQueryClient()
-  // 规则手册是公开的；只有维护索引才需要一个账号。
+  // 知识库检索测试和嵌入维护都属于运营后台，服务端还会按权限码拦截。
   const signedIn = Boolean(useAuthStore((state) => state.accessToken))
 
   const { data: stats } = useQuery({
@@ -106,8 +106,7 @@ export default function KnowledgePage() {
         </Col>
       </Row>
 
-      {/* 规则手册是公开的；维护索引不是。一个只是来读规则的访客没有理由去
-          触发重新嵌入，那个按钮只会给他换来一个 401。 */}
+      {/* 只有拥有知识库维护权限的运营账号才能触发补算；服务端会做最终校验。 */}
       {signedIn && noVector && (
         <Alert
           type="warning"

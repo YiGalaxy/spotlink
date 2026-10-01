@@ -22,8 +22,8 @@ import java.util.Map;
  *       完成。在当前这个语料规模下，那不过是对几十行做一次扫描，几乎没有开销；它
  *       同时也是这次迁移中唯一不具备扩展性的部分，所以才把它写下来，而不是留给人
  *       从延迟曲线上发现。</li>
- *   <li><b>关键词检索改用了全文索引。</b>{@code word_similarity} 是一个 trigram
- *       函数；在这里的对应物是带 ngram 解析器的 {@code FULLTEXT} 索引，通过
+   *   <li><b>关键词检索改用了全文索引。</b>PostgreSQL 的 {@code word_similarity} 是一个
+   *       trigram 函数；在这里的对应物是带 ngram 解析器的 {@code FULLTEXT} 索引，通过
  *       {@code MATCH ... AGAINST} 查询。解析器的选择并非无关紧要——MySQL 默认的
  *       分词器按空白切分，而中文没有空白，所以不用 ngram 的话，一整段中文就是一个
  *       词元，永远匹配不上任何东西。</li>

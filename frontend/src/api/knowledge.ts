@@ -16,15 +16,15 @@ export interface KnowledgeHit {
 }
 
 export function fetchKnowledgeStats() {
-  return api.get<KnowledgeStats>('/knowledge/stats')
+  return api.get<KnowledgeStats>('/admin/knowledge/stats')
 }
 
 export function embedPending(limit = 200) {
   return api.post<{ embedded: number; stats: KnowledgeStats }>(
-    `/knowledge/embed-pending?limit=${limit}`,
+    `/admin/knowledge/embed-pending?limit=${limit}`,
   )
 }
 
 export function searchKnowledge(question: string, topK = 5) {
-  return api.get<KnowledgeHit[]>('/knowledge/search', { question, topK })
+  return api.get<KnowledgeHit[]>('/admin/knowledge/search', { question, topK })
 }

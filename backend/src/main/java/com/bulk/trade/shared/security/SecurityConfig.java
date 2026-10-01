@@ -37,8 +37,6 @@ public class SecurityConfig {
     /** 不带令牌也能访问的端点。 */
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/auth/login",
-            "/api/auth/register",
-            "/api/auth/refresh",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",

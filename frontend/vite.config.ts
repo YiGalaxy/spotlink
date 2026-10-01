@@ -10,10 +10,8 @@ export default defineConfig({
     },
   },
   build: {
-    // Ant Design is ~745 kB minified (233 kB gzipped) on its own, mostly from
-    // the shared rc-* internals its components sit on. Tree shaking already
-    // removes the components we never import. Raising the threshold records
-    // that this is a known, accepted cost rather than an unnoticed regression.
+    // Ant Design and its rc-* internals are a known bundle cost. Keep the
+    // threshold explicit so a future build-size change remains visible in CI.
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {

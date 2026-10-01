@@ -9,6 +9,7 @@ import EnterprisePage from '@/pages/EnterprisePage'
 import InventoryPage from '@/pages/InventoryPage'
 import MarketPage from '@/pages/MarketPage'
 import TradingPage from '@/pages/TradingPage'
+import KnowledgePage from '@/pages/KnowledgePage'
 
 /**
  * 路由，按「谁能读到什么」来划分。
@@ -68,6 +69,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <EnterprisePage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'knowledge',
+        element: (
+          <RequireAuth>
+            <KnowledgePage />
           </RequireAuth>
         ),
       },

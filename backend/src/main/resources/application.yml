@@ -141,9 +141,6 @@ bulk:
 
   advisor:
     enabled: true
-    # 智能体循环的迭代次数上限。没有上限的工具调用循环可以一直转下去，
-    # 而每一轮都是要计费的。
-    max-iterations: 8
     # 端点、密钥、模型和令牌上限都在 spring.ai.anthropic 下，
     # 这样模型连接只有一个地方需要配置。
 
