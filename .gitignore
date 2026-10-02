@@ -40,3 +40,7 @@ application-prod.yml
 /bulk-trade-*
 scripts/__pycache__/
 *.pyc
+
+# Local learning and interview notes
+/docs/steps/
+/docs/项目导读与面试准备.md
