@@ -93,6 +93,14 @@ export interface ConversationDetail {
 
 // ---- 商品 / 库存 ----
 
+export interface SpecField {
+  key: string
+  label: string
+  type: 'number' | 'string'
+  unit?: string
+  required?: boolean
+}
+
 export interface CategoryNode {
   id: EntityId
   parentId: EntityId
@@ -101,6 +109,7 @@ export interface CategoryNode {
   level: number
   unit: string
   sortOrder: number
+  specSchema: SpecField[]
   children: CategoryNode[]
 }
 
@@ -133,13 +142,14 @@ export interface InventoryNoteView {
   brand: string | null
   origin: string | null
   spec: Record<string, unknown>
-  totalQuantity: number
-  availableQuantity: number
-  frozenQuantity: number
+  totalQuantity: string
+  availableQuantity: string
+  frozenQuantity: string
   unit: string
   status: number
   statusText: string
   createdAt: string
+  remark: string | null
 }
 
 // ---- 交易 ----

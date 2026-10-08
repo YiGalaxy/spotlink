@@ -31,9 +31,9 @@ public record InventoryNoteView(
         String origin,
         Map<String, Object> spec,
 
-        BigDecimal totalQuantity,
-        BigDecimal availableQuantity,
-        BigDecimal frozenQuantity,
+        @JsonSerialize(using = ToStringSerializer.class) BigDecimal totalQuantity,
+        @JsonSerialize(using = ToStringSerializer.class) BigDecimal availableQuantity,
+        @JsonSerialize(using = ToStringSerializer.class) BigDecimal frozenQuantity,
         String unit,
 
         Integer status,

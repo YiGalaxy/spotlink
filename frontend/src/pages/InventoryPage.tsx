@@ -34,14 +34,14 @@ import {
   updateInventoryNote,
   type InventoryRegisterPayload,
 } from '@/api/inventory'
-import type { CategoryNode, EntityId, InventoryNoteView } from '@/types/api'
+import type { CategoryNode, EntityId, InventoryNoteView, SpecField } from '@/types/api'
 
 /** 只有叶子品类可选——货物总归属于某个具体的东西。 */
-function flattenLeaves(nodes: CategoryNode[], depth = 0): { id: EntityId; label: string }[] {
-  const options: { id: EntityId; label: string }[] = []
+function flattenLeaves(nodes: CategoryNode[], depth = 0): (CategoryNode & { label: string })[] {
+  const options: (CategoryNode & { label: string })[] = []
   for (const node of nodes) {
     if (node.children.length === 0) {
-      options.push({ id: node.id, label: `${'　'.repeat(depth)}${node.name}` })
+      options.push({ ...node, label: `${'　'.repeat(depth)}${node.name}` })
     } else {
       options.push(...flattenLeaves(node.children, depth + 1))
     }
@@ -62,8 +62,16 @@ const STATUS_COLOURS: Record<number, string> = {
 /** 去掉 BigDecimal 保留的尾随零，例如 100.000 -> 100。 */
 function qty(value: number | string | null | undefined): string {
   if (value === null || value === undefined) return '—'
-  const num = Number(value)
-  return Number.isInteger(num) ? String(num) : num.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
+  return String(value).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')
+}
+
+function mills(value: string): bigint {
+  const [whole, fraction = ''] = value.split('.')
+  return BigInt(whole) * 1000n + BigInt(fraction.padEnd(3, '0'))
+}
+
+function formatMills(value: bigint): string {
+  return qty(`${value / 1000n}.${String(value % 1000n).padStart(3, '0')}`)
 }
 
 export default function InventoryPage() {
@@ -74,40 +82,55 @@ export default function InventoryPage() {
   const [registerForm] = Form.useForm()
   const [editForm] = Form.useForm()
   const queryClient = useQueryClient()
+  const registerCategoryId = Form.useWatch('categoryId', registerForm)
+  const editCategoryId = Form.useWatch('categoryId', editForm)
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: identityKey('inventory-notes') })
 
-  const { data: notes = [], isLoading } = useQuery({
+  const { data: notes = [], isLoading, isError, refetch } = useQuery({
     queryKey: identityKey('inventory-notes', statusFilter),
     queryFn: () => listInventoryNotes(statusFilter),
   })
 
-  const { data: categories = [] } = useQuery({
+  const { data: categories = [], isError: categoryError, refetch: reloadCategories } = useQuery({
     queryKey: identityKey('category-tree'),
     queryFn: fetchCategoryTree,
   })
 
-  const { data: warehouses = [] } = useQuery({
+  const { data: warehouses = [], isError: warehouseError, refetch: reloadWarehouses } = useQuery({
     queryKey: identityKey('warehouses'),
     queryFn: fetchWarehouses,
   })
 
   const categoryOptions = useMemo(() => flattenLeaves(categories), [categories])
+  const registerCategory = categoryOptions.find(category => category.id === registerCategoryId)
+  const editCategory = categoryOptions.find(category => category.id === editCategoryId)
+  const specFields = (fields: SpecField[] = [], disabled = false) => fields.map(field => (
+    <Form.Item key={field.key} name={['spec', field.key]}
+      label={`${field.label}${field.unit ? ` (${field.unit})` : ''}`}
+      rules={[{ required: field.required, message: `请填写${field.label}` }]}>
+      {field.type === 'number'
+        ? <InputNumber disabled={disabled} min={field.unit === '%' ? 0 : undefined}
+            max={field.unit === '%' ? 100 : undefined} style={{ width: '100%' }} />
+        : <Input disabled={disabled} maxLength={256} />}
+    </Form.Item>
+  ))
 
-  /** 当前已加载的库存合计，让表头跟着筛选条件走。 */
+  /** 已注销数量不计入现存货物，不同单位分别汇总。 */
   const summary = useMemo(
     () =>
-      notes.reduce(
-        (acc, note) => ({
-          count: acc.count + 1,
-          total: acc.total + Number(note.totalQuantity),
-          available: acc.available + Number(note.availableQuantity),
-          frozen: acc.frozen + Number(note.frozenQuantity),
-        }),
-        { count: 0, total: 0, available: 0, frozen: 0 },
-      ),
+      notes.filter(note => note.status !== 6).reduce((acc, note) => {
+        const group = acc[note.unit] ?? { total: 0n, available: 0n, frozen: 0n }
+        group.total += mills(note.totalQuantity)
+        group.available += mills(note.availableQuantity)
+        group.frozen += mills(note.frozenQuantity)
+        acc[note.unit] = group
+        return acc
+      }, {} as Record<string, { total: bigint; available: bigint; frozen: bigint }>),
     [notes],
   )
+  const summaryText = (key: 'total' | 'available' | 'frozen') =>
+    Object.entries(summary).map(([unit, group]) => `${formatMills(group[key])} ${unit}`).join(' / ') || '—'
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase()
@@ -137,10 +160,8 @@ export default function InventoryPage() {
         commodityName: vars.values.commodityName as string,
         brand: vars.values.brand as string | undefined,
         origin: vars.values.origin as string | undefined,
-        spec: {
-          ...(vars.values.cu_content !== undefined ? { cu_content: vars.values.cu_content } : {}),
-          ...(vars.values.standard ? { standard: vars.values.standard } : {}),
-        },
+        spec: { ...(editing && editing.categoryId === vars.values.categoryId ? editing.spec : {}),
+          ...vars.values.spec as Record<string, unknown> },
         remark: vars.values.remark as string | undefined,
       }),
     onSuccess: () => {
@@ -157,12 +178,9 @@ export default function InventoryPage() {
       commodityName: values.commodityName as string,
       brand: values.brand as string | undefined,
       origin: values.origin as string | undefined,
-      spec: {
-        ...(values.cu_content !== undefined ? { cu_content: values.cu_content } : {}),
-        ...(values.standard ? { standard: values.standard } : {}),
-      },
-      quantity: values.quantity as number,
-      unit: values.unit as string | undefined,
+      spec: values.spec as Record<string, unknown>,
+      quantity: values.quantity as string,
+      unit: registerCategory?.unit,
       remark: values.remark as string | undefined,
     })
   }
@@ -175,14 +193,14 @@ export default function InventoryPage() {
 
   const openEdit = (note: InventoryNoteView) => {
     setEditing(note)
+    editForm.resetFields()
     editForm.setFieldsValue({
       categoryId: note.categoryId,
       commodityName: note.commodityName,
       brand: note.brand,
       origin: note.origin,
-      cu_content: note.spec?.cu_content,
-      standard: note.spec?.standard,
-      remark: undefined,
+      spec: note.spec,
+      remark: note.remark,
     })
   }
 
@@ -272,6 +290,7 @@ export default function InventoryPage() {
                 icon={<EditOutlined />}
                 disabled={locked}
                 onClick={() => openEdit(row)}
+                aria-label={`修改${row.commodityName}`}
               />
             </Tooltip>
             <Popconfirm
@@ -294,7 +313,7 @@ export default function InventoryPage() {
   ]
 
   return (
-    <div style={{ padding: 24, maxWidth: 1500, margin: '0 auto' }}>
+    <div className="inventory-page" style={{ padding: 24, maxWidth: 1500, margin: '0 auto' }}>
       <div
         style={{
           display: 'flex',
@@ -315,25 +334,27 @@ export default function InventoryPage() {
           登记入库
         </Button>
       </div>
+      {(isError || categoryError || warehouseError) && <Alert type="error" showIcon
+        style={{ marginBottom: 16 }} message="暂时无法加载库存或基础资料"
+        action={<Button onClick={() => { void refetch(); void reloadCategories(); void reloadWarehouses() }}>重试</Button>} />}
 
       {/* 汇总跟着当前筛选选中的内容走。 */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col xs={12} sm={6}>
           <Card size="small">
-            <Statistic title="库存单" value={summary.count} suffix="单" />
+            <Statistic title="库存单" value={notes.length} suffix="单" />
           </Card>
         </Col>
         <Col xs={12} sm={6}>
           <Card size="small">
-            <Statistic title="总量" value={qty(summary.total)} suffix="吨" />
+            <Statistic title="现存总量（按单位）" value={summaryText('total')} />
           </Card>
         </Col>
         <Col xs={12} sm={6}>
           <Card size="small">
             <Statistic
               title="可用"
-              value={qty(summary.available)}
-              suffix="吨"
+              value={summaryText('available')}
               valueStyle={{ color: '#389e0d' }}
             />
           </Card>
@@ -342,9 +363,8 @@ export default function InventoryPage() {
           <Card size="small">
             <Statistic
               title="冻结"
-              value={qty(summary.frozen)}
-              suffix="吨"
-              valueStyle={{ color: summary.frozen > 0 ? '#d46b08' : undefined }}
+              value={summaryText('frozen')}
+              valueStyle={{ color: '#d46b08' }}
             />
           </Card>
         </Col>
@@ -381,6 +401,7 @@ export default function InventoryPage() {
         loading={isLoading}
         dataSource={filtered}
         columns={columns}
+        scroll={{ x: 850 }}
         pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
         locale={{
           emptyText:
@@ -410,6 +431,7 @@ export default function InventoryPage() {
               options={categoryOptions.map((o) => ({ value: o.id, label: o.label }))}
               showSearch
               optionFilterProp="label"
+              onChange={() => registerForm.setFieldsValue({ spec: undefined })}
             />
           </Form.Item>
 
@@ -443,29 +465,21 @@ export default function InventoryPage() {
 
           <Row gutter={12}>
             <Col span={12}>
-              <Form.Item name="quantity" label="数量" rules={[{ required: true, message: '请填写数量' }]}>
-                <InputNumber min={0.001} step={1} style={{ width: '100%' }} placeholder="100" />
+              <Form.Item name="quantity" label="数量" rules={[
+                { required: true, message: '请填写数量' },
+                { pattern: /^(?:0|[1-9]\d{0,14})(?:\.\d{1,3})?$/, message: '最多 15 位整数和 3 位小数' },
+              ]}>
+                <InputNumber stringMode min="0.001" max="999999999999999.999" step="1" style={{ width: '100%' }} placeholder="100" />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="unit" label="单位">
-                <Input placeholder="留空按品类默认" />
+              <Form.Item label="单位">
+                <Input value={registerCategory?.unit ?? ''} readOnly placeholder="选择品类后显示" />
               </Form.Item>
             </Col>
           </Row>
 
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item name="cu_content" label="铜含量 (%)">
-                <InputNumber min={0} max={100} step={0.01} style={{ width: '100%' }} placeholder="99.99" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="standard" label="执行标准">
-                <Input placeholder="如：GB/T 467-2010" />
-              </Form.Item>
-            </Col>
-          </Row>
+          {specFields(registerCategory?.specSchema)}
 
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={2} maxLength={256} showCount />
@@ -496,7 +510,7 @@ export default function InventoryPage() {
           showIcon
           style={{ marginBottom: 16 }}
           message="只能修改描述信息"
-          description="数量、仓库、单位不可修改。变动要走入库、出库或移库流程。"
+          description="数量、仓库、单位不可修改；存在冻结数量时仅可修改备注。"
         />
         <Form form={editForm} layout="vertical" onFinish={(values) => editing && void doUpdate({ id: editing.id, values })}>
           <Form.Item name="categoryId" label="品类" rules={[{ required: true, message: '请选择品类' }]}>
@@ -504,6 +518,8 @@ export default function InventoryPage() {
               options={categoryOptions.map((o) => ({ value: o.id, label: o.label }))}
               showSearch
               optionFilterProp="label"
+              disabled={Number(editing?.frozenQuantity) > 0}
+              onChange={() => editForm.setFieldsValue({ spec: undefined })}
             />
           </Form.Item>
 
@@ -512,34 +528,23 @@ export default function InventoryPage() {
             label="商品名称"
             rules={[{ required: true, message: '请填写商品名称' }]}
           >
-            <Input />
+            <Input disabled={Number(editing?.frozenQuantity) > 0} />
           </Form.Item>
 
           <Row gutter={12}>
             <Col span={12}>
               <Form.Item name="brand" label="品牌">
-                <Input />
+                <Input disabled={Number(editing?.frozenQuantity) > 0} />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="origin" label="产地">
-                <Input />
+                <Input disabled={Number(editing?.frozenQuantity) > 0} />
               </Form.Item>
             </Col>
           </Row>
 
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item name="cu_content" label="铜含量 (%)">
-                <InputNumber min={0} max={100} step={0.01} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="standard" label="执行标准">
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
+          {specFields(editCategory?.specSchema, Number(editing?.frozenQuantity) > 0)}
 
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={2} maxLength={256} showCount />

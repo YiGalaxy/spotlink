@@ -8,5 +8,6 @@ $script:CheckRegistry = [ordered]@{
     C05 = @{ Required = @('static', 'ops', 'e2e'); Checks = @{ static = 'static'; ops = 'compose-runtime'; e2e = 'compose-runtime' } }
     C06 = @{ Required = @('static', 'unit', 'dataset'); Checks = @{ static = 'static'; unit = 'data-unit'; dataset = 'dataset-generation' } }
     C07 = @{ Required = @('static', 'unit', 'integration', 'e2e'); Checks = @{ static = 'static'; unit = 'auth-unit'; integration = 'backend-integration'; e2e = 'auth-browser' } }
+    C08 = @{ Required = @('static', 'unit', 'integration', 'dataset', 'e2e'); Checks = @{ static = 'static'; unit = 'auth-unit'; integration = 'backend-integration'; dataset = 'data-unit'; e2e = 'inventory-browser' } }
 }
 $script:ValidCheckModes = @('task', 'full', 'static', 'unit', 'integration', 'dataset', 'ai-offline', 'rag', 'e2e', 'visual', 'ops', 'ai-live')

@@ -21,6 +21,7 @@ public record CategoryNode(
         Integer level,
         String unit,
         Integer sortOrder,
+        List<java.util.Map<String, Object>> specSchema,
         List<CategoryNode> children
 ) {
 
@@ -33,6 +34,16 @@ public record CategoryNode(
                 entity.getLevel(),
                 entity.getUnit(),
                 entity.getSortOrder(),
+                parseSchema(entity.getSpecSchema()),
                 children);
+    }
+
+    private static List<java.util.Map<String, Object>> parseSchema(String value) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(value,
+                    new com.fasterxml.jackson.core.type.TypeReference<>() {});
+        } catch (Exception e) {
+            throw new IllegalStateException("品类规格定义无效", e);
+        }
     }
 }

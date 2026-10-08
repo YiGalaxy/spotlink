@@ -286,3 +286,30 @@ body {
   border-top: 1px solid #eceef2;
   margin: 14px 0;
 }
+
+.inventory-page .ant-statistic-content {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .inventory-page {
+    padding: 16px !important;
+    min-width: 0;
+  }
+  .inventory-page > div:first-child {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .inventory-page .ant-col {
+    margin-bottom: 8px;
+  }
+  .inventory-page .ant-segmented {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .inventory-page .ant-space,
+  .inventory-page .ant-space-item {
+    max-width: 100%;
+  }
+}

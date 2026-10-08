@@ -8,7 +8,7 @@ export interface InventoryRegisterPayload {
   brand?: string
   origin?: string
   spec?: Record<string, unknown>
-  quantity: number
+  quantity: string
   unit?: string
   remark?: string
 }

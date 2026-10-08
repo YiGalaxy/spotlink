@@ -36,6 +36,7 @@ public class InventoryService {
     private final CommodityCategoryMapper categoryMapper;
     private final WarehouseMapper warehouseMapper;
     private final ObjectMapper objectMapper;
+    private final InventoryRules rules;
 
     /**
      * 登记货物并创建库存单。
@@ -47,14 +48,17 @@ public class InventoryService {
      */
     @Transactional
     public InventoryNote register(InventoryRegisterRequest request, Long enterpriseId) {
-        CommodityCategory category = categoryMapper.selectById(request.categoryId());
-        if (category == null || !Integer.valueOf(1).equals(category.getStatus())) {
-            throw BusinessException.of(ResultCode.CATEGORY_NOT_FOUND);
+        InventoryRules.quantity(request.quantity());
+        CommodityCategory category = loadActiveLeaf(request.categoryId());
+        rules.spec(category, request.spec());
+        if (request.unit() != null && !request.unit().isBlank()
+                && !category.getUnit().equals(request.unit())) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "单位必须与品类一致：" + category.getUnit());
         }
 
         Warehouse warehouse = warehouseMapper.selectById(request.warehouseId());
-        if (warehouse == null) {
-            throw BusinessException.of(ResultCode.NOT_FOUND, "交收仓库不存在");
+        if (warehouse == null || !Integer.valueOf(1).equals(warehouse.getStatus())) {
+            throw BusinessException.of(ResultCode.NOT_FOUND, "交收仓库不存在或已停用");
         }
 
         InventoryNote note = new InventoryNote();
@@ -73,9 +77,7 @@ public class InventoryService {
         // 起就是满足的。
         note.setAvailableQuantity(quantity);
         note.setFrozenQuantity(BigDecimal.ZERO);
-        note.setUnit(request.unit() == null || request.unit().isBlank()
-                ? category.getUnit()
-                : request.unit());
+        note.setUnit(category.getUnit());
         note.setStatus(InventoryNote.Status.IN_STOCK);
         note.setVersion(0);
         note.setRemark(request.remark());
@@ -108,8 +110,7 @@ public class InventoryService {
      * {@link com.spotlink.inventory.dto.InventoryUpdateRequest}。这里能改的，只有
      * 文员可能打错的东西。
      *
-     * <p>货物处于冻结状态时仍然允许编辑：品牌名写错并不影响被占用的数量，而禁止纠正
-     * 只会让这个错误一直留在那里，直到挂牌结束为止。
+     * <p>存在冻结数量时只允许修改备注，防止库存与已发布的商品属性发生分歧。
      */
     @Transactional
     public InventoryNote update(Long id, InventoryUpdateRequest request, Long enterpriseId) {
@@ -124,9 +125,18 @@ public class InventoryService {
                             : "已注销的库存单不能再修改");
         }
 
-        CommodityCategory category = categoryMapper.selectById(request.categoryId());
-        if (category == null) {
-            throw BusinessException.of(ResultCode.CATEGORY_NOT_FOUND);
+        CommodityCategory category = loadActiveLeaf(request.categoryId());
+        rules.spec(category, request.spec());
+        if (!note.getUnit().equals(category.getUnit())) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "新旧品类单位不一致，请重新登记库存");
+        }
+        if (note.getFrozenQuantity().signum() > 0
+                && (!note.getCategoryId().equals(request.categoryId())
+                || !note.getCommodityName().equals(request.commodityName())
+                || !java.util.Objects.equals(note.getBrand(), request.brand())
+                || !java.util.Objects.equals(note.getOrigin(), request.origin())
+                || !sameSpec(note.getSpec(), request.spec()))) {
+            throw BusinessException.of(ResultCode.CONFLICT, "存在冻结数量时仅可修改备注，请先解除挂牌或订单");
         }
 
         note.setCategoryId(request.categoryId());
@@ -175,6 +185,26 @@ public class InventoryService {
             throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_FOUND);
         }
         return note;
+    }
+
+    private CommodityCategory loadActiveLeaf(Long id) {
+        CommodityCategory category = categoryMapper.selectById(id);
+        if (category == null || !Integer.valueOf(1).equals(category.getStatus())) {
+            throw BusinessException.of(ResultCode.CATEGORY_NOT_FOUND);
+        }
+        if (categoryMapper.selectCount(Wrappers.<CommodityCategory>lambdaQuery()
+                .eq(CommodityCategory::getParentId, id)) > 0) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "请选择具体的叶子品类");
+        }
+        return category;
+    }
+
+    private boolean sameSpec(String stored, Map<String, Object> incoming) {
+        try {
+            return objectMapper.readTree(stored).equals(objectMapper.readTree(writeSpec(incoming)));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private String writeSpec(Map<String, Object> spec) {

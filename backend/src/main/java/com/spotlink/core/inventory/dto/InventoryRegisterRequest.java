@@ -4,6 +4,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Digits;
 
 import java.math.BigDecimal;
 import java.util.Map;
@@ -37,6 +38,7 @@ public record InventoryRegisterRequest(
 
         @NotNull(message = "请填写数量")
         @DecimalMin(value = "0.001", message = "数量必须大于 0")
+        @Digits(integer = 15, fraction = 3, message = "数量最多 15 位整数和 3 位小数")
         BigDecimal quantity,
 
         @Size(max = 16, message = "单位过长")

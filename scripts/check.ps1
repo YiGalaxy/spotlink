@@ -96,6 +96,10 @@ try {
                     & "$PSScriptRoot/tests/auth-runtime.tests.ps1"
                     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
+                'inventory-browser' {
+                    & "$PSScriptRoot/tests/auth-runtime.tests.ps1" -Inventory
+                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                }
                 'dataset-generation' {
                     $dataArguments = @('node', 'data/generators/generate.mjs', '--dataset', 'minimal', '--batch', 'c06-check')
                     if (Test-Path -LiteralPath "$script:ProjectRoot/.local/data/v1/c06-check/manifest.json") { $dataArguments += '--resume' }

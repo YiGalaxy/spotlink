@@ -67,6 +67,7 @@ public class FreezeService {
                                         Long bizId,
                                         String reason) {
 
+        com.spotlink.inventory.service.InventoryRules.quantity(quantity);
         InventoryNote note = loadOwnedNote(enterpriseId, noteId);
 
         if (!InventoryNote.Status.isTradable(note.getStatus())) {
@@ -180,6 +181,7 @@ public class FreezeService {
      */
     @Transactional
     public Long consumeInventoryPartial(Long enterpriseId, Long freezeId, BigDecimal quantity) {
+        com.spotlink.inventory.service.InventoryRules.quantity(quantity);
         FreezeRecord record = loadFrozen(enterpriseId, freezeId);
 
         if (quantity == null || quantity.signum() <= 0) {
