@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Badge,
@@ -29,7 +29,7 @@ import {
 } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { identityKey, useAuthStore } from '@/store/auth'
 import {
@@ -89,6 +89,8 @@ const ORDER_COLOURS: Record<string, string> = {
 export default function TradingPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const focusedListing = searchParams.get('listing')
   const accessToken = useAuthStore((state) => state.accessToken)
   const user = useAuthStore((state) => state.user)
   const signedIn = Boolean(accessToken)
@@ -104,8 +106,20 @@ export default function TradingPage() {
   const [acceptTarget, setAcceptTarget] = useState<ListingView | null>(null)
   const [publishOpen, setPublishOpen] = useState(false)
   const [detailOrder, setDetailOrder] = useState<OrderView | null>(null)
-  const [sideFilter, setSideFilter] = useState<string | undefined>(undefined)
-  const [keyword, setKeyword] = useState('')
+  const sideFilter = ['SELL', 'BUY'].includes(searchParams.get('side') ?? '') ? searchParams.get('side')! : undefined
+  const keyword = searchParams.get('q') ?? ''
+  const [searchDraft, setSearchDraft] = useState(keyword)
+  useEffect(() => setSearchDraft(keyword), [keyword])
+  const updateFilter = (key: string, value?: string) => setSearchParams(current => {
+    const next = new URLSearchParams(current)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    return next
+  })
+  const setSideFilter = (value?: string) => updateFilter('side', value)
+  const setKeyword = (value: string) => updateFilter('q', value.trim())
+  const requestedTab = searchParams.get('tab')
+  const activeTab = (requestedTab === 'mine' || requestedTab === 'orders') && isMember ? requestedTab : 'market'
   /** 'ACTIVE' | 'FINISHED' | 'ALL' — the top-level split on 我的订单. */
   const [orderPhase, setOrderPhase] = useState<'ACTIVE' | 'FINISHED' | 'ALL'>('ACTIVE')
   /** 空字符串表示所选层级下的全部状态。 */
@@ -513,7 +527,11 @@ export default function TradingPage() {
       </Typography.Title>
 
       <Tabs
-        defaultActiveKey="market"
+        activeKey={activeTab}
+        onChange={tab => {
+          if (tab !== 'market' && !signedIn) { navigate('/login', { state: { from: `/trading?tab=${tab}` } }); return }
+          setSearchParams(current => { const next = new URLSearchParams(current); next.set('tab',tab); next.delete('listing'); return next })
+        }}
         // 未登录的访客只看得到大厅。「我的挂牌」和「我的订单」在没有企业时无所谓
         // 「我的」，把它们渲染成空表，看起来会像一个坏掉的页面，而不是未登录的页面。
         items={[
@@ -533,19 +551,22 @@ export default function TradingPage() {
                         { label: '买方挂牌', value: 'BUY' },
                       ]}
                     />
-                    <Input.Search allowClear placeholder="按商品名称搜索"
+                    <Input.Search allowClear placeholder="按商品名称搜索" value={searchDraft}
                       style={{ width: 240 }}
+                      onChange={event => setSearchDraft(event.target.value)}
                       onSearch={setKeyword}
                       onClear={() => setKeyword('')} />
                     {(sideFilter || keyword) && (
                       <Button type="link" size="small"
-                        onClick={() => { setSideFilter(undefined); setKeyword('') }}>
+                        onClick={() => setSearchParams(current => { const next = new URLSearchParams(current); next.delete('side'); next.delete('q'); return next })}>
                         重置筛选
                       </Button>
                     )}
                   </Space>
                 </Card>
-                <Table rowKey="id" size="middle" loading={marketLoading} dataSource={market}
+                {focusedListing && <Alert type="info" style={{ marginBottom: 12 }} message="已定位你从商城选择的挂牌" description="挂牌可能已成交或过期；以当前大厅数据为准。" action={<Button onClick={() => setSearchParams(current => { const next = new URLSearchParams(current); next.delete('listing'); return next })}>查看全部</Button>}/>}
+                {requestedTab && requestedTab !== 'market' && !isMember && <Alert type="info" style={{ marginBottom: 12 }} message="登录企业账号后可管理挂牌与订单" action={!signedIn ? <Button onClick={() => navigate('/login', { state: { from: `/trading?tab=${requestedTab}` } })}>前往登录</Button> : undefined}/>}
+                <Table rowKey="id" size="middle" loading={marketLoading} dataSource={focusedListing ? market.filter(row => row.id === focusedListing) : market} scroll={{ x: 1100 }}
                   columns={marketColumns} pagination={LIST_PAGINATION}
                   locale={{
                     emptyText: (

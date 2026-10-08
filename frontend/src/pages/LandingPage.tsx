@@ -1,348 +1,516 @@
-import { Button, Card, Col, Empty, Row, Space, Statistic, Table, Tag, Typography } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
+import { Alert, Button, Empty, Modal, Skeleton } from 'antd'
 import {
   ArrowRightOutlined,
-  BookOutlined,
-  LineChartOutlined,
-  SwapOutlined,
+  SearchOutlined,
+  RobotOutlined,
+  ShopOutlined,
+  RightOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import dayjs from 'dayjs'
+import { Link, useSearchParams } from 'react-router-dom'
 import { fetchPublicStats } from '@/api/public'
 import { fetchQuotes } from '@/api/market'
 import { fetchMarket } from '@/api/trading'
+import { fetchCategoryTree } from '@/api/inventory'
 import { identityKey, useAuthStore } from '@/store/auth'
-import type { ListingView, QuoteRow } from '@/types/api'
+import type { CategoryNode, ListingView } from '@/types/api'
+import CommodityArtwork from '@/components/CommodityArtwork'
 
-const PRIMARY = '#1f4e79'
+function leaves(nodes: CategoryNode[]): CategoryNode[] {
+  return nodes.flatMap((node) =>
+    node.children.length ? leaves(node.children) : [node],
+  )
+}
+const format = (value: number) =>
+  new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 4 }).format(value)
 
-/**
- * 公开首页。
- *
- * <p>照着真实大宗商品交易场所对外亮相的方式来做：市场规模有多大、最近成交在什么
- * 价位、眼下有什么在挂、规则放在哪里。这四件事都是访客在决定要不要申请入会之前
- * 有权知道的——而它们没有一样描述任何单个会员。
- *
- * <p>已登录用户也会落到这里，菜单就在旁边。让首页在登录后消失，等于说交易场所
- * 对自身的介绍只给那些已经不再需要它的人看。
- */
 export default function LandingPage() {
-  const navigate = useNavigate()
-  const accessToken = useAuthStore((state) => state.accessToken)
-
-  const { data: stats } = useQuery({
+  const [params, setParams] = useSearchParams()
+  const keyword = params.get('q') ?? ''
+  const categoryId = params.get('category') ?? undefined
+  const side = params.get('side') === 'BUY' ? 'BUY' : 'SELL'
+  const [draft, setDraft] = useState(keyword)
+  const [selected, setSelected] = useState<ListingView | null>(null)
+  useEffect(() => setDraft(keyword), [keyword])
+  const user = useAuthStore((state) => state.user)
+  const stats = useQuery({
     queryKey: identityKey('public-stats'),
     queryFn: fetchPublicStats,
   })
-
-  const { data: quotes = [] } = useQuery({
+  const categories = useQuery({
+    queryKey: identityKey('category-tree'),
+    queryFn: fetchCategoryTree,
+  })
+  const quotes = useQuery({
     queryKey: identityKey('market-quotes'),
     queryFn: () => fetchQuotes(180),
   })
-
-  const { data: listings = [] } = useQuery({
-    queryKey: identityKey('market-listings'),
-    queryFn: () => fetchMarket(),
+  const market = useQuery({
+    queryKey: identityKey('market', categoryId, side, keyword),
+    queryFn: () => fetchMarket(categoryId, side, keyword || undefined),
   })
-
-  // 最近发布的几笔挂牌。首页不是市场本身——它是让你走进市场的理由。
-  const featured = [...listings]
-    .sort((a, b) => dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf())
-    .slice(0, 6)
-
-  const traded = quotes.filter((q) => q.latestPrice !== null).slice(0, 8)
+  const listingRows = useMemo(
+    () =>
+      [...(market.data ?? [])].sort((a, b) =>
+        b.createdAt.localeCompare(a.createdAt),
+      ),
+    [market.data],
+  )
+  const categoryLeaves = leaves(categories.data ?? [])
+  const activeCategory = categoryLeaves.find((c) => c.id === categoryId)
+  const changeFilter = (key: string, value?: string) => {
+    setParams((current) => {
+      const next = new URLSearchParams(current)
+      if (value) next.set(key, value)
+      else next.delete(key)
+      return next
+    })
+  }
+  const clearFilters = () => {
+    setDraft('')
+    setParams({})
+  }
+  const search = (value: string) => {
+    setDraft(value)
+    changeFilter('q', value.trim())
+  }
 
   return (
-    <div>
-      {/* ---------- 头条 ---------- */}
-      <div
-        style={{
-          background: `linear-gradient(135deg, ${PRIMARY} 0%, #2c6da3 100%)`,
-          color: '#fff',
-          padding: '56px 24px 64px',
-        }}
-      >
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <Typography.Title level={2} style={{ color: '#fff', margin: 0, fontSize: 34 }}>
-            现货通 SpotLink
-          </Typography.Title>
-          <Typography.Paragraph
-            style={{ color: 'rgba(255,255,255,.85)', fontSize: 16, marginTop: 12, maxWidth: 620 }}
-          >
-            大宗商品现货挂牌交易平台。挂牌即要约，摘牌即承诺——没有撮合引擎，
-            价格由买卖双方一对一约定。货权与资金全程留痕，每一步都可追溯。
-          </Typography.Paragraph>
-          <Space size={12} style={{ marginTop: 20 }}>
-            <Button
-              type="primary"
-              size="large"
-              icon={<SwapOutlined />}
-              onClick={() => navigate('/trading')}
-              style={{ background: '#fff', color: PRIMARY, borderColor: '#fff', fontWeight: 600 }}
-            >
-              进入挂牌大厅
-            </Button>
-            {accessToken ? (
-              <Button
-                size="large"
-                ghost
-                icon={<ArrowRightOutlined />}
-                onClick={() => navigate('/dashboard')}
-              >
-                回到工作台
-              </Button>
-            ) : (
-              <Button size="large" ghost onClick={() => navigate('/login')}>
-                登录 / 注册
-              </Button>
-            )}
-          </Space>
+    <div className="marketplace site-width">
+      <section className="search-area" aria-label="搜索现货">
+        <div className="search-caption">
+          <strong>找好货，就上现货通</strong>
+          <span>真实挂牌 · 直接采购</span>
         </div>
-      </div>
-
-      {/* ---------- 平台数据 ---------- */}
-      <div style={{ maxWidth: 1200, margin: '-32px auto 0', padding: '0 24px' }}>
-        <Card styles={{ body: { padding: '20px 8px' } }}>
-          <Row gutter={[8, 16]}>
-            <Col xs={12} md={4}>
-              <Statistic title="入驻企业" value={stats?.enterpriseCount ?? 0} suffix="家" />
-            </Col>
-            <Col xs={12} md={4}>
-              <Statistic title="在挂挂牌" value={stats?.openListingCount ?? 0} suffix="笔" />
-            </Col>
-            <Col xs={12} md={4}>
-              <Statistic title="累计成交" value={stats?.tradeCount ?? 0} suffix="笔" />
-            </Col>
-            <Col xs={12} md={4}>
-              <Statistic
-                title="累计成交量"
-                value={stats?.tradedQuantity ?? 0}
-                precision={0}
-                suffix="吨"
-              />
-            </Col>
-            <Col xs={12} md={4}>
-              <Statistic title="累计成交额" value={stats?.tradedAmountText ?? '0 元'} />
-            </Col>
-            <Col xs={12} md={4}>
-              <Statistic
-                title="在库总量"
-                value={stats?.inventoryQuantity ?? 0}
-                precision={0}
-                suffix="吨"
-              />
-            </Col>
-          </Row>
-        </Card>
-      </div>
-
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px 48px' }}>
-        <Row gutter={[24, 24]}>
-          {/* ---------- 最新行情 ---------- */}
-          <Col xs={24} lg={10}>
-            <Card
-              size="small"
-              title="最新行情"
-              extra={
-                <Button type="link" size="small" onClick={() => navigate('/market')}>
-                  查看走势 <ArrowRightOutlined />
-                </Button>
-              }
-              styles={{ body: { padding: 0 } }}
-            >
-              {traded.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="暂无成交"
-                  style={{ padding: 32 }}
-                />
-              ) : (
-                <Table<QuoteRow>
-                  rowKey="categoryId"
-                  size="small"
-                  pagination={false}
-                  dataSource={traded}
-                  columns={[
-                    { title: '品种', dataIndex: 'categoryName' },
-                    {
-                      title: '最新价',
-                      align: 'right',
-                      render: (_, r) => (
-                        <span>
-                          {r.latestPrice}
-                          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                            {' '}
-                            元/{r.unit}
-                          </Typography.Text>
-                        </span>
-                      ),
-                    },
-                    {
-                      title: '涨跌',
-                      align: 'right',
-                      width: 96,
-                      render: (_, r) => {
-                        if (r.changePercent === null || r.changePercent === undefined) {
-                          return <Typography.Text type="secondary">—</Typography.Text>
-                        }
-                        const up = r.changePercent >= 0
-                        return (
-                          <Typography.Text type={up ? 'danger' : 'success'}>
-                            {up ? '+' : ''}
-                            {r.changePercent.toFixed(2)}%
-                          </Typography.Text>
-                        )
-                      },
-                    },
-                  ]}
-                />
-              )}
-            </Card>
-          </Col>
-
-          {/* ---------- 精选挂牌 ---------- */}
-          <Col xs={24} lg={14}>
-            <Card
-              size="small"
-              title="最新挂牌"
-              extra={
-                <Button type="link" size="small" onClick={() => navigate('/trading')}>
-                  进入大厅 <ArrowRightOutlined />
-                </Button>
-              }
-              styles={{ body: { padding: 0 } }}
-            >
-              {featured.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="当前没有在挂的挂牌"
-                  style={{ padding: 32 }}
-                />
-              ) : (
-                <Table<ListingView>
-                  rowKey="id"
-                  size="small"
-                  pagination={false}
-                  dataSource={featured}
-                  columns={[
-                    {
-                      title: '商品',
-                      render: (_, r) => (
-                        <div>
-                          <Typography.Text strong>{r.commodityName}</Typography.Text>
-                          <div>
-                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                              {[r.brand, r.origin].filter(Boolean).join(' · ') || r.categoryName}
-                            </Typography.Text>
-                          </div>
-                        </div>
-                      ),
-                    },
-                    { title: '挂牌方', dataIndex: 'enterpriseName', width: 170 },
-                    {
-                      title: '价格',
-                      align: 'right',
-                      width: 130,
-                      render: (_, r) =>
-                        r.priceType === 'NEGOTIABLE' ? (
-                          <Tag>面议</Tag>
-                        ) : (
-                          <span>
-                            {r.price}
-                            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                              {' '}
-                              元/{r.unit}
-                            </Typography.Text>
-                          </span>
-                        ),
-                    },
-                    {
-                      title: '可摘',
-                      align: 'right',
-                      width: 100,
-                      render: (_, r) => `${r.remainingQuantity} ${r.unit}`,
-                    },
-                    {
-                      title: '成交方式',
-                      width: 110,
-                      render: (_, r) => (
-                        <Tag color={r.confirmMode === 'MANUAL' ? 'orange' : 'default'}>
-                          {r.confirmModeText}
-                        </Tag>
-                      ),
-                    },
-                  ]}
-                />
-              )}
-            </Card>
-          </Col>
-        </Row>
-
-        {/* ---------- 规则在哪里 ---------- */}
-        <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-          {[
-            {
-              icon: <SwapOutlined style={{ fontSize: 22, color: PRIMARY }} />,
-              title: '挂牌交易',
-              body: '发布挂牌即是发出要约，摘牌即作出承诺。支持「摘牌即成交」与「需挂牌方确认」两种成交方式。',
-              action: () => navigate('/trading'),
-              actionText: '浏览挂牌',
-            },
-            {
-              icon: <LineChartOutlined style={{ fontSize: 22, color: PRIMARY }} />,
-              title: '行情走势',
-              body: '平台内成交均价、成交量、挂牌量与在库量，每个点标出背后的成交笔数。',
-              action: () => navigate('/market'),
-              actionText: '查看行情',
-            },
-            {
-              icon: <BookOutlined style={{ fontSize: 22, color: PRIMARY }} />,
-              title: '交易规则',
-              body: '挂牌、摘牌、签约、交收、结算的完整流程与各方义务，以条文形式公布，并作为 AI 顾问回答规则类问题的依据。',
-              action: () => navigate('/knowledge'),
-              actionText: '查阅规则',
-            },
-          ].map((item) => (
-            <Col xs={24} md={8} key={item.title}>
-              <Card size="small" style={{ height: '100%' }}>
-                <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                  <Space size={10}>
-                    {item.icon}
-                    <Typography.Text strong style={{ fontSize: 15 }}>
-                      {item.title}
-                    </Typography.Text>
-                  </Space>
-                  <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                    {item.body}
-                  </Typography.Text>
-                  <Button type="link" size="small" style={{ paddingLeft: 0 }} onClick={item.action}>
-                    {item.actionText} <ArrowRightOutlined />
-                  </Button>
-                </Space>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-
-        {!accessToken && (
-          <Card
-            size="small"
-            style={{ marginTop: 24, background: '#f6f8fb', borderColor: '#e3e9f2' }}
+        <div className="search-wrap">
+          <form
+            className="market-search"
+            onSubmit={(event) => {
+              event.preventDefault()
+              search(draft)
+            }}
           >
-            <Space
-              style={{ width: '100%', justifyContent: 'space-between', flexWrap: 'wrap' }}
-              size={12}
-            >
-              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                浏览无需登录。挂牌、摘牌、查看库存与使用 AI 顾问需要企业账号。
-              </Typography.Text>
-              <Button type="primary" size="small" onClick={() => navigate('/login')}>
-                登录 / 注册
-              </Button>
-            </Space>
-          </Card>
+            <SearchOutlined aria-hidden="true" />
+            <input
+              aria-label="搜索商品"
+              placeholder="搜索商品名称，例如：电解铜、铝锭、碳酸锂"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            <button type="submit">搜索现货</button>
+          </form>
+          <div className="search-suggestions">
+            <span>按品种找货</span>
+            {categoryLeaves.slice(0, 5).map((c) => (
+              <button
+                key={c.id}
+                onClick={() => {
+                  changeFilter('category', c.id)
+                  document.getElementById('goods')?.scrollIntoView()
+                }}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        <Link className="publish-entry" to="/trading?tab=mine">
+          <ShopOutlined />
+          <span>
+            我是供应商<small>发布我的挂牌 →</small>
+          </span>
+        </Link>
+      </section>
+      <section className="mall-showcase" aria-label="采购入口">
+        <aside className="category-panel">
+          <h2>
+            <span className="category-lines" aria-hidden="true">
+              ☰
+            </span>{' '}
+            商品分类
+          </h2>
+          {categories.isPending ? (
+            <Skeleton active paragraph={{ rows: 5 }} />
+          ) : categories.isError ? (
+            <div className="panel-error">
+              分类加载失败{' '}
+              <button onClick={() => void categories.refetch()}>重试</button>
+            </div>
+          ) : (
+            <div className="category-rows">
+              {(categories.data ?? []).map((root) => (
+                <div key={root.id} className="category-row">
+                  <span className="category-marker" aria-hidden="true">
+                    {root.name.slice(0, 1)}
+                  </span>
+                  <div>
+                    <strong>{root.name}</strong>
+                    <div>
+                      {leaves([root])
+                        .slice(0, 3)
+                        .map((c) => (
+                          <button
+                            key={c.id}
+                            className={categoryId === c.id ? 'selected' : ''}
+                            onClick={() => changeFilter('category', c.id)}
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                  <RightOutlined />
+                </div>
+              ))}
+              {categories.data?.length === 0 && <p>暂无商品分类</p>}
+            </div>
+          )}
+          <Link className="category-all" to="/trading">
+            查看全部挂牌 <ArrowRightOutlined />
+          </Link>
+        </aside>
+        <div className="showcase-center">
+          <div className="sourcing-banner">
+            <div className="banner-copy">
+              <span className="eyebrow">SPOTLINK / 现货采购</span>
+              <h1>
+                大宗好货
+                <br />
+                直接找到。
+              </h1>
+              <p>
+                从一笔真实挂牌开始，
+                <br />
+                连接你的下一位生意伙伴。
+              </p>
+              <a href="#goods" className="banner-button">
+                逛逛现货 <ArrowRightOutlined />
+              </a>
+            </div>
+            <div className="banner-visual">
+              <CommodityArtwork name="电解铜" hero />
+              <span className="material-note">金属 · 品类示意</span>
+              <span className="visual-caption">
+                GOOD MATERIALS.
+                <br />
+                BETTER CONNECTIONS.
+              </span>
+            </div>
+          </div>
+          <div className="service-strip">
+            <span>
+              <b>01</b> 看现货 <small>价格与可购量公开</small>
+            </span>
+            <span>
+              <b>02</b> 问顾问 <small>了解规则与交易流程</small>
+            </span>
+            <span>
+              <b>03</b> 做交易 <small>挂牌到交收全程留痕</small>
+            </span>
+          </div>
+        </div>
+        <aside className="buyer-panel">
+          <div className="buyer-greeting">
+            <span className="greeting-avatar">
+              {user?.realName?.slice(0, 1) ?? 'Hi'}
+            </span>
+            <h2>
+              {user
+                ? `你好，${user.realName || user.username}`
+                : '欢迎来到现货通'}
+            </h2>
+            <p>{user?.enterpriseName || '逛市场、找现货，从这里开始'}</p>
+          </div>
+          <Link className="member-button" to={user ? '/dashboard' : '/login'}>
+            {user ? '进入我的工作台' : '登录企业账号'} <ArrowRightOutlined />
+          </Link>
+          <div className="buyer-shortcuts">
+            <Link to="/trading?tab=orders">我的订单</Link>
+            <Link to="/inventory">库存管理</Link>
+            <Link to="/enterprise">企业信息</Link>
+          </div>
+          <div className="advisor-promo">
+            <RobotOutlined />
+            <strong>采购有疑问？问 AI 顾问</strong>
+            <p>
+              找商品、查库存、了解交易规则，
+              <br />
+              用一句话开始。
+            </p>
+            <Link to="/advisor">
+              开始咨询 <ArrowRightOutlined />
+            </Link>
+          </div>
+        </aside>
+      </section>
+      <section className="quote-strip" aria-label="平台成交行情">
+        <div className="quote-label">
+          <strong>现货行情</strong>
+          <Link to="/market">查看走势 →</Link>
+        </div>
+        {quotes.isPending ? (
+          <Skeleton active paragraph={false} />
+        ) : quotes.isError ? (
+          <span className="quote-empty">
+            行情加载失败{' '}
+            <button onClick={() => void quotes.refetch()}>重试</button>
+          </span>
+        ) : (
+          (quotes.data ?? [])
+            .filter((q) => q.latestPrice !== null)
+            .slice(0, 4)
+            .map((q) => (
+              <Link to="/market" className="quote-item" key={q.categoryId}>
+                <span>{q.categoryName}</span>
+                <b>
+                  {format(q.latestPrice!)} <small>元/{q.unit}</small>
+                </b>
+                <em
+                  className={
+                    (q.changePercent ?? 0) < 0 ? 'price-down' : 'price-up'
+                  }
+                >
+                  {q.changePercent == null
+                    ? '暂无对比'
+                    : `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(2)}%`}
+                </em>
+              </Link>
+            ))
         )}
+        {!quotes.isPending &&
+          !quotes.isError &&
+          !(quotes.data ?? []).some((q) => q.latestPrice !== null) && (
+            <span className="quote-empty">
+              暂无平台成交行情，挂牌报价可在下方查看。
+            </span>
+          )}
+      </section>
+      <section id="goods" className="goods-section" aria-label="现货商品">
+        <div className="goods-heading">
+          <div>
+            <span className="eyebrow">现货在这里</span>
+            <h2>
+              {keyword
+                ? `“${keyword}”的搜索结果`
+                : activeCategory
+                  ? activeCategory.name
+                  : '发现好货'}
+              <small>真实挂牌，按最新发布排序</small>
+            </h2>
+          </div>
+          <Link to="/trading">
+            全部挂牌 <ArrowRightOutlined />
+          </Link>
+        </div>
+        <div className="goods-toolbar">
+          <div role="group" aria-label="挂牌方向">
+            <button
+              className={side === 'SELL' ? 'active' : ''}
+              onClick={() => changeFilter('side', 'SELL')}
+            >
+              供应现货
+            </button>
+            <button
+              className={side === 'BUY' ? 'active' : ''}
+              onClick={() => changeFilter('side', 'BUY')}
+            >
+              采购需求
+            </button>
+          </div>
+          <div className="category-chips">
+            <button
+              className={!categoryId ? 'active' : ''}
+              onClick={() => changeFilter('category')}
+            >
+              全部品种
+            </button>
+            {categoryLeaves.map((c) => (
+              <button
+                key={c.id}
+                className={categoryId === c.id ? 'active' : ''}
+                onClick={() => changeFilter('category', c.id)}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        {(keyword || categoryId) && (
+          <div className="filter-summary">
+            {activeCategory?.name} {keyword && `关键词：${keyword}`}{' '}
+            <button onClick={clearFilters}>清除筛选</button>
+          </div>
+        )}
+        {market.isPending ? (
+          <div className="goods-grid">
+            {[0, 1, 2, 3, 4].map((n) => (
+              <div className="goods-skeleton" key={n}>
+                <Skeleton.Image active />
+                <Skeleton active paragraph={{ rows: 2 }} />
+              </div>
+            ))}
+          </div>
+        ) : market.isError ? (
+          <Alert
+            type="error"
+            showIcon
+            message="暂时无法加载挂牌"
+            description="请检查服务连接后重试。"
+            action={<Button onClick={() => void market.refetch()}>重试</Button>}
+          />
+        ) : listingRows.length === 0 ? (
+          <div className="goods-empty">
+            <Empty description="当前没有符合条件的有效挂牌" />
+            <Button onClick={clearFilters}>查看全部现货</Button>
+            <Link to="/trading">前往挂牌大厅</Link>
+          </div>
+        ) : (
+          <div className="goods-grid">
+            {listingRows.slice(0, 20).map((row) => (
+              <button
+                key={row.id}
+                className="product-card"
+                onClick={() => setSelected(row)}
+                aria-label={`查看${row.commodityName}挂牌详情`}
+              >
+                <div className="product-visual">
+                  <CommodityArtwork
+                    name={`${row.categoryName} ${row.commodityName}`}
+                  />
+                  <span className="listing-badge">
+                    {row.side === 'SELL' ? '现货供应' : '采购需求'}
+                  </span>
+                  <span className="art-label">品类示意</span>
+                </div>
+                <div className="product-body">
+                  <span className="product-category">
+                    {row.categoryName} · {row.origin || '产地未注明'}
+                  </span>
+                  <h3>{row.commodityName}</h3>
+                  <p className="product-spec">
+                    {[row.brand, ...Object.values(row.spec)]
+                      .filter(Boolean)
+                      .map(String)
+                      .join(' / ') || '规格详见挂牌'}
+                  </p>
+                  <div className="product-price">
+                    {row.priceType === 'NEGOTIABLE' ? (
+                      <strong>价格面议</strong>
+                    ) : (
+                      <>
+                        <span>¥</span>
+                        <strong>
+                          {row.price == null ? '—' : format(row.price)}
+                        </strong>
+                        <small>/{row.unit}</small>
+                      </>
+                    )}
+                  </div>
+                  <div className="product-meta">
+                    <span>
+                      {row.side === 'SELL' ? '可购' : '需求'}{' '}
+                      {format(row.remainingQuantity)} {row.unit}
+                    </span>
+                    <span>{row.deliveryMethodText}</span>
+                  </div>
+                  <div className="product-supplier">
+                    <ShopOutlined />
+                    <span>{row.enterpriseName}</span>
+                    <ArrowRightOutlined />
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+        {listingRows.length > 20 && (
+          <Link className="more-goods" to="/trading">
+            去挂牌大厅查看更多商品 →
+          </Link>
+        )}
+      </section>
+      <div className="platform-proof">
+        <span>连接真实现货市场</span>
+        {stats.isSuccess && (
+          <>
+            <strong>
+              {format(stats.data.enterpriseCount)}
+              <small>家入驻企业</small>
+            </strong>
+            <strong>
+              {format(stats.data.openListingCount)}
+              <small>笔在挂挂牌</small>
+            </strong>
+            <strong>
+              {format(stats.data.tradeCount)}
+              <small>笔累计成交</small>
+            </strong>
+          </>
+        )}
+        <Link to="/market">了解平台行情 →</Link>
       </div>
+      <Modal
+        title="挂牌详情"
+        open={Boolean(selected)}
+        onCancel={() => setSelected(null)}
+        footer={null}
+        width={620}
+      >
+        {selected && (
+          <div className="listing-detail">
+            <CommodityArtwork
+              name={`${selected.categoryName} ${selected.commodityName}`}
+            />
+            <small>品类示意，非实物照片</small>
+            <h2>{selected.commodityName}</h2>
+            <p className="detail-price">
+              {selected.priceText}{' '}
+              <span>
+                {selected.priceType === 'FIXED' ? `元/${selected.unit}` : ''}
+              </span>
+            </p>
+            <dl>
+              {[
+                ['挂牌号', selected.listingNo],
+                ['挂牌企业', selected.enterpriseName],
+                ['品类', selected.categoryName],
+                [
+                  '品牌 / 产地',
+                  [selected.brand, selected.origin]
+                    .filter(Boolean)
+                    .join(' / ') || '未注明',
+                ],
+                [
+                  '规格',
+                  Object.entries(selected.spec)
+                    .map(([k, v]) => `${k}：${String(v)}`)
+                    .join(' / ') || '未注明',
+                ],
+                [
+                  '剩余数量',
+                  `${format(selected.remainingQuantity)} ${selected.unit}`,
+                ],
+                ['仓库', selected.warehouseName || '未指定'],
+                ['交收方式', selected.deliveryMethodText],
+                ['成交方式', selected.confirmModeText],
+                ['有效期', selected.validUntil.replace('T', ' ')],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <Link
+              className="member-button"
+              to={`/trading?listing=${encodeURIComponent(selected.id)}&side=${selected.side}`}
+            >
+              前往大厅查看与摘牌 <ArrowRightOutlined />
+            </Link>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

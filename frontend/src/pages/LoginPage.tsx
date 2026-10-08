@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Button, Card, Form, Input, Typography, Alert, Divider } from 'antd'
 import { LockOutlined, UserOutlined } from '@ant-design/icons'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import CommodityArtwork from '@/components/CommodityArtwork'
 import { login as loginApi } from '@/api/auth'
 import { useAuthStore } from '@/store/auth'
 import { notifySuccess } from '@/utils/notify'
@@ -33,10 +34,9 @@ export default function LoginPage() {
       if (useAuthStore.getState().sessionId !== sessionId) return
       login(data)
       notifySuccess('登录成功')
-      // 回到守卫当初打断他们的地方，或者工作台。不是首页：刚刚登录的人是
-      // 来这里干活的，而公开页面在菜单里只差一次点击。
+      // 主动登录后回商城；从受保护功能进入时保留原目标。
       const from = (location.state as { from?: string } | null)?.from
-      navigate(from ?? '/dashboard', { replace: true })
+      navigate(from ?? '/', { replace: true })
     } catch {
       // axios 层已经把原因提示出来了。
     } finally {
@@ -49,75 +49,113 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #eef3ff 0%, #f7f8fa 55%, #eef7f2 100%)',
-        padding: 24,
-      }}
-    >
-      <Card style={{ width: 400 }} styles={{ body: { padding: 32 } }}>
-        <Typography.Title level={3} style={{ marginBottom: 4 }}>
-          现货通 SpotLink
-        </Typography.Title>
-        <Typography.Text type="secondary">
-          挂牌 · 摘牌 · 协议交易
-        </Typography.Text>
+    <div className="login-screen">
+      <Link to="/" className="brand" aria-label="现货通首页">
+        <span className="brand-symbol" aria-hidden="true">
+          S<span>↗</span>
+        </span>
+        <span className="brand-name">
+          现货通<small>SpotLink · 大宗现货</small>
+        </span>
+      </Link>
+      <div className="login-content">
+        <section className="login-intro">
+          <span className="eyebrow">SPOTLINK / 连接每一笔现货生意</span>
+          <h1>
+            好货在眼前，
+            <br />
+            生意更进一步。
+          </h1>
+          <p>
+            登录企业账号，管理库存、处理订单，
+            <br />让 AI 顾问帮你理清下一步。
+          </p>
+          <CommodityArtwork name="钢材" />
+        </section>
+        <Card className="login-card" styles={{ body: { padding: 32 } }}>
+          <Typography.Title level={3} style={{ marginBottom: 4 }}>
+            欢迎登录
+          </Typography.Title>
+          <Typography.Text type="secondary">
+            挂牌 · 摘牌 · 协议交易
+          </Typography.Text>
 
-        <Form form={form} layout="vertical" onFinish={onFinish} style={{ marginTop: 28 }}>
-          <Form.Item
-            name="username"
-            label="用户名"
-            rules={[{ required: true, message: '请输入用户名' }]}
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={onFinish}
+            style={{ marginTop: 28 }}
           >
-            <Input prefix={<UserOutlined />} placeholder="用户名" size="large" autoComplete="username" />
-          </Form.Item>
+            <Form.Item
+              name="username"
+              label="用户名"
+              rules={[{ required: true, message: '请输入用户名' }]}
+            >
+              <Input
+                prefix={<UserOutlined />}
+                placeholder="用户名"
+                size="large"
+                autoComplete="username"
+              />
+            </Form.Item>
 
-          <Form.Item
-            name="password"
-            label="密码"
-            rules={[{ required: true, message: '请输入密码' }]}
-          >
-            <Input.Password
-              prefix={<LockOutlined />}
-              placeholder="密码"
+            <Form.Item
+              name="password"
+              label="密码"
+              rules={[{ required: true, message: '请输入密码' }]}
+            >
+              <Input.Password
+                prefix={<LockOutlined />}
+                placeholder="密码"
+                size="large"
+                autoComplete="current-password"
+              />
+            </Form.Item>
+
+            <Button
+              type="primary"
+              htmlType="submit"
               size="large"
-              autoComplete="current-password"
-            />
-          </Form.Item>
+              block
+              loading={loading}
+            >
+              登录
+            </Button>
+          </Form>
 
-          <Button type="primary" htmlType="submit" size="large" block loading={loading}>
-            登录
-          </Button>
-        </Form>
-
-        <Divider plain style={{ marginTop: 28, fontSize: 12 }}>
-          开发环境账号
-        </Divider>
-        <Alert
-          type="info"
-          showIcon={false}
-          style={{ padding: '8px 12px' }}
-          message={
-            <div style={{ fontSize: 12, lineHeight: 2 }}>
-              {DEMO_ACCOUNTS.map((account) => (
-                <div key={account.username}>
-                  <Typography.Link onClick={() => fillAccount(account.username)}>
-                    {account.username}
-                  </Typography.Link>
-                  <Typography.Text type="secondary">
-                    {' '}
-                    / Admin@123 — {account.label}
-                  </Typography.Text>
-                </div>
-              ))}
-            </div>
-          }
-        />
-      </Card>
+          <Divider plain style={{ marginTop: 28, fontSize: 12 }}>
+            开发环境账号
+          </Divider>
+          <Alert
+            type="info"
+            showIcon={false}
+            style={{ padding: '8px 12px' }}
+            message={
+              <div style={{ fontSize: 12, lineHeight: 2 }}>
+                {DEMO_ACCOUNTS.map((account) => (
+                  <div key={account.username}>
+                    <Typography.Link
+                      onClick={() => fillAccount(account.username)}
+                    >
+                      {account.username}
+                    </Typography.Link>
+                    <Typography.Text type="secondary">
+                      {' '}
+                      / Admin@123 — {account.label}
+                    </Typography.Text>
+                  </div>
+                ))}
+              </div>
+            }
+          />
+        </Card>
+      </div>
+      <div className="login-footer">
+        个人作品集项目 ·{' '}
+        <Link to="/" className="login-home">
+          返回现货商城
+        </Link>
+      </div>
     </div>
   )
 }

@@ -5,7 +5,7 @@ async (page) => {
     await page.getByLabel('用户名', { exact: true }).fill(username)
     await page.getByLabel('密码', { exact: true }).fill('Admin@123')
     await page.getByRole('button', { name: /登\s*录/, exact: true }).click()
-    await page.waitForURL('**/dashboard')
+    await page.waitForURL('http://localhost:38080/')
   }
   const profile = async () => {
     await page.goto('http://localhost:38080/enterprise')

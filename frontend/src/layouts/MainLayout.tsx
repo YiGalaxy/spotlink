@@ -1,60 +1,31 @@
-import { Avatar, Badge, Button, Divider, Dropdown, Layout, Menu, Space, Tag, Typography } from 'antd'
+import { Badge, Dropdown } from 'antd'
 import {
-  BankOutlined,
-  DashboardOutlined,
-  DatabaseOutlined,
-  HomeOutlined,
-  LineChartOutlined,
-  LoginOutlined,
+  DownOutlined,
   LogoutOutlined,
   RobotOutlined,
-  SwapOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchTasks } from '@/api/tasks'
 import { useTaskStream } from '@/hooks/useTaskStream'
 import { identityKey, useAuthStore } from '@/store/auth'
-
-const { Header, Sider, Content, Footer } = Layout
-
-const footerStyle: React.CSSProperties = {
-  textAlign: 'center',
-  background: '#fff',
-  borderTop: '1px solid #eceef2',
-  padding: '12px 24px',
-  height: 'auto',
-  lineHeight: 1.6,
-}
-
-/** 菜单项与可用路由保持一一对应。 */
-const PUBLIC_MENU = [
-  { key: '/', icon: <HomeOutlined />, label: '首页' },
-  { key: '/market', icon: <LineChartOutlined />, label: '行情' },
-  { key: '/trading', icon: <SwapOutlined />, label: '挂牌交易' },
-]
-
-// 知识库仅供运营后台维护和查看。
-
-/** 登录后可见、按企业数据隔离的菜单。 */
-const MEMBER_MENU = [
-  { key: '/dashboard', icon: <DashboardOutlined />, label: '工作台' },
-  { key: '/inventory', icon: <DatabaseOutlined />, label: '我的库存' },
-  { key: '/advisor', icon: <RobotOutlined />, label: 'AI 顾问' },
-  { key: '/enterprise', icon: <BankOutlined />, label: '企业信息' },
-]
+import { useEffect, useState } from 'react'
 
 export default function MainLayout() {
   const navigate = useNavigate()
-  const location = useLocation()
   const user = useAuthStore((state) => state.user)
-  const accessToken = useAuthStore((state) => state.accessToken)
+  const signedIn = Boolean(useAuthStore((state) => state.accessToken))
   const clear = useAuthStore((state) => state.clear)
-
-  const signedIn = Boolean(accessToken)
-
-  // SSE 实时刷新，轮询兜底。
+  const [accountOpen, setAccountOpen] = useState(false)
+  useEffect(() => {
+    if (!accountOpen) return
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAccountOpen(false)
+    }
+    document.addEventListener('keydown', dismiss)
+    return () => document.removeEventListener('keydown', dismiss)
+  }, [accountOpen])
   useTaskStream()
   const { data: tasks = [] } = useQuery({
     queryKey: identityKey('tasks'),
@@ -62,154 +33,110 @@ export default function MainLayout() {
     enabled: signedIn,
     refetchInterval: 60_000,
   })
-  const pendingCount = tasks.length
-
-  // 保持公开菜单顺序不变。
-  const menuItems = signedIn
-    ? [...PUBLIC_MENU, ...MEMBER_MENU]
-    : PUBLIC_MENU
-
-  // 将跨模块待办集中提示到交易入口。
-  const itemsWithBadge = menuItems.map((item) =>
-    item.key === '/trading' && pendingCount > 0
-      ? {
-          ...item,
-          label: (
-            <Space size={6}>
-              <span>{item.label}</span>
-              <Badge count={pendingCount} size="small" />
-            </Space>
-          ),
-        }
-      : item,
-  )
-
-  // 菜单项使用精确路径匹配。
-  const selectedKey = menuItems.find((item) => item.key === location.pathname)?.key ?? '/'
-
-  const handleLogout = () => {
-    clear()
-    navigate('/', { replace: true })
+  const accountMenu = {
+    items: [
+      {
+        key: 'enterprise',
+        label: '企业信息',
+        onClick: () => navigate('/enterprise'),
+      },
+      {
+        key: 'inventory',
+        label: '我的库存',
+        onClick: () => navigate('/inventory'),
+      },
+      ...(user?.platformOperator
+        ? [
+            {
+              key: 'knowledge',
+              label: '知识库管理',
+              onClick: () => navigate('/knowledge'),
+            },
+          ]
+        : []),
+      {
+        key: 'logout',
+        icon: <LogoutOutlined />,
+        label: '退出登录',
+        onClick: () => {
+          clear()
+          navigate('/', { replace: true })
+        },
+      },
+    ],
   }
-
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider theme="light" width={216} style={{ borderRight: '1px solid #eceef2' }}>
-        <div
-          style={{
-            height: 56,
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 20px',
-            fontWeight: 600,
-            fontSize: 15,
-            borderBottom: '1px solid #eceef2',
-            cursor: 'pointer',
-          }}
-          onClick={() => navigate('/')}
-        >
-          现货通 SpotLink
-        </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          items={itemsWithBadge}
-          style={{ borderInlineEnd: 'none', paddingTop: 8 }}
-          onClick={({ key }) => navigate(key)}
-        />
-
-        {!signedIn && (
-          <div style={{ padding: '16px 20px' }}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              浏览无需登录。
-              <br />
-              交易、库存与 AI 顾问需要企业账号。
-            </Typography.Text>
+    <div className="site-shell">
+      <a className="skip-link" href="#main-content">
+        跳到页面内容
+      </a>
+      <div className="utility-bar">
+        <div className="site-width utility-inner">
+          <span>现货通，让大宗采购更直接</span>
+          <div className="utility-links">
+            {signedIn ? (
+              <Dropdown
+                menu={accountMenu}
+                trigger={['hover', 'click']}
+                open={accountOpen}
+                onOpenChange={setAccountOpen}
+              >
+                <button className="account-trigger" aria-expanded={accountOpen}>
+                  <UserOutlined /> {user?.realName || user?.username}{' '}
+                  <DownOutlined />
+                </button>
+              </Dropdown>
+            ) : (
+              <Link className="accent-link" to="/login">
+                你好，请登录
+              </Link>
+            )}
+            <Link to="/dashboard">
+              我的工作台{' '}
+              {tasks.length > 0 && <Badge count={tasks.length} size="small" />}
+            </Link>
+            <Link to="/inventory">我的库存</Link>
+            <Link to="/enterprise">企业中心</Link>
           </div>
-        )}
-      </Sider>
-
-      <Layout>
-        <Header
-          style={{
-            background: '#fff',
-            borderBottom: '1px solid #eceef2',
-            paddingInline: 24,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            height: 56,
-            lineHeight: '56px',
-          }}
-        >
-          {signedIn ? (
-            <Dropdown
-              placement="bottomRight"
-              menu={{
-                items: [
-                  {
-                    key: 'logout',
-                    icon: <LogoutOutlined />,
-                    label: '退出登录',
-                    onClick: handleLogout,
-                  },
-                ],
-              }}
-            >
-              <span
-                style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
-              >
-                <Avatar size={26} icon={<UserOutlined />} />
-                <Typography.Text>{user?.realName || user?.username}</Typography.Text>
-                {user?.platformOperator ? (
-                  <Tag color="gold" style={{ marginInlineEnd: 0 }}>
-                    平台运营
-                  </Tag>
-                ) : (
-                  user?.traderCode && (
-                    <Tag color="blue" style={{ marginInlineEnd: 0 }}>
-                      {user.traderCode}
-                    </Tag>
-                  )
-                )}
-              </span>
-            </Dropdown>
-          ) : (
-            <Space size={10}>
-              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                未登录 · 浏览模式
-              </Typography.Text>
-              <Button
-                type="primary"
-                size="small"
-                icon={<LoginOutlined />}
-                onClick={() => navigate('/login')}
-              >
-                登录 / 注册
-              </Button>
-            </Space>
-          )}
-        </Header>
-
-        <Content style={{ background: '#f5f6f8' }}>
-          <Outlet />
-        </Content>
-
-        {/* 标注项目属性。 */}
-        <Footer style={footerStyle}>
-          <Space size={8} wrap split={<Divider type="vertical" />}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              个人作品集项目 · 现货通 SpotLink
-            </Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              作者 别太在亿啦
-            </Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              Java 21 · Spring Boot 3 · MySQL 8 · Spring AI · React 19
-            </Typography.Text>
-          </Space>
-        </Footer>
-      </Layout>
-    </Layout>
+        </div>
+      </div>
+      <header className="site-header">
+        <div className="site-width header-inner">
+          <Link to="/" className="brand" aria-label="现货通首页">
+            <span className="brand-symbol" aria-hidden="true">
+              S<span>↗</span>
+            </span>
+            <span className="brand-name">
+              现货通<small>SpotLink · 大宗现货</small>
+            </span>
+          </Link>
+          <nav className="main-nav" aria-label="主导航">
+            <NavLink to="/" end>
+              现货商城
+            </NavLink>
+            <NavLink to="/trading">挂牌大厅</NavLink>
+            <NavLink to="/market">行情中心</NavLink>
+          </nav>
+          <Link to="/advisor" className="advisor-entry">
+            <RobotOutlined /> AI 采购顾问 <span>↗</span>
+          </Link>
+        </div>
+      </header>
+      <main id="main-content" tabIndex={-1}>
+        <Outlet />
+      </main>
+      <footer className="site-footer site-width">
+        <Link to="/" className="footer-brand">
+          现货通 <span>SpotLink</span>
+        </Link>
+        <p>挂牌、摘牌、签约与交收，一站连接大宗现货。</p>
+        <div>
+          <Link to="/trading">现货交易</Link>
+          <Link to="/market">行情中心</Link>
+          <Link to="/advisor">AI 顾问</Link>
+        </div>
+        <small>个人作品集项目 · 作者 别太在亿啦 · 平台数据仅供学习与演示</small>
+      </footer>
+    </div>
   )
 }

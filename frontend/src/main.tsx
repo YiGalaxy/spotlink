@@ -11,12 +11,17 @@ import { queryClient } from '@/lib/queryClient'
 import { useAuthStore } from '@/store/auth'
 import { registerMessageApi } from '@/utils/notify'
 import './index.css'
+import './styles/marketplace.css'
 
 dayjs.locale('zh-cn')
 
 function SessionBoundary() {
   const sessionId = useAuthStore((state) => state.sessionId)
-  return <QueryClientProvider client={queryClient}><RouterProvider key={sessionId} router={router} /></QueryClientProvider>
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider key={sessionId} router={router} />
+    </QueryClientProvider>
+  )
 }
 /**
  * 把 Ant Design 的 App 上下文接入 axios 层。
@@ -37,8 +42,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       locale={zhCN}
       theme={{
         token: {
-          colorPrimary: '#1f5eff',
-          borderRadius: 6,
+          colorPrimary: '#ce4314',
+          borderRadius: 8,
+          colorBgLayout: '#f5f3f0',
+          fontFamily:
+            "'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
         },
       }}
     >
