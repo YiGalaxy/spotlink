@@ -35,7 +35,6 @@
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.8.6</springdoc.version>
-        <anthropic.version>2.34.0</anthropic.version>
         <spring-ai.version>1.0.0</spring-ai.version>
     </properties>
 
@@ -130,13 +129,15 @@
             <version>${springdoc.version}</version>
         </dependency>
 
-        <!-- AI advisor: Spring AI with the Anthropic model.
-             Note the artifact name: spring-ai-anthropic-spring-boot-starter was
-             the pre-1.0 name and is no longer published; from 1.0 the starters
-             are spring-ai-starter-model-<provider>. -->
+        <!-- AI advisor: OpenAI-compatible chat completion APIs. This works with
+             OpenAI and compatible gateways by changing only the .env values. -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-model-anthropic</artifactId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-client-chat</artifactId>
         </dependency>
 
         <!-- Boilerplate reduction -->

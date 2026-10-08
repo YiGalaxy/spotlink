@@ -1,13 +1,13 @@
 package com.spotlink.admin.service;
 
 import com.spotlink.admin.dto.AdminViews;
+import com.spotlink.advisor.config.AdvisorModelSettingsService;
 import com.spotlink.admin.mapper.AdminStatsMapper;
 import com.spotlink.advisor.agent.AdvisorAgent;
 import com.spotlink.publicapi.dto.PublicStats;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.aop.support.AopUtils;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -25,21 +25,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdminOverviewService {
 
-    /** application.yml 中的占位值，表示没有配置任何密钥。 */
-    private static final String UNCONFIGURED_KEY = "not-configured";
-
     private final AdminStatsMapper stats;
     private final AdvisorAgent advisorAgent;
-
-    @Value("${spring.ai.anthropic.api-key:}")
-    private String apiKey;
-
-    @Value("${spring.ai.anthropic.chat.model:}")
-    private String model;
+    private final AdvisorModelSettingsService modelSettings;
 
     public AdminViews.Overview load() {
         BigDecimal traded = stats.tradedAmount();
-        boolean configured = apiKey != null && !apiKey.isBlank() && !UNCONFIGURED_KEY.equals(apiKey);
+        var config = modelSettings.view();
 
         return new AdminViews.Overview(
                 stats.enterpriseCount(),
@@ -52,8 +44,8 @@ public class AdminOverviewService {
                 traded,
                 PublicStats.formatAmount(traded),
                 stats.auditCount(),
-                model == null ? "" : model,
-                configured,
+                config.model(),
+                config.available(),
                 toolNames());
     }
 

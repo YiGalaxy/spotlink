@@ -92,7 +92,8 @@ export const api = {
   get: <T>(url: string, params?: Record<string, unknown>) =>
     request<T>({ method: 'GET', url, params }),
 
-  post: <T>(url: string, data?: unknown) => request<T>({ method: 'POST', url, data }),
+  post: <T>(url: string, data?: unknown, options?: Pick<AxiosRequestConfig, 'timeout'>) =>
+    request<T>({ method: 'POST', url, data, ...options }),
 
   put: <T>(url: string, data?: unknown) => request<T>({ method: 'PUT', url, data }),
 

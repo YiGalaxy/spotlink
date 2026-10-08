@@ -75,6 +75,7 @@ export default function AdvisorPage() {
   const { data: status } = useQuery({
     queryKey: identityKey('advisor-status'),
     queryFn: fetchAdvisorStatus,
+    refetchInterval: 30_000,
   })
 
   useEffect(() => {
@@ -223,7 +224,7 @@ export default function AdvisorPage() {
           <Typography.Text strong>AI 交易顾问</Typography.Text>
           {status?.available ? (
             <>
-              <Tag color="green">已就绪</Tag>
+              <Tag color="green">已配置</Tag>
               <Tag>{status.model}</Tag>
               <Tag color="blue">{status.registeredTools.length} 个工具</Tag>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -231,7 +232,7 @@ export default function AdvisorPage() {
               </Typography.Text>
             </>
           ) : status ? (
-            <Tag color="orange">未配置 API 密钥</Tag>
+            <Tag color="orange">{status.enabled ? '平台模型待配置' : '顾问已停用'}</Tag>
           ) : (
             <Spin size="small" />
           )}
@@ -377,8 +378,8 @@ export default function AdvisorPage() {
                 type="warning"
                 showIcon
                 style={{ marginTop: 10 }}
-                message="AI 顾问未配置 API 密钥"
-                description="设置环境变量 SPOTLINK_ADVISOR_API_KEY 后重启后端即可启用。"
+                message={status.enabled ? '平台模型待配置' : 'AI 顾问已停用'}
+                description="请联系平台管理员在管理后台配置模型服务。本地推理服务和 OpenAI 兼容云端 API 均可使用。"
               />
             )}
           </div>

@@ -46,7 +46,12 @@ export default function MainLayout() {
         onClick: () => navigate('/inventory'),
       },
       ...(user?.platformOperator
-        ? [
+          ? [
+            {
+              key: 'admin-model',
+              label: '管理后台 · 模型配置',
+              onClick: () => navigate('/admin/model'),
+            },
             {
               key: 'knowledge',
               label: '知识库管理',
@@ -97,6 +102,7 @@ export default function MainLayout() {
             </Link>
             <Link to="/inventory">我的库存</Link>
             <Link to="/enterprise">企业中心</Link>
+            {user?.platformOperator && <Link to="/admin/model">管理后台</Link>}
           </div>
         </div>
       </div>

@@ -14,10 +14,10 @@ function Get-ComposeContext {
         $random = [Security.Cryptography.RandomNumberGenerator]::Create()
         try {
             $values = @{}
-            foreach ($key in @('MYSQL_PASSWORD', 'MYSQL_ROOT_PASSWORD', 'REDIS_PASSWORD', 'SPOTLINK_JWT_SECRET')) {
+            foreach ($key in @('MYSQL_PASSWORD', 'MYSQL_ROOT_PASSWORD', 'REDIS_PASSWORD', 'SPOTLINK_JWT_SECRET', 'SPOTLINK_ADVISOR_CONFIG_SECRET')) {
                 $bytes = New-Object byte[] 32
                 $random.GetBytes($bytes)
-                $values[$key] = if ($key -eq 'SPOTLINK_JWT_SECRET') { [Convert]::ToBase64String($bytes) } else { -join ($bytes | ForEach-Object { $_.ToString('x2') }) }
+                $values[$key] = if ($key -in @('SPOTLINK_JWT_SECRET', 'SPOTLINK_ADVISOR_CONFIG_SECRET')) { [Convert]::ToBase64String($bytes) } else { -join ($bytes | ForEach-Object { $_.ToString('x2') }) }
             }
         } finally { $random.Dispose() }
         $template = [IO.File]::ReadAllText((Join-Path $script:ProjectRoot '.env.example'))

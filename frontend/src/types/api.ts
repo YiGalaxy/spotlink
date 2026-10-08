@@ -338,8 +338,9 @@ export interface SeriesData {
 export interface AdvisorStatus {
   available: boolean
   enabled: boolean
-  endpoint: string
+  configured: boolean
   model: string
-  maxIterations: number
+  provider: string
+  framework: string
   registeredTools: string[]
 }

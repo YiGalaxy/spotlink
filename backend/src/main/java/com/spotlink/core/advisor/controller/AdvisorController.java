@@ -1,6 +1,7 @@
 package com.spotlink.advisor.controller;
 
 import com.spotlink.advisor.agent.AdvisorAgent;
+import com.spotlink.advisor.config.AdvisorModelSettingsService;
 import com.spotlink.advisor.dto.ConversationDetail;
 import com.spotlink.advisor.dto.ConversationSummary;
 import com.spotlink.advisor.dto.CreateConversationRequest;
@@ -16,7 +17,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.aop.support.AopUtils;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,20 +35,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AdvisorController {
 
-    /** 未配置密钥时使用的占位值；见 application.yml。 */
-    private static final String UNCONFIGURED_KEY = "not-configured";
-
     private final ConversationService conversationService;
     private final AdvisorAgent advisorAgent;
-
-    @Value("${spring.ai.anthropic.api-key:}")
-    private String apiKey;
-
-    @Value("${spring.ai.anthropic.base-url:}")
-    private String baseUrl;
-
-    @Value("${spring.ai.anthropic.chat.model:}")
-    private String model;
+    private final AdvisorModelSettingsService modelSettings;
 
     // ------------------------------------------------------------------
     // 会话
@@ -102,20 +91,19 @@ public class AdvisorController {
     // ------------------------------------------------------------------
 
     /**
-     * 就绪探针。报告当前使用的端点与模型，但不泄露密钥，
-     * 这样配置错误在一次对话请求失败之前就能看见。
+     * 配置状态不主动调用模型；普通用户只看到模型和启用状态，
+     * 地址与密钥管理位于有专用权限的后台接口。
      */
     @Operation(summary = "查看顾问配置状态")
     @GetMapping("/status")
     public ApiResponse<Map<String, Object>> status() {
-        boolean configured = apiKey != null
-                && !apiKey.isBlank()
-                && !UNCONFIGURED_KEY.equals(apiKey);
-
+        var config = modelSettings.view();
         return ApiResponse.success(Map.of(
-                "available", configured,
-                "endpoint", baseUrl == null ? "" : baseUrl,
-                "model", model == null ? "" : model,
+                "available", config.available(),
+                "enabled", config.enabled(),
+                "configured", config.hasKey(),
+                "model", config.model(),
+                "provider", "OpenAI-compatible",
                 "framework", "Spring AI",
                 "registeredTools", registeredToolNames()));
     }

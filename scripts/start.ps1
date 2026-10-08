@@ -10,10 +10,14 @@ try {
         Invoke-ProjectCompose $context @('build', 'backend', 'frontend')
     }
     Write-Host "正在启动 $ProjectName，并等待全部服务健康检查。"
-    Invoke-ProjectCompose $context @('up', '-d', '--wait', '--wait-timeout', "$WaitSeconds")
+    $startArguments = @('up', '-d', '--wait', '--wait-timeout', "$WaitSeconds")
+    if ($context.Settings.SPOTLINK_ADVISOR_BASE_URL -eq 'http://ollama:11434/v1' -and $context.Settings.SPOTLINK_ADVISOR_API_KEY -eq 'ollama') {
+        $startArguments = @('--profile', 'local-ai') + $startArguments
+    }
+    Invoke-ProjectCompose $context $startArguments
     Assert-PlatformReady $context
     Write-Host "[就绪] 现货通：http://127.0.0.1:$($context.Settings.FRONTEND_PORT)"
-    Write-Host '[模型] 未配置聊天模型时，业务可用；向量默认不构建。'
+    Write-Host '[模型] 业务已就绪；管理员可在 /admin/model 配置本地或云端模型并显式测试。'
     exit 0
 } catch {
     Write-Error $_.Exception.Message -ErrorAction Continue

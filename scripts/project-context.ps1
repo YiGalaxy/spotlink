@@ -5,7 +5,7 @@ Write-Host "项目根：$script:ProjectRoot"
 & git -C $script:ProjectRoot status --short --branch
 & git -C $script:ProjectRoot log -1 --oneline
 Write-Host "已实现检查节点：$($script:CheckRegistry.Keys -join '、')"
-foreach ($entry in @('start.cmd', 'stop.cmd', 'setup-demo.cmd', 'import-data.cmd', 'check.cmd')) {
+foreach ($entry in @('start.cmd', 'stop.cmd', 'setup-demo.cmd', 'setup-local-model.cmd', 'import-data.cmd', 'check.cmd')) {
     Write-Host "$entry ：$(if (Test-Path -LiteralPath (Join-Path $script:ProjectRoot $entry)) { '存在' } else { '待实现' })"
 }
 Write-Host "本机 .env ：$(if (Test-Path -LiteralPath (Join-Path $script:ProjectRoot '.env')) { '存在（不显示内容）' } else { '尚未生成' })"

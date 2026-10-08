@@ -63,23 +63,6 @@ spring:
     deserialization:
       fail-on-unknown-properties: false
 
-  ai:
-    anthropic:
-      # 自动配置要求启动时 key 非空。占位值让平台在没有顾问 key 时也能启动，
-      # 顾问会报告自己不可用，而不是让整个应用拒绝启动。
-      api-key: ${SPOTLINK_ADVISOR_API_KEY:not-configured}
-      base-url: ${SPOTLINK_ADVISOR_BASE_URL:https://api.anthropic.com}
-      chat:
-        model: ${SPOTLINK_ADVISOR_MODEL:claude-opus-5}
-        max-tokens: 8192
-        cache-options:
-          # 缓存系统提示词。它稳定不变的那一半对每个租户都相同，
-          # 所以一条缓存就能服务所有调用方。
-          strategy: SYSTEM_ONLY
-          # 每条 system 消息各成一个块。否则稳定的那一半和随调用方变化的那一半会被
-          # 合并，前缀随用户改变，于是每个请求都命中不了缓存。
-          multi-block-system-caching: true
-
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
@@ -133,16 +116,22 @@ bulk:
 
   rag:
     embedding:
-      # Claude 没有嵌入接口，所以这是顾问技术栈里唯一不属于 Anthropic 的一块。
-      # 由 Ollama 提供 BGE-M3：中文强、每次调用免费，而且无需联网即可运行。
+      # 知识库向量服务独立于聊天服务；由 Ollama 提供 BGE-M3。
       enabled: ${SPOTLINK_EMBEDDING_ENABLED:true}
       base-url: ${SPOTLINK_EMBEDDING_URL:http://localhost:11434}
       model: ${SPOTLINK_EMBEDDING_MODEL:bge-m3}
 
   advisor:
-    enabled: true
-    # 端点、密钥、模型和令牌上限都在 spring.ai.anthropic 下，
-    # 这样模型连接只有一个地方需要配置。
+    enabled: ${SPOTLINK_ADVISOR_ENABLED:true}
+    # env 为初始配置；后台保存的配置优先，恢复默认后重新读取 env。
+    base-url: ${SPOTLINK_ADVISOR_BASE_URL:http://ollama:11434/v1}
+    model: ${SPOTLINK_ADVISOR_MODEL:qwen3:4b}
+    api-key: ${SPOTLINK_ADVISOR_API_KEY:}
+    max-tokens: ${SPOTLINK_ADVISOR_MAX_TOKENS:4096}
+    timeout-seconds: ${SPOTLINK_ADVISOR_TIMEOUT_SECONDS:120}
+    token-parameter: ${SPOTLINK_ADVISOR_TOKEN_PARAMETER:max_tokens}
+    # 独立于 JWT 的 AES-256 密钥，不存在时仅禁用后台凭证保存。
+    config-secret: ${SPOTLINK_ADVISOR_CONFIG_SECRET:}
 
 logging:
   level:

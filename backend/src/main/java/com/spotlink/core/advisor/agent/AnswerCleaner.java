@@ -74,9 +74,6 @@ public final class AnswerCleaner {
             // 更糟，而返回原文比两者都更糟。
             log.warn("Advisor produced no answer line in {} characters; suppressed",
                     raw.length());
-            // 全文记入日志，因为另一种选择是对被抑制的答案长什么样做两次猜测 ——
-            // 而这个分支第一次真正触发时，发生的正是这样的事。
-            log.warn("Suppressed advisor text:\n{}", raw);
             return null;
         }
 
@@ -86,7 +83,6 @@ public final class AnswerCleaner {
 
         String cleaned = String.join("\n", java.util.Arrays.copyOfRange(lines, start, lines.length)).strip();
         log.info("Dropped {} line(s) of model working notes before the answer", start);
-        log.debug("Dropped prefix began: {}", lines[0]);
         return cleaned;
     }
 

@@ -1,6 +1,8 @@
 package com.spotlink.advisor.agent;
 
 import com.spotlink.advisor.prompt.SystemPromptBuilder;
+import com.spotlink.advisor.config.AdvisorModelSettingsService;
+import com.spotlink.advisor.config.AdvisorModelClientFactory;
 import com.spotlink.advisor.tool.AdvisorTools;
 import com.spotlink.advisor.tool.ContractAdvisorTools;
 import com.spotlink.advisor.tool.ContractReviewTools;
@@ -43,7 +45,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdvisorAgent {
 
-    private final ChatClient.Builder chatClientBuilder;
+    private final AdvisorModelSettingsService modelSettings;
+    private final AdvisorModelClientFactory clients;
     private final AdvisorTools advisorTools;
     private final InventoryAdvisorTools inventoryAdvisorTools;
     private final KnowledgeAdvisorTools knowledgeAdvisorTools;
@@ -92,6 +95,8 @@ public class AdvisorAgent {
     }
 
     public AgentResult run(String userMessage, List<ConversationTurn> history, LoginUser user) {
+        ChatClient chatClient = clients.create(modelSettings.current());
+
         List<Message> messages = new ArrayList<>(history.size() + 1);
         for (ConversationTurn turn : history) {
             messages.add(ConversationTurn.ROLE_USER.equals(turn.role())
@@ -103,14 +108,9 @@ public class AdvisorAgent {
         // 在调用之前开启：Spring AI 会在其中执行工具，切面则记录到当前线程上打开的那个槽位。
         ToolCallRecorder.begin();
         try {
-            ChatResponse response = chatClientBuilder.build()
+            ChatResponse response = chatClient
                     .prompt()
-                    // 两个独立的 system 块，而不是拼接成的一个字符串。第一块对所有租户都完全
-                    // 相同，因此在 SYSTEM_ONLY 缓存下一条缓存就能服务所有调用方；把两者合并
-                    // 会让每个用户的前缀都不一样。
-                    .system(system -> system
-                            .text(promptBuilder.stablePrefix())
-                            .text(promptBuilder.callerSection(user)))
+                    .system(promptBuilder.stablePrefix() + "\n\n" + promptBuilder.callerSection(user))
                     .messages(messages)
                     // 这些 Bean 上的每个 @Tool 方法都会变成可调用的。
                     .tools(toolsFor(userMessage).toArray())
@@ -124,10 +124,10 @@ public class AdvisorAgent {
                 // 却不给答案。它需要的每个工具结果都已经在对话里了，所以再问一次只花一个来回，
                 // 就能把死路变成一次回答。
                 log.info("No answer line produced; asking once more without tools");
-                answer = AnswerCleaner.clean(retryForAnswer(messages));
+                answer = AnswerCleaner.clean(retryForAnswer(chatClient, messages, user));
             }
             if (answer == null) {
-                // 两次就够了。那段文本已被清理器打进日志，所以这是可诊断的，而不是无迹可寻。
+                // 两次就够了；日志只记录失败类型与长度，不保留模型原文。
                 answer = "抱歉，这次没能生成回答。请把问题再发一次，或换个说法。";
             }
 
@@ -143,9 +143,9 @@ public class AdvisorAgent {
         } catch (Exception e) {
             // 轨迹被丢弃而不是记录：这次调用失败了，没有答案可以挂靠这段轨迹。
             ToolCallRecorder.drain();
-            log.error("Advisor call failed for user {}", user.getUsername(), e);
+            log.warn("Advisor call failed for user {}: {}", user.getUserId(), e.getClass().getSimpleName());
             throw BusinessException.of(ResultCode.ADVISOR_UNAVAILABLE,
-                    "AI 服务调用失败：" + rootMessage(e));
+                    "AI 服务调用失败，请管理员检查服务地址、模型名、密钥或超时时间");
         }
     }
 
@@ -159,19 +159,20 @@ public class AdvisorAgent {
      * <p>草稿内容故意<em>不</em>作为 assistant 轮次回灌。把模型自己未完成的推理再喂回去、
      * 让它接着往下写，是得到更多同类内容的好办法。
      */
-    private String retryForAnswer(List<Message> messages) {
+    private String retryForAnswer(ChatClient chatClient, List<Message> messages, LoginUser user) {
         List<Message> followUp = new ArrayList<>(messages);
         followUp.add(new UserMessage(
                 "请直接给出最终答案。只输出结论和依据，不要输出任何分析过程或思考步骤。"));
         try {
-            ChatResponse response = chatClientBuilder.build()
+            ChatResponse response = chatClient
                     .prompt()
+                    .system(promptBuilder.stablePrefix() + "\n\n" + promptBuilder.callerSection(user))
                     .messages(followUp)
                     .call()
                     .chatResponse();
             return extractText(response);
         } catch (Exception e) {
-            log.warn("Follow-up for a final answer failed: {}", e.getMessage());
+            log.warn("Follow-up for a final answer failed: {}", e.getClass().getSimpleName());
             return null;
         }
     }
@@ -229,15 +230,4 @@ public class AdvisorAgent {
                 : response.getMetadata().getUsage();
     }
 
-    /** SDK 异常会把有用的信息包在一两层 cause 之下。 */
-    private String rootMessage(Throwable throwable) {
-        Throwable cursor = throwable;
-        while (cursor.getCause() != null && cursor.getCause() != cursor) {
-            cursor = cursor.getCause();
-        }
-        String message = cursor.getMessage();
-        return message == null || message.isBlank()
-                ? cursor.getClass().getSimpleName()
-                : message;
-    }
 }

@@ -61,7 +61,8 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException.class
     })
     public ApiResponse<Void> handleMalformedRequest(Exception e) {
-        log.warn("Malformed request: {}", e.getMessage());
+        // JSON 解码异常可能回显输入片段；模型设置请求体包含 Key，只记录类型。
+        log.warn("Malformed request: {}", e.getClass().getSimpleName());
         return ApiResponse.failure(ResultCode.BAD_REQUEST);
     }
 

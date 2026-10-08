@@ -29,5 +29,5 @@ export function deleteConversation(id: EntityId) {
 }
 
 export function sendMessage(id: EntityId, message: string) {
-  return api.post<MessageView>(`/advisor/conversations/${id}/messages`, { message })
+  return api.post<MessageView>(`/advisor/conversations/${id}/messages`, { message }, { timeout: 660_000 })
 }

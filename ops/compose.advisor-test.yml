@@ -1,0 +1,13 @@
+services:
+  advisor-mock:
+    image: node:22.14.0-alpine
+    command: ["node", "/test/advisor-model-mock.mjs"]
+    volumes: ["./scripts/tests/advisor-model-mock.mjs:/test/advisor-model-mock.mjs:ro"]
+    ports: ["127.0.0.1:48082:8080"]
+    networks: [spotlink-next]
+  backend:
+    environment:
+      # 浏览器验收绝不借用开发 env 的真实提供商密钥。
+      SPOTLINK_ADVISOR_API_KEY: ''
+      SPOTLINK_ADVISOR_BASE_URL: http://advisor-mock:8080/v1
+      SPOTLINK_ADVISOR_MODEL: offline-model

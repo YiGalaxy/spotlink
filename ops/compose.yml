@@ -44,9 +44,14 @@ services:
       SPOTLINK_REDIS_PORT: 6379
       SPOTLINK_REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me-redis-local}
       SPOTLINK_JWT_SECRET: ${SPOTLINK_JWT_SECRET:-YnVsay10cmFkZS1kZXYtc2VjcmV0LWtleS1jaGFuZ2UtbWUtMjAyNg==}
-      SPOTLINK_ADVISOR_API_KEY: ${SPOTLINK_ADVISOR_API_KEY:-not-configured}
-      SPOTLINK_ADVISOR_BASE_URL: ${SPOTLINK_ADVISOR_BASE_URL:-https://api.anthropic.com}
-      SPOTLINK_ADVISOR_MODEL: ${SPOTLINK_ADVISOR_MODEL:-claude-opus-5}
+      SPOTLINK_ADVISOR_ENABLED: ${SPOTLINK_ADVISOR_ENABLED:-true}
+      SPOTLINK_ADVISOR_API_KEY: ${SPOTLINK_ADVISOR_API_KEY:-}
+      SPOTLINK_ADVISOR_BASE_URL: ${SPOTLINK_ADVISOR_BASE_URL:-http://ollama:11434/v1}
+      SPOTLINK_ADVISOR_MODEL: ${SPOTLINK_ADVISOR_MODEL:-qwen3:4b}
+      SPOTLINK_ADVISOR_MAX_TOKENS: ${SPOTLINK_ADVISOR_MAX_TOKENS:-4096}
+      SPOTLINK_ADVISOR_TIMEOUT_SECONDS: ${SPOTLINK_ADVISOR_TIMEOUT_SECONDS:-120}
+      SPOTLINK_ADVISOR_TOKEN_PARAMETER: ${SPOTLINK_ADVISOR_TOKEN_PARAMETER:-max_tokens}
+      SPOTLINK_ADVISOR_CONFIG_SECRET: ${SPOTLINK_ADVISOR_CONFIG_SECRET:-}
       SPOTLINK_EMBEDDING_ENABLED: ${SPOTLINK_EMBEDDING_ENABLED:-false}
       LOGGING_LEVEL_COM_SPOTLINK: INFO
     ports: ["127.0.0.1:${BACKEND_PORT:-18081}:8081"]
@@ -75,9 +80,27 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+  # 可选本地推理服务，后端通过内部网络调用；不向浏览器暴露模型端口。
+  ollama:
+    image: ollama/ollama:0.11.10
+    profiles: [local-ai]
+    environment:
+      OLLAMA_NUM_PARALLEL: 1
+      OLLAMA_MAX_LOADED_MODELS: 1
+      OLLAMA_CONTEXT_LENGTH: 8192
+    volumes: ["spotlink_next_models:/root/.ollama"]
+    networks: [spotlink-next]
+    mem_limit: 6g
+    cpus: 8
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 volumes:
   spotlink_next_mysql:
   spotlink_next_redis:
+  spotlink_next_models:
 networks:
   spotlink-next:
     driver: bridge

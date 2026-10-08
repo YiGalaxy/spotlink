@@ -100,6 +100,14 @@ try {
                     & "$PSScriptRoot/tests/auth-runtime.tests.ps1" -Inventory
                     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
+                'advisor-offline' {
+                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps backend-tools mvn -B -ntp -Punit-tests '-Dtest=AdvisorModelClientFactoryTest,AdvisorSecretCipherTest' test
+                    if ($LASTEXITCODE -ne 0) { throw '顾问离线请求、工具或加密测试失败。' }
+                }
+                'advisor-browser' {
+                    & "$PSScriptRoot/tests/advisor-runtime.tests.ps1"
+                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                }
                 'image-browser' {
                     & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools node scripts/assets/verify-images.mjs
                     if ($LASTEXITCODE -ne 0) { throw '本地图片来源、散列或预算校验失败。' }
