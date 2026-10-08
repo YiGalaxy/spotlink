@@ -32,7 +32,7 @@ if ($Repeat -ne 1 -and $Mode -ne 'ai-live') {
 
 try {
     Assert-ProjectRoot
-    $tasks = if ($Mode -eq 'full') { @($script:CheckRegistry.Keys) } else { @($Task) }
+    $tasks = @(if ($Mode -eq 'full') { $script:CheckRegistry.Keys } else { $Task })
     $executed = @{}
     foreach ($node in $tasks) {
         $registration = $script:CheckRegistry[$node]
@@ -65,14 +65,22 @@ try {
                     if ($LASTEXITCODE -ne 0) { throw '工具 Compose 配置校验失败。' }
                 }
                 'backend-package' {
-                    Push-Location (Join-Path $script:ProjectRoot 'backend')
-                    try { & mvn -B -ntp -DskipTests package; if ($LASTEXITCODE -ne 0) { exit 4 } }
-                    finally { Pop-Location }
+                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps backend-tools mvn -B -ntp -Punit-tests test
+                    if ($LASTEXITCODE -ne 0) { throw '容器内后端单元测试失败。' }
+                }
+                'backend-integration' {
+                    & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests
+                    $testCode = $LASTEXITCODE
+                    & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
+                    if ($testCode -ne 0) { throw "隔离后端集成测试失败，原始退出码 $testCode。" }
                 }
                 'frontend-build' {
-                    Push-Location (Join-Path $script:ProjectRoot 'frontend')
-                    try { & npm run build; if ($LASTEXITCODE -ne 0) { exit 4 } }
-                    finally { Pop-Location }
+                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps frontend-tools sh -c 'npm ci && npm test && npm run build'
+                    if ($LASTEXITCODE -ne 0) { throw '容器内前端测试或构建失败。' }
+                }
+                'compose-runtime' {
+                    & "$PSScriptRoot/tests/compose-runtime.tests.ps1"
+                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
                 default {
                     Write-Error "执行器 $executor 不存在。" -ErrorAction Continue

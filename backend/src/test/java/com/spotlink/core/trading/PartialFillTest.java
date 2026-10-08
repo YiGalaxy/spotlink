@@ -48,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Requires the docker compose stack from the README to be running.
  */
+@org.junit.jupiter.api.Tag("integration")
 @SpringBootTest
 @ActiveProfiles("local")
 @DisplayName("挂牌分次成交")

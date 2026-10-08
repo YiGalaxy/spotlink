@@ -3,7 +3,8 @@ $script:CheckRegistry = [ordered]@{
     C00 = @{ Required = @('static'); Checks = @{ static = 'static' } }
     C01 = @{ Required = @('static', 'unit'); Checks = @{ static = 'static'; unit = 'entry-tests' } }
     C02 = @{ Required = @('static', 'ops'); Checks = @{ static = 'static'; ops = 'compose-config' } }
-    C03 = @{ Required = @('static', 'unit'); Checks = @{ static = 'static'; unit = 'backend-package' } }
+    C03 = @{ Required = @('static', 'unit', 'integration'); Checks = @{ static = 'static'; unit = 'backend-package'; integration = 'backend-integration' } }
     C04 = @{ Required = @('static', 'unit'); Checks = @{ static = 'static'; unit = 'frontend-build' } }
+    C05 = @{ Required = @('static', 'ops', 'e2e'); Checks = @{ static = 'static'; ops = 'compose-runtime'; e2e = 'compose-runtime' } }
 }
 $script:ValidCheckModes = @('task', 'full', 'static', 'unit', 'integration', 'dataset', 'ai-offline', 'rag', 'e2e', 'visual', 'ops', 'ai-live')

@@ -1,0 +1,46 @@
+name: spotlink-next-test
+services:
+  mysql-test:
+    image: mysql:8.4.7
+    environment:
+      MYSQL_DATABASE: spotlink_test
+      MYSQL_USER: spotlink_test
+      MYSQL_PASSWORD: test-only-spotlink
+      MYSQL_ROOT_PASSWORD: test-only-root
+    command: ["mysqld", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--log-bin-trust-function-creators=1"]
+    volumes: ["spotlink_next_test_mysql:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -u$$MYSQL_USER -e 'SELECT 1' $$MYSQL_DATABASE >/dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+  redis-test:
+    image: redis:7.4.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+  backend-tests:
+    image: maven:3.9.11-eclipse-temurin-21
+    working_dir: /workspace/backend
+    volumes: [".:/workspace", "spotlink_next_test_maven:/root/.m2"]
+    environment:
+      SPOTLINK_DB_URL: jdbc:mysql://mysql-test:3306/spotlink_test?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&connectionTimeZone=Asia/Shanghai&forceConnectionTimeZoneToSession=true
+      SPOTLINK_DB_USER: spotlink_test
+      SPOTLINK_DB_PASSWORD: test-only-spotlink
+      SPOTLINK_REDIS_HOST: redis-test
+      SPOTLINK_REDIS_PORT: 6379
+      SPOTLINK_REDIS_PASSWORD: ''
+      SPOTLINK_ADVISOR_API_KEY: not-configured
+      SPOTLINK_ADVISOR_BASE_URL: http://127.0.0.1:9
+      SPOTLINK_EMBEDDING_ENABLED: 'false'
+      LOGGING_LEVEL_COM_SPOTLINK: INFO
+      SPOTLINK_SWEEP_INITIAL_DELAY: 86400000
+    depends_on:
+      mysql-test: { condition: service_healthy }
+      redis-test: { condition: service_healthy }
+    command: ["mvn", "-B", "-ntp", "-Pintegration-tests", "test"]
+volumes:
+  spotlink_next_test_mysql:
+  spotlink_next_test_maven:

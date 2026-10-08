@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>The two are separate assertions on purpose. A rule that classifies
  * correctly and a tool list that ignores it would each pass the other's test.
  */
+@org.junit.jupiter.api.Tag("integration")
 @SpringBootTest
 @ActiveProfiles("local")
 @DisplayName("顾问每轮的工具集")

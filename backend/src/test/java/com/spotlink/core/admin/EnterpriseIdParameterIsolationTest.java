@@ -44,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * on a name rather than a key — matching loosely would produce false alarms
  * that get suppressed, and a suppressed check is worse than none.
  */
+@org.junit.jupiter.api.Tag("integration")
 @SpringBootTest
 @ActiveProfiles("local")
 @DisplayName("租户隔离：除运营后台外，没有任何接口从请求里读企业 ID")

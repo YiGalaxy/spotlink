@@ -98,7 +98,7 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: always
+      show-details: when_authorized
 
 springdoc:
   swagger-ui:
@@ -126,7 +126,7 @@ bulk:
     # 挂牌过期——这些活没人会手动触发，所以这个间隔决定了一个停滞的要约能滞留多久。
     sweep-interval-ms: 300000
     # 让应用先启动完，再跑第一次扫描。
-    sweep-initial-delay-ms: 60000
+    sweep-initial-delay-ms: ${SPOTLINK_SWEEP_INITIAL_DELAY:60000}
     # 「需挂牌方确认」的挂牌，挂牌方答复一次摘牌的时间上限。受每张挂牌自身的有效期
     # 封顶，所以它只会缩短等待。把它设成 PT1M，就能不必等一天而观察到自动过期的路径。
     confirm-window: ${SPOTLINK_CONFIRM_WINDOW:PT24H}

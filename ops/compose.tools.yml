@@ -1,13 +1,14 @@
 name: spotlink-next-tools
 services:
   backend-tools:
-    build: { context: ., dockerfile: ops/docker/backend/Dockerfile }
+    image: maven:3.9.11-eclipse-temurin-21
     working_dir: /workspace/backend
     volumes: [".:/workspace", "spotlink_next_maven:/root/.m2"]
   frontend-tools:
-    build: { context: ., dockerfile: ops/docker/frontend/Dockerfile }
+    image: node:22.14.0-alpine
     working_dir: /workspace/frontend
-    volumes: [".:/workspace", "spotlink_next_npm:/root/.npm"]
+    volumes: [".:/workspace", "spotlink_next_npm:/root/.npm", "spotlink_next_node_modules:/workspace/frontend/node_modules"]
 volumes:
   spotlink_next_maven:
   spotlink_next_npm:
+  spotlink_next_node_modules:

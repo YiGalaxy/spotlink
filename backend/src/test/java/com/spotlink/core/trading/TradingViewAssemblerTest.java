@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * null key, and everything rendered. Which is the reason this is a test and not
  * a comment — the failing input is the one a developer is least likely to try.
  */
+@org.junit.jupiter.api.Tag("integration")
 @SpringBootTest
 @ActiveProfiles("local")
 @DisplayName("订单视图：没有关联单据时也要能渲染")
