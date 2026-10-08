@@ -22,7 +22,7 @@ try {
         } else {
             $paths = if ($WorkingTree) { @(& git ls-files --cached --others --exclude-standard) } else { @(& git diff --cached --name-only) }
             foreach ($path in $paths) {
-                if ($path -match '(^|/)(\.local|node_modules|target|dist|coverage|__pycache__|\.venv|test-results|playwright-report)(/|$)' -or $path -match '\.(log|dump)$' -or ($path -match '(^|/)\.env($|\.)' -and $path -notmatch '\.example$')) {
+                if ($path -match '(^|/)(\.local|node_modules|target|dist|__pycache__|\.venv|test-results|playwright-report)(/|$)' -or ($path -match '(^|/)coverage(/|$)' -and $path -notmatch '^data/coverage/') -or $path -match '\.(log|dump)$' -or ($path -match '(^|/)\.env($|\.)' -and $path -notmatch '\.example$')) {
                     throw "运行数据或敏感配置不能提交：$path"
                 }
                 if ($path -match '^data/.*\.(jsonl|csv)$' -or $path -match '^data/.*(manifest.generated|rendered|coverage-report)') {

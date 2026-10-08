@@ -7,6 +7,8 @@
 **/target/
 **/dist/
 **/coverage/
+!data/coverage/
+!data/coverage/**
 **/.venv/
 **/__pycache__/
 **/.pytest_cache/
