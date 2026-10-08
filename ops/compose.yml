@@ -32,7 +32,7 @@ services:
       retries: 20
   backend:
     build:
-      context: ..
+      context: .
       dockerfile: ops/docker/backend/Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
@@ -58,7 +58,7 @@ services:
       retries: 20
   frontend:
     build:
-      context: ..
+      context: .
       dockerfile: ops/docker/frontend/Dockerfile
       args:
         VITE_API_BASE_URL: /api

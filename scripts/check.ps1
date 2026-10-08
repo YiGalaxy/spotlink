@@ -64,6 +64,16 @@ try {
                     & docker compose -p spotlink-next-tools-check --project-directory $script:ProjectRoot -f $tools config --quiet
                     if ($LASTEXITCODE -ne 0) { throw '工具 Compose 配置校验失败。' }
                 }
+                'backend-package' {
+                    Push-Location (Join-Path $script:ProjectRoot 'backend')
+                    try { & mvn -B -ntp -DskipTests package; if ($LASTEXITCODE -ne 0) { exit 4 } }
+                    finally { Pop-Location }
+                }
+                'frontend-build' {
+                    Push-Location (Join-Path $script:ProjectRoot 'frontend')
+                    try { & npm run build; if ($LASTEXITCODE -ne 0) { exit 4 } }
+                    finally { Pop-Location }
+                }
                 default {
                     Write-Error "执行器 $executor 不存在。" -ErrorAction Continue
                     exit 2
