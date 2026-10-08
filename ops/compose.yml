@@ -1,0 +1,74 @@
+name: spotlink-next
+services:
+  mysql:
+    image: mysql:8.4.7
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-spotlink}
+      MYSQL_USER: ${MYSQL_USER:-spotlink}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me-local}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-root-local}
+      TZ: Asia/Shanghai
+    command: ["mysqld", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--default-time-zone=+08:00"]
+    volumes:
+      - spotlink_next_mysql:/var/lib/mysql
+    networks: [spotlink-next]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7.4.2-alpine
+    command: ["sh", "-c", "redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD:-change-me-redis-local}\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me-redis-local}
+    volumes:
+      - spotlink_next_redis:/data
+    networks: [spotlink-next]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD:-change-me-redis-local}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  backend:
+    build:
+      context: ..
+      dockerfile: ops/docker/backend/Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      SPOTLINK_DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-spotlink}?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&connectionTimeZone=Asia/Shanghai&forceConnectionTimeZoneToSession=true
+      SPOTLINK_DB_USER: ${MYSQL_USER:-spotlink}
+      SPOTLINK_DB_PASSWORD: ${MYSQL_PASSWORD:-change-me-local}
+      SPOTLINK_REDIS_HOST: redis
+      SPOTLINK_REDIS_PORT: 6379
+      SPOTLINK_REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me-redis-local}
+      SPOTLINK_JWT_SECRET: ${SPOTLINK_JWT_SECRET:-replace-with-a-local-256-bit-secret}
+      SPOTLINK_ADVISOR_API_KEY: ${SPOTLINK_ADVISOR_API_KEY:-}
+      SPOTLINK_ADVISOR_BASE_URL: ${SPOTLINK_ADVISOR_BASE_URL:-https://api.anthropic.com}
+      SPOTLINK_ADVISOR_MODEL: ${SPOTLINK_ADVISOR_MODEL:-}
+    ports: ["127.0.0.1:${BACKEND_PORT:-18081}:8081"]
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [spotlink-next]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8081/actuator/health | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  frontend:
+    build:
+      context: ..
+      dockerfile: ops/docker/frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    ports: ["127.0.0.1:${FRONTEND_PORT:-18080}:80"]
+    depends_on:
+      backend: { condition: service_healthy }
+    networks: [spotlink-next]
+volumes:
+  spotlink_next_mysql:
+  spotlink_next_redis:
+networks:
+  spotlink-next:
+    driver: bridge

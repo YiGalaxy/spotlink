@@ -2,5 +2,6 @@
 $script:CheckRegistry = [ordered]@{
     C00 = @{ Required = @('static'); Checks = @{ static = 'static' } }
     C01 = @{ Required = @('static', 'unit'); Checks = @{ static = 'static'; unit = 'entry-tests' } }
+    C02 = @{ Required = @('static', 'ops'); Checks = @{ static = 'static'; ops = 'compose-config' } }
 }
 $script:ValidCheckModes = @('task', 'full', 'static', 'unit', 'integration', 'dataset', 'ai-offline', 'rag', 'e2e', 'visual', 'ops', 'ai-live')

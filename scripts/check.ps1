@@ -56,6 +56,14 @@ try {
                     & "$PSScriptRoot/tests/check-entry.tests.ps1"
                     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
+                'compose-config' {
+                    $compose = Join-Path $script:ProjectRoot 'ops/compose.yml'
+                    & docker compose -p spotlink-next-check --project-directory $script:ProjectRoot -f $compose config --quiet
+                    if ($LASTEXITCODE -ne 0) { throw 'Compose 配置校验失败。' }
+                    $tools = Join-Path $script:ProjectRoot 'ops/compose.tools.yml'
+                    & docker compose -p spotlink-next-tools-check --project-directory $script:ProjectRoot -f $tools config --quiet
+                    if ($LASTEXITCODE -ne 0) { throw '工具 Compose 配置校验失败。' }
+                }
                 default {
                     Write-Error "执行器 $executor 不存在。" -ErrorAction Continue
                     exit 2

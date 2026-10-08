@@ -1,0 +1,13 @@
+name: spotlink-next-tools
+services:
+  backend-tools:
+    build: { context: .., dockerfile: ops/docker/backend/Dockerfile }
+    working_dir: /workspace/backend
+    volumes: ["..:/workspace", "spotlink_next_maven:/root/.m2"]
+  frontend-tools:
+    build: { context: .., dockerfile: ops/docker/frontend/Dockerfile }
+    working_dir: /workspace/frontend
+    volumes: ["..:/workspace", "spotlink_next_npm:/root/.npm"]
+volumes:
+  spotlink_next_maven:
+  spotlink_next_npm:
