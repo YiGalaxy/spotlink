@@ -1,0 +1,10 @@
+# 可选 NVIDIA 推理加速；CPU 环境不加载此文件。
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

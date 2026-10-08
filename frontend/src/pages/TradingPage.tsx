@@ -565,6 +565,23 @@ export default function TradingPage() {
                   </Space>
                 </Card>
                 {focusedListing && <Alert type="info" style={{ marginBottom: 12 }} message="已定位你从商城选择的挂牌" description="挂牌可能已成交或过期；以当前大厅数据为准。" action={<Button onClick={() => setSearchParams(current => { const next = new URLSearchParams(current); next.delete('listing'); return next })}>查看全部</Button>}/>}
+                {focusedListing && market.find(row => row.id === focusedListing) && (() => {
+                  const item = market.find(row => row.id === focusedListing)!
+                  return <Card title={`${item.commodityName} · 挂牌详情`} style={{ marginBottom: 16 }}>
+                    <Descriptions column={{ xs: 1, sm: 2, lg: 3 }} items={[
+                      { key: 'no', label: '挂牌编号', children: item.listingNo },
+                      { key: 'seller', label: '挂牌方', children: item.enterpriseName },
+                      { key: 'price', label: '挂牌单价', children: item.price == null ? '面议' : `${item.priceText} 元/${item.unit}` },
+                      { key: 'quantity', label: '剩余 / 总量', children: `${item.remainingQuantity} / ${item.quantity} ${item.unit}` },
+                      { key: 'warehouse', label: '交收仓库', children: item.warehouseName || '未登记' },
+                      { key: 'delivery', label: '交付方式', children: item.deliveryMethodText },
+                      { key: 'spec', label: '规格', children: Object.entries(item.spec).map(([key, value]) => `${key}：${String(value)}`).join('，') || '未登记' },
+                      { key: 'origin', label: '品牌 / 产地', children: [item.brand, item.origin].filter(Boolean).join(' / ') || '未登记' },
+                      { key: 'valid', label: '有效期', children: dayjs(item.validUntil).format('YYYY-MM-DD HH:mm') },
+                    ]} />
+                    <Typography.Text type="secondary">单价为挂牌报价，运输、装卸及其他费用请另行核实；摘牌、签约等操作需你本人确认。</Typography.Text>
+                  </Card>
+                })()}
                 {requestedTab && requestedTab !== 'market' && !isMember && <Alert type="info" style={{ marginBottom: 12 }} message="登录企业账号后可管理挂牌与订单" action={!signedIn ? <Button onClick={() => navigate('/login', { state: { from: `/trading?tab=${requestedTab}` } })}>前往登录</Button> : undefined}/>}
                 <Table rowKey="id" size="middle" loading={marketLoading} dataSource={focusedListing ? market.filter(row => row.id === focusedListing) : market} scroll={{ x: 1100 }}
                   columns={marketColumns} pagination={LIST_PAGINATION}

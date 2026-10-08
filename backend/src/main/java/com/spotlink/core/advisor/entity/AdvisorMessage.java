@@ -17,6 +17,7 @@ import java.time.OffsetDateTime;
 @Setter
 @TableName("t_ai_message")
 public class AdvisorMessage {
+    private String productsJson;
 
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;

@@ -71,10 +71,22 @@ export interface MessageView {
   id: EntityId | null
   role: 'user' | 'assistant'
   content: string
+  products: AdvisorProductReference[]
   toolCalls: ToolCallView[]
   iterations: number | null
   usage: TokenUsage | null
   createdAt: string
+}
+
+export interface AdvisorProductReference {
+  id: EntityId
+  listingNo: string | null
+  title: string
+  seller: string
+  quantity: string
+  price: string
+  warehouse: string
+  delivery: string
 }
 
 export interface ConversationSummary {
@@ -88,6 +100,7 @@ export interface ConversationSummary {
 export interface ConversationDetail {
   id: EntityId
   title: string
+  contextNote: string | null
   messages: MessageView[]
 }
 

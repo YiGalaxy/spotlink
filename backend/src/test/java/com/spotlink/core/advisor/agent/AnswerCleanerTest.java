@@ -134,4 +134,15 @@ class AnswerCleanerTest {
         // Blank in, blank out: not emptied, and not mistaken for an answer.
         assertThat(AnswerCleaner.clean("   \n  ")).isEqualTo("   \n  ");
     }
+
+    @Test
+    @DisplayName("数字、编号和加粗结论不导致正常首句丢失")
+    void numericConclusionIsPreserved() {
+        String answer = "已查到 **2 条电解铜挂牌**，单价分别为 **67500 元/吨**和 **68000 元/吨**。\n\n| 商品 | 单价 |\n|---|---|";
+        assertThat(AnswerCleaner.clean(answer)).isEqualTo(answer);
+        assertThat(AnswerCleaner.clean("估算运费为 **800 元。**")).isEqualTo("估算运费为 **800 元。**");
+        assertThat(AnswerCleaner.clean("<THINK>隐藏推理")).isNull();
+        assertThat(AnswerCleaner.clean("好的，我现在要处理用户的查询。\n先分析字段。\n</think>\n\n估算运费为800元。"))
+                .isEqualTo("估算运费为800元。");
+    }
 }

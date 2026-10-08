@@ -87,7 +87,7 @@ services:
     environment:
       OLLAMA_NUM_PARALLEL: 1
       OLLAMA_MAX_LOADED_MODELS: 1
-      OLLAMA_CONTEXT_LENGTH: 8192
+      OLLAMA_CONTEXT_LENGTH: 16384
     volumes: ["spotlink_next_models:/root/.ollama"]
     networks: [spotlink-next]
     mem_limit: 6g

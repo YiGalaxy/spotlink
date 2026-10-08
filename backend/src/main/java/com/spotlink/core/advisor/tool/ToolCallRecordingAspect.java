@@ -29,6 +29,11 @@ public class ToolCallRecordingAspect {
 
     @Around("@annotation(tool)")
     public Object record(ProceedingJoinPoint joinPoint, Tool tool) throws Throwable {
+        ToolCallRecorder.beforeCall();
+        if (Arrays.stream(joinPoint.getArgs()).anyMatch(value -> value instanceof String text && text.length() > 4000)) {
+            throw com.spotlink.shared.exception.BusinessException.of(com.spotlink.shared.web.ResultCode.BAD_REQUEST,
+                    "查询参数过长，请缩小查询范围");
+        }
         String name = tool.name().isBlank()
                 ? joinPoint.getSignature().getName()
                 : tool.name();
@@ -37,12 +42,17 @@ public class ToolCallRecordingAspect {
         try {
             Object result = joinPoint.proceed();
             ToolCallRecorder.record(name, input, String.valueOf(result));
+            // 模型上下文也限制体积，不能仅限制保存的轨迹。
+            if (result instanceof String text && text.length() > 8000) return text.substring(0, 8000) + "\n（查询结果过多，请缩小范围）";
             return result;
         } catch (Throwable failure) {
             // 在重新抛出之前先记录，这样一个失败的工具在轨迹里是看得见的，
             // 而不是显得从未运行过。
-            ToolCallRecorder.record(name, input, "失败：" + failure.getMessage());
-            throw failure;
+            ToolCallRecorder.record(name, input, "查询失败，请缩小范围或检查权限后重试");
+            if (failure instanceof com.spotlink.shared.exception.BusinessException) throw failure;
+            // SQL/连接异常不能通过工具错误反馈泄漏给模型或客户端。
+            throw com.spotlink.shared.exception.BusinessException.of(com.spotlink.shared.web.ResultCode.ADVISOR_UNAVAILABLE,
+                    "平台查询暂时不可用，请稍后重试");
         }
     }
 

@@ -19,6 +19,7 @@ public record MessageView(
         @JsonSerialize(using = ToStringSerializer.class) Long id,
         String role,
         String content,
+        List<AdvisorProductReference> products,
         List<ToolCallView> toolCalls,
         Integer iterations,
         TokenUsage usage,
@@ -41,6 +42,7 @@ public record MessageView(
                 entity.getId(),
                 entity.getRole(),
                 entity.getContent(),
+                parseProducts(entity.getProductsJson(), objectMapper),
                 parseToolCalls(entity.getToolCalls(), objectMapper),
                 entity.getIterations(),
                 entity.getInputTokens() == null ? null : new TokenUsage(
@@ -56,8 +58,14 @@ public record MessageView(
                                           List<ToolCallView> toolCalls,
                                           int iterations,
                                           TokenUsage usage) {
-        return new MessageView(null, AdvisorMessage.Role.ASSISTANT, content,
+        return new MessageView(null, AdvisorMessage.Role.ASSISTANT, content, List.of(),
                 toolCalls, iterations, usage, OffsetDateTime.now());
+    }
+
+    private static List<AdvisorProductReference> parseProducts(String json, ObjectMapper mapper) {
+        if (json == null || json.isBlank()) return List.of();
+        try { return mapper.readValue(json, new TypeReference<List<AdvisorProductReference>>() {}); }
+        catch (Exception e) { return List.of(); }
     }
 
     /**

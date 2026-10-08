@@ -8,6 +8,7 @@ import java.util.List;
 public record ConversationDetail(
         @JsonSerialize(using = ToStringSerializer.class) Long id,
         String title,
+        String contextNote,
         List<MessageView> messages
 ) {
 }

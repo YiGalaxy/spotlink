@@ -1,10 +1,11 @@
 package com.spotlink.advisor.tool;
 
-import com.spotlink.identity.entity.Enterprise;
-import com.spotlink.identity.mapper.EnterpriseMapper;
 import com.spotlink.shared.security.SecurityUtils;
 import com.spotlink.trading.entity.Listing;
 import com.spotlink.trading.service.ListingService;
+import com.spotlink.warehouse.entity.Warehouse;
+import com.spotlink.warehouse.mapper.WarehouseMapper;
+import com.spotlink.trading.mapper.ListingMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -40,11 +41,10 @@ public class ListingAdvisorTools {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    /** 多到足以比较报价，又少到能让回答保持可读。 */
-    private static final int MARKET_ROWS = 15;
-
     private final ListingService listingService;
-    private final EnterpriseMapper enterpriseMapper;
+    private final WarehouseMapper warehouseMapper;
+    private final ListingMapper listingMapper;
+    private final ProcurementAdvisorTools procurement;
 
     @Tool(name = "list_my_listings",
             description = """
@@ -113,46 +113,76 @@ public class ListingAdvisorTools {
             @ToolParam(description = "SELL 表示卖出的要约，BUY 表示买入的请求。留空表示两者都要。")
             String side) {
 
-        Long enterpriseId = SecurityUtils.currentEnterpriseIdOrNull();
         String wantedSide = side == null || side.isBlank() ? null : side.trim().toUpperCase();
         if (wantedSide != null
                 && !Listing.Side.SELL.equals(wantedSide) && !Listing.Side.BUY.equals(wantedSide)) {
             return "挂牌方向只能是 SELL 或 BUY。";
         }
 
-        List<Listing> listings = listingService.browse(null, wantedSide, keyword);
+        if (keyword != null && keyword.length() > 80) return "商品名称关键字不能超过80个字符。";
+        var query = ProcurementAdvisorTools.publicQuery();
+        if (wantedSide != null) query.eq(Listing::getSide, wantedSide);
+        if (keyword != null && !keyword.isBlank()) query.like(Listing::getCommodityName, keyword.trim());
+        long total = listingMapper.selectCount(query);
+        List<Listing> listings = listingMapper.selectList(query.orderByDesc(Listing::getId).last("LIMIT " + ToolCallRecorder.rowLimit()));
         if (listings.isEmpty()) {
             return keyword == null || keyword.isBlank()
                     ? "当前市场上没有在挂的挂牌。"
                     : "市场上没有名称包含「%s」的在挂挂牌。".formatted(keyword.trim());
         }
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("市场在挂挂牌共 ").append(listings.size()).append(" 条");
-        if (listings.size() > MARKET_ROWS) {
-            sb.append("，按发布时间由新到旧列出前 ").append(MARKET_ROWS).append(" 条");
-        }
-        sb.append("：\n");
+        return procurement.render(listings, total, "公开挂牌，按最新排序；报价不是成交价");
+    }
 
-        for (Listing listing : listings.stream().limit(MARKET_ROWS).toList()) {
-            sb.append("- ").append(listing.getCommodityName())
-              .append(" | ").append(sideText(listing))
-              .append(' ').append(plain(listing.getRemainingQuantity())).append('/')
-              .append(plain(listing.getQuantity())).append(' ').append(listing.getUnit())
-              .append(" | ").append(priceText(listing))
-              .append(" | ").append(confirmModeText(listing))
-              .append(" | 挂牌方 ").append(enterpriseName(listing.getEnterpriseId()));
-            if (enterpriseId != null && enterpriseId.equals(listing.getEnterpriseId())) {
-                // 加这个标记，是因为调用方接下来通常就要比价，而没有它，助手会兴高采烈地
-                // 建议去接受一个根本接受不了的报价 —— 那是他们自己挂的。
-                sb.append("（本方）");
-            }
-            sb.append('\n');
+    @Tool(name = "estimate_delivery_cost",
+            description = """
+                    估算一条公开挂牌到目的地的运输费用。平台当前没有维护真实运费价目表时，
+                    只能说明起运仓和配送方式；只有用户明确提供每吨运价与吨数，才可按公式
+                    做透明估算。不得把估算说成平台报价，也不得猜测距离或运价。
+                    """)
+    public String estimateDeliveryCost(
+            @ToolParam(description = "挂牌编号或商品名称关键字，至少提供一个。") String listingNoOrKeyword,
+            @ToolParam(required = false, description = "目的地省或市。可选；不填时只返回起运地和数据边界。") String destination,
+            @ToolParam(required = false, description = "预计运输吨数。可选；必须为正数。") BigDecimal tonnes,
+            @ToolParam(required = false, description = "仅用户明确提供的每吨运价，单位元/吨；不允许模型猜测或自定。可选。") BigDecimal ratePerTonne) {
+        if (listingNoOrKeyword == null || listingNoOrKeyword.isBlank()) {
+            return "请提供挂牌编号或商品名称，才能查询起运仓。";
         }
-
-        // 加上这句，是因为调用方接下来通常就要判断价格高低，而一串报价不等于一串成交。
-        sb.append("以上是挂牌报价，不是成交价。判断价位是否合理要用 query_market_price 看实际成交。");
-        return sb.toString();
+        if (listingNoOrKeyword.length() > 80 || (destination != null && destination.length() > 80)) return "挂牌或目的地关键字过长。";
+        List<Listing> candidates = listingMapper.selectList(ProcurementAdvisorTools.publicQuery().eq(Listing::getSide, Listing.Side.SELL)
+                .eq(Listing::getListingNo, listingNoOrKeyword.trim()).last("LIMIT 1"));
+        if (candidates.isEmpty()) candidates = listingMapper.selectList(ProcurementAdvisorTools.publicQuery().eq(Listing::getSide, Listing.Side.SELL)
+                .like(Listing::getCommodityName, listingNoOrKeyword.trim()).orderByDesc(Listing::getId).last("LIMIT 2"));
+        if (candidates.size() > 1) return "找到多个挂牌，起运仓或交付方式可能不同。请指定挂牌编号后估算，不能随意选第一条。";
+        Listing listing = candidates.isEmpty() ? null : candidates.get(0);
+        if (listing == null) {
+            return "没有找到匹配的在挂卖方挂牌，无法估算运费。";
+        }
+        Warehouse warehouse = listing.getWarehouseId() == null ? null : warehouseMapper.selectById(listing.getWarehouseId());
+        String origin = warehouse == null ? "—" : warehouseLocation(warehouse);
+        String delivery = deliveryText(listing);
+        StringBuilder sb = new StringBuilder("挂牌 ").append(listing.getListingNo())
+                .append(" 起运地：").append(origin).append("；交付方式：").append(delivery).append("。\n");
+        sb.append(procurement.render(List.of(listing), 1, "本次运费估算对应的有效公开挂牌，单价和余量已重新查询")).append('\n');
+        if (Listing.DeliveryMethod.SELF_PICKUP.equals(listing.getDeliveryMethod())) sb.append("自提需买方安排运输，费用不等于零。\n");
+        if (ratePerTonne == null || tonnes == null || ratePerTonne.signum() <= 0 || tonnes.signum() <= 0) {
+            return sb.append("平台当前没有可用于该路线的真实运费价目表，因此不能给出实际运费。"
+                    + "如你提供目的地、吨数和每吨运价，可按“吨数 × 每吨运价”做标注为估算的计算。").toString();
+        }
+        if (destination == null || destination.isBlank()) {
+            return sb.append("已收到吨数和运价，但还缺目的地；请补充目的地后再计算。 ").toString();
+        }
+        if (!"吨".equals(listing.getUnit())) return sb.append("该挂牌不是按吨计量，不能直接将挂牌量代入每吨运价，请先提供明确的重量换算。").toString();
+        if (tonnes.compareTo(new BigDecimal("1000000000")) > 0 || ratePerTonne.compareTo(new BigDecimal("1000000000")) > 0
+                || tonnes.scale() > 6 || ratePerTonne.scale() > 6) return "估算参数超出范围。";
+        if (listing.getRemainingQuantity() != null && tonnes.compareTo(listing.getRemainingQuantity()) > 0) return "需求吨数大于该挂牌剩余量，请减少数量或另选挂牌。";
+        BigDecimal total = tonnes.multiply(ratePerTonne);
+        if (!ToolCallRecorder.userProvidedFreightRate(ratePerTonne)) return sb.append("你尚未明确提供每吨运价，不能使用模型自行填写的费率。请补充例如“运价80元/吨”后再估算。").toString();
+        return sb.append("目的地：").append(destination.trim())
+                .append("；按你提供的 ").append(ratePerTonne.stripTrailingZeros().toPlainString())
+                .append(" 元/吨 × ").append(tonnes.stripTrailingZeros().toPlainString())
+                .append(" 吨，估算运费：").append(total.stripTrailingZeros().toPlainString())
+                .append(" 元。该金额是用户参数估算，不是平台运费报价。").toString();
     }
 
     // ------------------------------------------------------------------
@@ -206,9 +236,20 @@ public class ListingAdvisorTools {
         };
     }
 
-    private String enterpriseName(Long id) {
-        Enterprise enterprise = id == null ? null : enterpriseMapper.selectById(id);
-        return enterprise == null ? "—" : enterprise.getName();
+    private String warehouseLocation(Warehouse warehouse) {
+        StringBuilder value = new StringBuilder(valueOrDash(warehouse.getName()));
+        if (warehouse.getProvince() != null || warehouse.getCity() != null) {
+            value.append("（").append(valueOrDash(warehouse.getProvince())).append(valueOrDash(warehouse.getCity())).append("）");
+        }
+        return value.toString();
+    }
+
+    private String deliveryText(Listing listing) {
+        return Listing.DeliveryMethod.DELIVERED.equals(listing.getDeliveryMethod()) ? "送到" : "自提";
+    }
+
+    private String valueOrDash(String value) {
+        return value == null || value.isBlank() ? "—" : value;
     }
 
     private String plain(BigDecimal value) {

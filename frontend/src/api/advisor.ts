@@ -28,6 +28,10 @@ export function deleteConversation(id: EntityId) {
   return api.delete<void>(`/advisor/conversations/${id}`)
 }
 
+export function updateConversationContext(id: EntityId, note: string) {
+  return api.put<void>(`/advisor/conversations/${id}/context`, { note })
+}
+
 export function sendMessage(id: EntityId, message: string) {
   return api.post<MessageView>(`/advisor/conversations/${id}/messages`, { message }, { timeout: 660_000 })
 }

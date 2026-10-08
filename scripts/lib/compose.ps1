@@ -39,6 +39,9 @@ function Get-ComposeContext {
     try { $secret = [Convert]::FromBase64String($settings.SPOTLINK_JWT_SECRET) } catch { throw 'JWT 密钥必须是 Base64 编码。' }
     if ($secret.Length -lt 32) { throw 'JWT 密钥至少需要 256 位。' }
     $arguments = @('compose', '-p', $ProjectName, '--project-directory', $script:ProjectRoot, '--env-file', $envPath, '-f', (Join-Path $script:ProjectRoot 'ops/compose.yml'))
+    if ($settings.ContainsKey('SPOTLINK_LOCAL_AI_GPU') -and $settings['SPOTLINK_LOCAL_AI_GPU'] -eq 'true') {
+        $arguments += @('-f', (Join-Path $script:ProjectRoot 'ops/compose.gpu.yml'))
+    }
     return @{ Arguments = $arguments; Settings = $settings; ProjectName = $ProjectName; EnvFile = $envPath }
 }
 

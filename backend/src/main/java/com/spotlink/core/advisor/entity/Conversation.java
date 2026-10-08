@@ -28,6 +28,7 @@ public class Conversation {
     private Long enterpriseId;
     private Long userId;
     private String title;
+    private String contextNote;
     private Integer messageCount;
     private OffsetDateTime lastMessageAt;
 

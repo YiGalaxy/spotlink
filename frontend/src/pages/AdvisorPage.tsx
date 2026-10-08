@@ -7,6 +7,7 @@ import {
   Collapse,
   Empty,
   Input,
+  Modal,
   Popconfirm,
   Space,
   Spin,
@@ -15,6 +16,7 @@ import {
 } from 'antd'
 import { DeleteOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
   createConversation,
@@ -23,15 +25,32 @@ import {
   getConversation,
   listConversations,
   sendMessage,
+  updateConversationContext,
 } from '@/api/advisor'
 import MarkdownText from '@/components/MarkdownText'
 import type { EntityId, MessageView } from '@/types/api'
 
 const SAMPLE_QUESTIONS = [
-  '我们公司叫什么名字？交易席位号是多少？审核通过了吗？',
-  '我们公司下面有几个账号？分别是谁？',
-  '平台支持哪几种交易方式？',
+  '找电解铜，对比挂牌单价、剩余数量和交收仓库，给我查看挂牌入口。',
+  '采购20吨电解铜，优先上海交收，按单价从低到高筛选。',
+  '自提和送到有什么区别？运费、磅差和质量异议应该怎么约定？',
+  '我有哪些订单或合同需要处理？',
 ]
+
+const SOURCE_NAMES: Record<string, string> = {
+  find_purchase_options: '在售货物筛选', get_listing_details: '挂牌详情',
+  query_market_listings: '公开挂牌', estimate_delivery_cost: '运输费用估算',
+  query_market_price: '平台成交行情', query_price_trend: '成交价格趋势',
+  search_platform_rules: '平台规则', query_my_inventory: '本企业库存',
+  summarise_my_inventory: '本企业库存汇总', list_my_listings: '本企业挂牌',
+  list_my_orders: '本企业订单', get_order_detail: '本企业订单详情',
+  list_my_contracts: '本企业合同', get_contract_detail: '合同条款',
+  list_my_tasks: '本企业待办', query_my_enterprise: '本企业资料', query_team_members: '本企业成员',
+}
+
+function readableEvidence(output: string) {
+  try { return JSON.stringify(JSON.parse(output), null, 2) } catch { return output }
+}
 
   /** 等待期间和失败时显示的占位回合。永不落库。 */
 function localTurn(role: 'user' | 'assistant', content: string): MessageView {
@@ -39,6 +58,7 @@ function localTurn(role: 'user' | 'assistant', content: string): MessageView {
     id: null,
     role,
     content,
+    products: [],
     toolCalls: [],
     iterations: null,
     usage: null,
@@ -52,6 +72,11 @@ export default function AdvisorPage() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [contextNote, setContextNote] = useState('')
+  const [contextDraft, setContextDraft] = useState('')
+  const [contextOpen, setContextOpen] = useState(false)
+  const [savingContext, setSavingContext] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
@@ -88,16 +113,20 @@ export default function AdvisorPage() {
   const refreshList = () => queryClient.invalidateQueries({ queryKey: identityKey('conversations') })
 
   const openConversation = async (id: EntityId) => {
+    setHistoryOpen(false)
     setActiveId(id)
     activeIdRef.current = id
     setLoadingHistory(true)
     try {
       const detail = await getConversation(id)
-      setMessages(detail.messages)
+      if (activeIdRef.current === id) {
+        setMessages(detail.messages)
+        setContextNote(detail.contextNote ?? '')
+      }
     } catch {
-      setMessages([])
+      if (activeIdRef.current === id) setMessages([])
     } finally {
-      setLoadingHistory(false)
+      if (activeIdRef.current === id) setLoadingHistory(false)
     }
   }
 
@@ -106,10 +135,13 @@ export default function AdvisorPage() {
    * 改主意，列表里什么都不会留下。
    */
   const handleNewConversation = () => {
+    setHistoryOpen(false)
     setActiveId(null)
     activeIdRef.current = null
     setMessages([])
     setInput('')
+    setContextNote('')
+    setLoadingHistory(false)
   }
 
   const handleDeleteConversation = async (id: EntityId) => {
@@ -128,6 +160,7 @@ export default function AdvisorPage() {
 
     const content = (text ?? input).trim()
     if (!content) return
+    if (content.length > 4000) return
 
     sendingRef.current = true
     setSending(true)
@@ -140,6 +173,7 @@ export default function AdvisorPage() {
         conversationId = detail.id
         setActiveId(conversationId)
         activeIdRef.current = conversationId
+        if (contextNote) await updateConversationContext(conversationId, contextNote)
       }
 
       setInput('')
@@ -153,6 +187,7 @@ export default function AdvisorPage() {
       if (activeIdRef.current === conversationId) {
         const detail = await getConversation(conversationId)
         setMessages(detail.messages)
+        setContextNote(detail.contextNote ?? '')
       }
     } catch {
       if (conversationId !== null && activeIdRef.current === conversationId) {
@@ -169,10 +204,20 @@ export default function AdvisorPage() {
     }
   }
 
+  const saveContext = async () => {
+    setSavingContext(true)
+    try {
+      if (activeId) await updateConversationContext(activeId, contextDraft.trim())
+      setContextNote(contextDraft.trim())
+      setContextOpen(false)
+    } finally { setSavingContext(false) }
+  }
+
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
       {/* ---------- 会话列表 ---------- */}
-      <div className="conv-sidebar">
+      {historyOpen && <button className="advisor-history-backdrop" aria-label="关闭会话列表" onClick={() => setHistoryOpen(false)} />}
+      <div className={`conv-sidebar${historyOpen ? ' is-open' : ''}`}>
         <div style={{ padding: 12 }}>
           <Button type="primary" block icon={<PlusOutlined />} onClick={handleNewConversation}>
             新建对话
@@ -221,14 +266,13 @@ export default function AdvisorPage() {
       {/* ---------- chat ---------- */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <div className="chat-header">
+          <Button className="advisor-history-button" size="small" onClick={() => setHistoryOpen(true)}>会话记录</Button>
           <Typography.Text strong>AI 交易顾问</Typography.Text>
           {status?.available ? (
             <>
-              <Tag color="green">已配置</Tag>
-              <Tag>{status.model}</Tag>
-              <Tag color="blue">{status.registeredTools.length} 个工具</Tag>
+              <Tag color="green">已启用</Tag>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                回答下方的调用链可以展开，看到它到底查了什么
+                查货 · 比价 · 交付 · 订单与合同
               </Typography.Text>
             </>
           ) : status ? (
@@ -236,7 +280,9 @@ export default function AdvisorPage() {
           ) : (
             <Spin size="small" />
           )}
+          <Button size="small" disabled={sending || loadingHistory} onClick={() => { setContextDraft(contextNote); setContextOpen(true) }}>采购需求{contextNote ? ' · 已保存' : ''}</Button>
         </div>
+        {contextNote && <div className="advisor-context-note"><Typography.Text type="secondary" ellipsis>本会话需求：{contextNote}</Typography.Text></div>}
 
         <div ref={scrollRef} className="chat-scroll" style={{ flex: 1 }}>
           {loadingHistory ? (
@@ -273,9 +319,20 @@ export default function AdvisorPage() {
                       <div className="chat-bubble user">{message.content}</div>
                     ) : (
                       <>
+                        <div className="advisor-answer-meta">现货通顾问 · {dayjs(message.createdAt).format('HH:mm')}</div>
                         <div className="chat-bubble assistant">
-                          <MarkdownText content={message.content} />
+                          <MarkdownText content={message.content} allowedLinks={(message.products ?? []).map(product => `/trading?listing=${product.id}`)} />
                         </div>
+                        {(message.products ?? []).length > 0 && <div className="advisor-products" aria-label="查询到的挂牌">
+                          {message.products.map(product => <article className="advisor-product" key={product.id}>
+                            <div className="advisor-product-top"><Typography.Text strong>{product.title}</Typography.Text><Tag>{product.delivery}</Tag></div>
+                            <strong className="advisor-product-price">{product.price}</strong>
+                            <div>可摘牌 {product.quantity}</div>
+                            <Typography.Text type="secondary">{product.seller}</Typography.Text>
+                            <Typography.Text type="secondary">{product.warehouse}</Typography.Text>
+                            <Link className="advisor-product-link" to={`/trading?listing=${product.id}`}>查看挂牌 →</Link>
+                          </article>)}
+                        </div>}
 
                         {message.toolCalls.length > 0 && (
                           <Collapse
@@ -287,8 +344,7 @@ export default function AdvisorPage() {
                                 key: 'tools',
                                 label: (
                                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                                    查看调用链（{message.toolCalls.length} 次工具调用
-                                    {message.iterations ? `，${message.iterations} 轮` : ''}）
+                                    查看数据依据（{message.toolCalls.length} 项查询）
                                   </Typography.Text>
                                 ),
                                 children: (
@@ -299,18 +355,12 @@ export default function AdvisorPage() {
                                         size="small"
                                         title={
                                           <Space size={6}>
-                                            <Tag color="blue">{call.name}</Tag>
-                                            <Typography.Text
-                                              type="secondary"
-                                              style={{ fontSize: 12, fontWeight: 400 }}
-                                            >
-                                              入参 {call.input}
-                                            </Typography.Text>
+                                            <Tag>{SOURCE_NAMES[call.name] ?? '平台业务查询'}</Tag>
                                           </Space>
                                         }
                                         styles={{ body: { padding: 10 } }}
                                       >
-                                        <pre className="tool-output">{call.output}</pre>
+                                        <pre className="tool-output">{readableEvidence(call.output)}</pre>
                                       </Card>
                                     ))}
                                   </Space>
@@ -320,14 +370,6 @@ export default function AdvisorPage() {
                           />
                         )}
 
-                        {message.usage && (
-                          <Typography.Text
-                            type="secondary"
-                            style={{ fontSize: 12, display: 'block', marginTop: 4 }}
-                          >
-                            输入 {message.usage.inputTokens} / 输出 {message.usage.outputTokens} tokens
-                          </Typography.Text>
-                        )}
                       </>
                     )}
                   </div>
@@ -337,7 +379,7 @@ export default function AdvisorPage() {
                   <div className="chat-bubble assistant" style={{ display: 'flex', gap: 10 }}>
                     <Spin size="small" />
                     <Typography.Text type="secondary">
-                      正在思考，可能需要调用平台工具取数…
+                      正在核对货物和平台记录，请稍候…
                     </Typography.Text>
                   </div>
                 )}
@@ -355,6 +397,9 @@ export default function AdvisorPage() {
                 placeholder="输入问题，Enter 发送，Shift+Enter 换行"
                 autoSize={{ minRows: 1, maxRows: 4 }}
                 disabled={sending}
+                maxLength={4000}
+                showCount
+                aria-label="向交易顾问提问"
                 onPressEnter={(event) => {
                   if (!event.shiftKey) {
                     event.preventDefault()
@@ -372,6 +417,7 @@ export default function AdvisorPage() {
                 发送
               </Button>
             </Space.Compact>
+            <div className="advisor-composer-hint">同一会话保留最近对话；长期条件可存入“采购需求”。报价与余量以挂牌详情为准。</div>
 
             {status && !status.available && (
               <Alert
@@ -385,6 +431,10 @@ export default function AdvisorPage() {
           </div>
         </div>
       </div>
+      <Modal title="本会话采购需求" open={contextOpen} onCancel={() => setContextOpen(false)} onOk={() => void saveContext()} confirmLoading={savingContext} okText="保存需求">
+        <p>填写商品、规格、数量、预算和目的地，顾问会在本会话中参考这些条件。新问题中的条件优先。留空保存可清除。</p>
+        <Input.TextArea aria-label="采购需求内容" value={contextDraft} onChange={event => setContextDraft(event.target.value)} maxLength={2000} showCount rows={6} placeholder="例如：电解铜20吨，交收到上海，优先送到；请比较单价和总费用。" />
+      </Modal>
     </div>
   )
 }

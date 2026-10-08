@@ -5,4 +5,6 @@ playwright-cli --config=/workspace/scripts/tests/browser.config.json open http:/
 playwright-cli snapshot
 playwright-cli run-code "$(cat /workspace/scripts/tests/advisor-browser.flow.js)"
 playwright-cli snapshot
+playwright-cli run-code "$(cat /workspace/scripts/tests/advisor-chat-browser.flow.js)"
+playwright-cli snapshot
 playwright-cli close

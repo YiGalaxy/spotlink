@@ -88,7 +88,7 @@ class AdvisorModelSettingsIntegrationTest {
                 .andExpect(jsonPath("$.code").value(0)).andReturn();
         String id=json.readTree(creation.getResponse().getContentAsString()).path("data").path("id").asText();
         mvc.perform(post("/api/advisor/conversations/"+id+"/messages").header("Authorization",buyer)
-                .contentType("application/json").content("{\"message\":\"你好\"}"))
+                .contentType("application/json").content("{\"message\":\"查询电解铜当前挂牌\"}"))
                 .andExpect(jsonPath("$.code").value(80000));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM t_ai_message WHERE conversation_id=?",Integer.class,id)).isZero();
     }

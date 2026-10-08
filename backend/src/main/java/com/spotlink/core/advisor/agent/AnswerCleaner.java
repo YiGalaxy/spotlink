@@ -55,6 +55,14 @@ public final class AnswerCleaner {
         if (raw == null || raw.isBlank()) {
             return raw;
         }
+        // 部分本地兼容网关省略开头的 think 标签，但保留闭合标签。
+        int thinkingEnd = raw.toLowerCase(java.util.Locale.ROOT).lastIndexOf("</think>");
+        if (thinkingEnd >= 0) raw = raw.substring(thinkingEnd + "</think>".length()).strip();
+        if (raw.toLowerCase(java.util.Locale.ROOT).contains("<think>")) raw = raw.replaceAll("(?is)<think>.*?</think>", "").strip();
+        // 未闭合思考块的内容不能展示。
+        int unclosedThink = raw.toLowerCase(java.util.Locale.ROOT).indexOf("<think>");
+        if (unclosedThink >= 0) raw = raw.substring(0, unclosedThink).strip();
+        if (raw.isBlank()) return null;
 
         String[] lines = raw.split("\n", -1);
         int start = -1;
@@ -119,13 +127,16 @@ public final class AnswerCleaner {
                 cjk++;
             }
         }
-        if (counted == 0 || cjk < MIN_CJK_CHARS || (double) cjk / counted < CJK_RATIO) {
+        if (counted == 0 || cjk < MIN_CJK_CHARS) {
             return false;
         }
 
         String trimmed = line.strip();
-        return STARTS_A_BLOCK.matcher(trimmed).find()
-                || ENDS_A_SENTENCE.indexOf(trimmed.charAt(trimmed.length() - 1)) >= 0;
+        // 挂牌编号、单价和链接会稀释中文比例，完整中文结论仍需保留。
+        String sentence = trimmed.replaceAll("[\\*_]$", "").replaceAll("[\\*_]$", "");
+        double ratio = (double) cjk / counted;
+        return (ratio >= CJK_RATIO && STARTS_A_BLOCK.matcher(trimmed).find())
+                || (ratio >= 0.15 && ENDS_A_SENTENCE.indexOf(sentence.charAt(sentence.length() - 1)) >= 0);
     }
 
     /** 开启某个结构的 Markdown：标题、引用、表格行。 */

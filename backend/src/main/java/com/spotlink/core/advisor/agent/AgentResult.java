@@ -18,13 +18,14 @@ public record AgentResult(
         String answer,
         List<ToolCallRecorder.Invocation> toolInvocations,
         Integer inputTokens,
-        Integer outputTokens
+        Integer outputTokens,
+        List<com.spotlink.advisor.dto.AdvisorProductReference> products
 ) {
 
     public static AgentResult of(String answer,
                                  List<ToolCallRecorder.Invocation> toolInvocations,
                                  Integer inputTokens,
                                  Integer outputTokens) {
-        return new AgentResult(answer, List.copyOf(toolInvocations), inputTokens, outputTokens);
+        return new AgentResult(answer, List.copyOf(toolInvocations), inputTokens, outputTokens, List.of());
     }
 }

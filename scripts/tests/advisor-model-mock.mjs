@@ -11,9 +11,22 @@ http.createServer(async (req, res) => {
   count++
   const hasResult = request.messages.some(m => m.role === 'tool')
   const tool = request.tools?.find(t => t.function.name === 'platform_connection_probe')
-  const choice = tool && !hasResult
-    ? { index: 0, finish_reason: 'tool_calls', message: { role: 'assistant', content: null, tool_calls: [{ id: 'offline-call', type: 'function', function: { name: 'platform_connection_probe', arguments: '{}' } }] } }
-    : { index: 0, finish_reason: 'stop', message: { role: 'assistant', content: '离线模型连接正常。' } }
+  const procurement = request.tools?.find(t => t.function.name === 'find_purchase_options')
+  const functionName = tool ? 'platform_connection_probe' : procurement ? 'find_purchase_options' : null
+  const args = tool ? '{}' : JSON.stringify({ keyword: '电解铜', location: null, minQuantity: null, maxPrice: null, unit: '吨', deliveryMethod: null, sortBy: 'PRICE_ASC' })
+  let answer = '离线模型连接正常。'
+  if (hasResult && request.messages.some(m => m.role === 'tool' && m.name !== 'platform_connection_probe')) {
+    const output = request.messages.filter(m => m.role === 'tool').at(-1)?.content
+    try {
+      let data = JSON.parse(output)
+      if (typeof data === 'string') data = JSON.parse(data)
+      const item = data['挂牌'][0]
+      answer = `已查到真实挂牌，可查看以下商品卡片。\n\n[查看挂牌](${item['详情']})\n\n[伪造挂牌](/trading?listing=99999999999999) [外部链接](https://example.invalid/tracker) ![外部图片](https://example.invalid/image.png)`
+    } catch { answer = '当前未查询到符合条件的挂牌。' }
+  }
+  const choice = functionName && !hasResult
+    ? { index: 0, finish_reason: 'tool_calls', message: { role: 'assistant', content: null, tool_calls: [{ id: 'offline-call', type: 'function', function: { name: functionName, arguments: args } }] } }
+    : { index: 0, finish_reason: 'stop', message: { role: 'assistant', content: answer } }
   // 不记录请求体、Authorization 或业务内容。
   res.end(JSON.stringify({ id: 'offline-completion', object: 'chat.completion', created: 1, model: request.model,
     choices: [choice], usage: { prompt_tokens: 12, completion_tokens: 6, total_tokens: 18 } }))

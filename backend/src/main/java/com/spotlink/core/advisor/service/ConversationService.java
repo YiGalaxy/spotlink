@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.advisor.agent.AdvisorAgent;
 import com.spotlink.advisor.agent.AgentResult;
 import com.spotlink.advisor.agent.ConversationTurn;
+import com.spotlink.advisor.agent.AdvisorInputPolicy;
+import com.spotlink.advisor.agent.ConversationContext;
 import com.spotlink.advisor.dto.ConversationDetail;
 import com.spotlink.advisor.dto.ConversationSummary;
 import com.spotlink.advisor.dto.MessageView;
@@ -23,6 +25,9 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @Service
@@ -44,14 +49,21 @@ public class ConversationService {
     private final AdvisorMessageMapper messageMapper;
     private final AdvisorAgent advisorAgent;
     private final ObjectMapper objectMapper;
+    private final AdvisorRequestGuard guard;
+    private final PlatformTransactionManager transactionManager;
 
     // ------------------------------------------------------------------
     // 会话管理
     // ------------------------------------------------------------------
 
     public List<ConversationSummary> listMine(Long userId) {
-        return conversationMapper.selectList(Wrappers.<Conversation>lambdaQuery()
-                        .eq(Conversation::getUserId, userId)
+        var query = Wrappers.<Conversation>lambdaQuery().eq(Conversation::getUserId, userId);
+        var current = com.spotlink.shared.security.SecurityUtils.currentUserOrNull();
+        if (current != null) {
+            if (current.getEnterpriseId() == null) query.isNull(Conversation::getEnterpriseId);
+            else query.eq(Conversation::getEnterpriseId, current.getEnterpriseId());
+        }
+        return conversationMapper.selectList(query
                         .orderByDesc(Conversation::getLastMessageAt)
                         .orderByDesc(Conversation::getId))
                 .stream()
@@ -73,7 +85,7 @@ public class ConversationService {
         conversation.setLastMessageAt(OffsetDateTime.now());
         conversationMapper.insert(conversation);
 
-        return new ConversationDetail(conversation.getId(), conversation.getTitle(), List.of());
+        return new ConversationDetail(conversation.getId(), conversation.getTitle(), conversation.getContextNote(), List.of());
     }
 
     public ConversationDetail get(Long conversationId, Long userId) {
@@ -86,7 +98,14 @@ public class ConversationService {
                 .map(entity -> MessageView.from(entity, objectMapper))
                 .toList();
 
-        return new ConversationDetail(conversation.getId(), conversation.getTitle(), messages);
+        return new ConversationDetail(conversation.getId(), conversation.getTitle(), conversation.getContextNote(), messages);
+    }
+
+    public void updateContext(Long conversationId, Long userId, String note) {
+        Conversation conversation = requireOwned(conversationId, userId);
+        if (note != null && note.length() > 2000) throw BusinessException.of(ResultCode.BAD_REQUEST, "采购需求不能超过2000个字符");
+        conversation.setContextNote(note == null || note.isBlank() ? "" : AdvisorInputPolicy.normalize(note));
+        conversationMapper.updateById(conversation);
     }
 
     public void delete(Long conversationId, Long userId) {
@@ -106,20 +125,24 @@ public class ConversationService {
      * <p>模型是在写入任何东西<em>之前</em>调用的。如果先把用户的问题写进去，上游调用失败时
      * 就会留下一个悬空的问题，而一份满是无人应答问题的对话记录，比缺少失败那一轮的记录更糟。
      *
-     * <p>两次插入没有包在同一个事务里。它们是相互独立的写入，彼此之间没有不变式 ——
-     * 丢掉一条只会让对话记录变短，不会产生脏数据。
+     * <p>模型返回后，以短事务原子保存问答和计数，避免半个问答进入后续上下文。
      */
     public MessageView sendMessage(Long conversationId, String userMessage, LoginUser user) {
+        String content = AdvisorInputPolicy.normalize(userMessage);
         Conversation conversation = requireOwned(conversationId, user.getUserId());
-
-        List<ConversationTurn> history = loadHistory(conversationId);
-        AgentResult result = advisorAgent.run(userMessage, history, user);
-
-        persistUserMessage(conversation, user, userMessage);
-        AdvisorMessage assistantRow = persistAssistantMessage(conversation, user, result);
-        touchConversation(conversation, userMessage);
-
-        return MessageView.from(assistantRow, objectMapper);
+        if (!Objects.equals(conversation.getEnterpriseId(), user.getEnterpriseId())) throw BusinessException.of(ResultCode.CONVERSATION_NOT_FOUND);
+        try (var lease = guard.acquire(user.getUserId())) {
+            List<ConversationTurn> history = loadHistory(conversationId);
+            AgentResult result = advisorAgent.run(content, history, user, conversation.getContextNote());
+            // 模型调用不占用数据库事务；问答与计数在同一短事务中提交。
+            return new TransactionTemplate(transactionManager).execute(status -> {
+                requireOwned(conversationId, user.getUserId());
+                persistUserMessage(conversation, user, content);
+                AdvisorMessage assistantRow = persistAssistantMessage(conversation, user, result);
+                touchConversation(conversation, content);
+                return MessageView.from(assistantRow, objectMapper);
+            });
+        }
     }
 
     /**
@@ -138,9 +161,14 @@ public class ConversationService {
 
         List<ConversationTurn> turns = new ArrayList<>(recent.size());
         for (AdvisorMessage row : recent) {
-            turns.add(new ConversationTurn(row.getRole(), row.getContent()));
+            String content = row.getContent();
+            if (AdvisorMessage.Role.ASSISTANT.equals(row.getRole()) && row.getProductsJson() != null && !row.getProductsJson().equals("[]")) {
+                // 保留用户可见卡片的编号，续问“第一条”可重新查详情；旧快照不能当新报价。
+                content += "\n上一轮展示的挂牌快照（仅帮助定位，价格及余量需要重新查询）：\n" + row.getProductsJson();
+            }
+            turns.add(new ConversationTurn(row.getRole(), content, MessageView.from(row, objectMapper).products()));
         }
-        return turns;
+        return ConversationContext.bounded(turns);
     }
 
     // ------------------------------------------------------------------
@@ -158,6 +186,9 @@ public class ConversationService {
         if (conversation == null || !conversation.getUserId().equals(userId)) {
             throw BusinessException.of(ResultCode.CONVERSATION_NOT_FOUND);
         }
+        var current = com.spotlink.shared.security.SecurityUtils.currentUserOrNull();
+        if (current != null && !Objects.equals(conversation.getEnterpriseId(), current.getEnterpriseId()))
+            throw BusinessException.of(ResultCode.CONVERSATION_NOT_FOUND);
         return conversation;
     }
 
@@ -174,6 +205,8 @@ public class ConversationService {
         AdvisorMessage message = newMessage(conversation, user);
         message.setRole(AdvisorMessage.Role.ASSISTANT);
         message.setContent(result.answer());
+        try { message.setProductsJson(objectMapper.writeValueAsString(result.products())); }
+        catch (Exception e) { throw new IllegalStateException("商品卡片编码失败"); }
         message.setToolCalls(serialiseToolCalls(result));
         message.setInputTokens(toLong(result.inputTokens()));
         message.setOutputTokens(toLong(result.outputTokens()));

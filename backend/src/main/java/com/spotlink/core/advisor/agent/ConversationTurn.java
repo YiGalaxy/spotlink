@@ -7,7 +7,10 @@ package com.spotlink.advisor.agent;
  * {@code tool_result} 块：那些块必须按 id 配对，而从存下来的行里重建这层配对既脆弱
  * 又没有收益——模型只需要知道自己已经告诉过用户什么。
  */
-public record ConversationTurn(String role, String content) {
+public record ConversationTurn(String role, String content,
+                               java.util.List<com.spotlink.advisor.dto.AdvisorProductReference> products) {
+
+    public ConversationTurn(String role, String content) { this(role, content, java.util.List.of()); }
 
     public static final String ROLE_USER = "user";
     public static final String ROLE_ASSISTANT = "assistant";

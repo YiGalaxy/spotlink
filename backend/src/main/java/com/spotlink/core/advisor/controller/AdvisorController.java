@@ -7,6 +7,8 @@ import com.spotlink.advisor.dto.ConversationSummary;
 import com.spotlink.advisor.dto.CreateConversationRequest;
 import com.spotlink.advisor.dto.MessageView;
 import com.spotlink.advisor.dto.SendMessageRequest;
+import com.spotlink.advisor.dto.UpdateContextRequest;
+import org.springframework.web.bind.annotation.PutMapping;
 import com.spotlink.advisor.service.ConversationService;
 import com.spotlink.shared.security.LoginUser;
 import com.spotlink.shared.security.SecurityUtils;
@@ -64,6 +66,13 @@ public class AdvisorController {
     public ApiResponse<ConversationDetail> getConversation(@PathVariable Long id) {
         return ApiResponse.success(
                 conversationService.get(id, SecurityUtils.currentUserId()));
+    }
+
+    @Operation(summary = "更新本会话的采购需求", description = "仅会话所有者可编辑；作为用户背景数据，不改变权限")
+    @PutMapping("/conversations/{id}/context")
+    public ApiResponse<Void> updateContext(@PathVariable Long id, @Valid @RequestBody UpdateContextRequest request) {
+        conversationService.updateContext(id, SecurityUtils.currentUserId(), request.note());
+        return ApiResponse.success();
     }
 
     @Operation(summary = "删除会话", description = "软删除，消息作为历史保留")

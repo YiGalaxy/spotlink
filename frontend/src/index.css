@@ -19,6 +19,27 @@ body {
   background: #f5f6f8;
 }
 
+.advisor-products { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 12px 0; }
+.advisor-product { display: flex; flex-direction: column; gap: 8px; padding: 18px; border: 1px solid #e8e8e8; background: #fff; border-radius: 12px; min-width: 0; overflow-wrap: anywhere; }
+.advisor-product-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.advisor-product-price { color: #cf4f20; font-size: 20px; }
+.advisor-product-link { align-self: flex-start; margin-top: auto; padding-top: 8px; color: #b8451a; font-weight: 600; }
+.advisor-product-link:focus-visible { outline: 2px solid #b8451a; outline-offset: 4px; }
+.advisor-context-note { padding: 8px 24px; background: #fff8ee; border-bottom: 1px solid #f2e6d4; }
+.advisor-composer-hint { margin-top: 14px; color: #70757d; font-size: 12px; line-height: 1.6; }
+.chat-header .advisor-history-button, .advisor-history-backdrop { display: none; }
+.advisor-answer-meta { margin: 0 0 6px 2px; color: #70757d; font-size: 12px; }
+@media (max-width: 600px) {
+  .advisor-products { grid-template-columns: 1fr; }
+  .advisor-context-note { padding: 8px 12px; }
+  .chat-header { flex-wrap: wrap; gap: 6px; }
+  .conv-sidebar { display: none !important; }
+  .conv-sidebar.is-open { display: flex !important; position: fixed; inset: 0 auto 0 0; width: min(86vw, 320px); z-index: 101; }
+  .chat-header .advisor-history-button { display: inline-flex; }
+  .advisor-history-backdrop { display: block; position: fixed; inset: 0; border: 0; background: #0006; z-index: 100; }
+  .chat-scroll, .chat-composer { padding: 12px !important; }
+}
+
 /* ------------------------------------------------------------------ */
 /* 顾问：会话侧边栏                                                    */
 /* ------------------------------------------------------------------ */
@@ -127,7 +148,7 @@ body {
 
 .chat-bubble.user {
   margin-left: auto;
-  background: #1f5eff;
+  background: #b8451a;
   color: #fff;
   white-space: pre-wrap;
 }

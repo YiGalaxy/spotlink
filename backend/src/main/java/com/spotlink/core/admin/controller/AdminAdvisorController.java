@@ -43,7 +43,8 @@ public class AdminAdvisorController {
             AdvisorModelSettings snapshot = settings.current();
             ProbeTool probe = new ProbeTool();
             String response = clients.create(snapshot).prompt()
-                    .user("这是连接测试。请先调用 platform_connection_probe 工具，再用中文回复连接正常。不要输出思考过程。")
+                    .user("这是连接测试。请先调用 platform_connection_probe 工具，再用中文回复连接正常。不要输出思考过程。"
+                            + (snapshot.model().startsWith("qwen3") ? "\n/no_think" : ""))
                     .tools(probe).call().content();
             boolean connected = response != null && !response.isBlank();
             ConnectionResult result = new ConnectionResult(connected, probe.called, (System.nanoTime()-start)/1_000_000,
