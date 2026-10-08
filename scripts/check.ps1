@@ -100,6 +100,12 @@ try {
                     & "$PSScriptRoot/tests/auth-runtime.tests.ps1" -Inventory
                     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
+                'image-browser' {
+                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools node scripts/assets/verify-images.mjs
+                    if ($LASTEXITCODE -ne 0) { throw '本地图片来源、散列或预算校验失败。' }
+                    & "$PSScriptRoot/tests/auth-runtime.tests.ps1" -Mall
+                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                }
                 'dataset-generation' {
                     $dataArguments = @('node', 'data/generators/generate.mjs', '--dataset', 'minimal', '--batch', 'c06-check')
                     if (Test-Path -LiteralPath "$script:ProjectRoot/.local/data/v1/c06-check/manifest.json") { $dataArguments += '--resume' }

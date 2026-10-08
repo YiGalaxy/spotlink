@@ -70,7 +70,8 @@ export default function LoginPage() {
             登录企业账号，管理库存、处理订单，
             <br />让 AI 顾问帮你理清下一步。
           </p>
-          <CommodityArtwork name="钢材" />
+          <CommodityArtwork name="仓储" purpose="login" />
+          <small className="login-image-note">AI 生成仓储示意</small>
         </section>
         <Card className="login-card" styles={{ body: { padding: 32 } }}>
           <Typography.Title level={3} style={{ marginBottom: 4 }}>

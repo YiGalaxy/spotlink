@@ -1,0 +1,162 @@
+[
+  {
+    "id": "commodity-copper",
+    "sourceType": "AI生成品类或仓储示意",
+    "model": "gpt-image-2",
+    "date": "2026-10-08",
+    "prompt": "design/商品图片提示词.json#commodity-copper",
+    "original": ".local/images/2026-10-08/commodity-copper.png",
+    "originalSize": [
+      1024,
+      1024
+    ],
+    "originalSha256": "801d7c7ede6e8dcf90edcbabea1f8e704c793247d7554c9045672698b2e022ae",
+    "file": "frontend/public/images/commodity-copper.webp",
+    "size": [
+      800,
+      800
+    ],
+    "bytes": 64296,
+    "sha256": "194d6d1ddd2c6d56c7758f7d38ac8a2b7357751ae57ddf771ae470e31b1dbe11"
+  },
+  {
+    "id": "commodity-aluminum",
+    "sourceType": "AI生成品类或仓储示意",
+    "model": "gpt-image-2",
+    "date": "2026-10-08",
+    "prompt": "design/商品图片提示词.json#commodity-aluminum",
+    "original": ".local/images/2026-10-08/commodity-aluminum.png",
+    "originalSize": [
+      1024,
+      1024
+    ],
+    "originalSha256": "eec2a5ab384049a7fbd0be07e6495ed36dc48fc74f5e159e3d78f8a97042d6de",
+    "file": "frontend/public/images/commodity-aluminum.webp",
+    "size": [
+      800,
+      800
+    ],
+    "bytes": 60342,
+    "sha256": "7910ba514fe8d3f3a9c32774f7a70fe51a90fcf012ec112042f3c78514395b01"
+  },
+  {
+    "id": "commodity-zinc",
+    "sourceType": "AI生成品类或仓储示意",
+    "model": "gpt-image-2",
+    "date": "2026-10-08",
+    "prompt": "design/商品图片提示词.json#commodity-zinc",
+    "original": ".local/images/2026-10-08/commodity-zinc.png",
+    "originalSize": [
+      1024,
+      1024
+    ],
+    "originalSha256": "1d99ed06fe74cec99df0d2fb001e86dfac85df62bb9b87459776552fa0e5a199",
+    "file": "frontend/public/images/commodity-zinc.webp",
+    "size": [
+      800,
+      800
+    ],
+    "bytes": 68356,
+    "sha256": "13a123e0ebdfd4e90e41232db928cd625ee8b5fc3a00ececd987c7df5fb021c3"
+  },
+  {
+    "id": "commodity-lithium-carbonate",
+    "sourceType": "AI生成品类或仓储示意",
+    "model": "gpt-image-2",
+    "date": "2026-10-08",
+    "prompt": "design/商品图片提示词.json#commodity-lithium-carbonate",
+    "original": ".local/images/2026-10-08/commodity-lithium-carbonate.png",
+    "originalSize": [
+      1024,
+      1024
+    ],
+    "originalSha256": "be492d35f0e40ed0b08569fa5b7bfa29c922e49e8aa6a0fb4167ed9a26f251cb",
+    "file": "frontend/public/images/commodity-lithium-carbonate.webp",
+    "size": [
+      800,
+      800
+    ],
+    "bytes": 45788,
+    "sha256": "de4423f55e10d062a877abc47edbd1a8bdda90ae45a379822e03a810048df7b1"
+  },
+  {
+    "id": "commodity-lithium-hydroxide",
+    "sourceType": "AI生成品类或仓储示意",
+    "model": "gpt-image-2",
+    "date": "2026-10-08",
+    "prompt": "design/商品图片提示词.json#commodity-lithium-hydroxide",
+    "original": ".local/images/2026-10-08/commodity-lithium-hydroxide.png",
+    "originalSize": [
+      1024,
+      1024
+    ],
+    "originalSha256": "de94b0873ebc1e710f15264787189ca057c2e551591ef00dbed6b996ded17f8e",
+    "file": "frontend/public/images/commodity-lithium-hydroxide.webp",
+    "size": [
+      800,
+      800
+    ],
+    "bytes": 24928,
+    "sha256": "3b74a2352722657a682733e771908ee020053689ab980979e23f5a83b9881cf7"
+  },
+  {
+    "id": "commodity-indium",
+    "sourceType": "AI生成品类或仓储示意",
+    "model": "gpt-image-2",
+    "date": "2026-10-08",
+    "prompt": "design/商品图片提示词.json#commodity-indium",
+    "original": ".local/images/2026-10-08/commodity-indium.png",
+    "originalSize": [
+      1024,
+      1024
+    ],
+    "originalSha256": "251c4a57d0da99a0b54303bc51a4095b665cdf0ca9a3605fedcbfbbbe33a90e1",
+    "file": "frontend/public/images/commodity-indium.webp",
+    "size": [
+      800,
+      800
+    ],
+    "bytes": 45074,
+    "sha256": "cf735bb45a85152743a1049a23799450b36e2efc40c1056f63477ad2dd714c46"
+  },
+  {
+    "id": "home-commodity-hero",
+    "sourceType": "AI生成品类或仓储示意",
+    "model": "gpt-image-2",
+    "date": "2026-10-08",
+    "prompt": "design/商品图片提示词.json#home-commodity-hero",
+    "original": ".local/images/2026-10-08/home-commodity-hero.png",
+    "originalSize": [
+      1536,
+      1024
+    ],
+    "originalSha256": "b6b5dd9a17676082b1959d851478386be0a60a136c42ac77a5fe3dc9c9740828",
+    "file": "frontend/public/images/home-commodity-hero.webp",
+    "size": [
+      1200,
+      800
+    ],
+    "bytes": 93572,
+    "sha256": "d92aacb7f9800db51bdc6d1dddbc2d28a02180b6e78c09c0716aa0a9cc7e73a7"
+  },
+  {
+    "id": "login-warehouse",
+    "sourceType": "AI生成品类或仓储示意",
+    "model": "gpt-image-2",
+    "date": "2026-10-08",
+    "prompt": "design/商品图片提示词.json#login-warehouse",
+    "original": ".local/images/2026-10-08/login-warehouse.png",
+    "originalSize": [
+      2048,
+      1365
+    ],
+    "originalSha256": "f9a08c7c7e72dfc1d42126ed4f80177ad69d8e74b5844adb967dd48745c6dcb4",
+    "file": "frontend/public/images/login-warehouse.webp",
+    "size": [
+      1200,
+      800
+    ],
+    "bytes": 210072,
+    "sha256": "c97607e329880e9693809f07e701c99acf68142da9f8ea11947ce7f89b0a4307"
+  }
+]

@@ -286,6 +286,22 @@ export default function LandingPage() {
             </span>
           )}
       </section>
+      {categoryLeaves.length > 0 && <section className="category-gallery" aria-label="按品类逛现货">
+        <div className="category-gallery-heading">
+          <h2>按品类逛现货</h2><span>AI 生成品类示意</span>
+        </div>
+        <div className="category-gallery-grid">
+          {categoryLeaves.slice(0, 6).map(category => <button key={category.id}
+            aria-label={`浏览${category.name}现货`}
+            onClick={() => {
+              changeFilter('category', category.id)
+              document.getElementById('goods')?.scrollIntoView()
+            }}>
+            <CommodityArtwork name={category.name} />
+            <strong>{category.name}</strong><span>查看现货 <ArrowRightOutlined /></span>
+          </button>)}
+        </div>
+      </section>}
       <section id="goods" className="goods-section" aria-label="现货商品">
         <div className="goods-heading">
           <div>
@@ -381,7 +397,7 @@ export default function LandingPage() {
                   <span className="listing-badge">
                     {row.side === 'SELL' ? '现货供应' : '采购需求'}
                   </span>
-                  <span className="art-label">品类示意</span>
+                  <span className="art-label">AI 品类示意</span>
                 </div>
                 <div className="product-body">
                   <span className="product-category">
@@ -462,7 +478,7 @@ export default function LandingPage() {
             <CommodityArtwork
               name={`${selected.categoryName} ${selected.commodityName}`}
             />
-            <small>品类示意，非实物照片</small>
+            <small>AI 生成的品类示意图，实际货物以挂牌资料和验收为准</small>
             <h2>{selected.commodityName}</h2>
             <p className="detail-price">
               {selected.priceText}{' '}

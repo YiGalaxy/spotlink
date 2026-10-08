@@ -25,3 +25,5 @@
 C07 认证回归覆盖 access/refresh 用途、账号/企业状态、对象越权、前端迟到响应与双账号切换。Docker Chromium 通过 localhost 宿主映射运行，结果仅 .local。
 
 C08 库存登记校验叶子品类、启用仓库、单位、数量精度和品类规格；冻结时仅允许修改备注。数量接口使用字符串，库存汇总按单位精确计算，保留中文扩展字段。详见[业务规则](docs/业务规则.md)。执行 check.cmd -Task C08 -Mode task -NoPause 验证库存、数据和浏览器，产物只写 .local。
+
+C18 已使用 gpt-image-2 生成六个品类商品图、商城主图及登录仓储图，压缩成品随源码提供。提示词、来源和散列登记在 design，母图与私有配置不提交。`check.cmd -Task C18 -Mode task -NoPause` 校验本地 WebP、前端构建、六品类匹配、图片失败备用及桌面/手机显示，不发图片请求。

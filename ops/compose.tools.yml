@@ -1,5 +1,13 @@
 name: spotlink-next-tools
 services:
+  assets-tools:
+    image: spotlink-next-assets:local
+    build:
+      context: .
+      dockerfile: ops/docker/assets/Dockerfile
+    working_dir: /workspace
+    volumes: [".:/workspace"]
+    command: ["python", "scripts/assets/prepare-images.py"]
   browser-tools:
     image: spotlink-next-browser:local
     build:

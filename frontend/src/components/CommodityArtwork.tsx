@@ -1,12 +1,42 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
+
+const products = [
+  { pattern: /电解铜|铜/, file: 'commodity-copper', label: '电解铜板' },
+  { pattern: /铝/, file: 'commodity-aluminum', label: '铝锭' },
+  { pattern: /锌/, file: 'commodity-zinc', label: '锌锭' },
+  { pattern: /碳酸锂/, file: 'commodity-lithium-carbonate', label: '碳酸锂粉末' },
+  { pattern: /氢氧化锂/, file: 'commodity-lithium-hydroxide', label: '氢氧化锂颗粒' },
+  { pattern: /精铟|铟/, file: 'commodity-indium', label: '精铟金属条' },
+]
 
 /** 品类示意插画，不作为挂牌货物的实物照片。 */
 export default function CommodityArtwork({
   name,
   hero = false,
+  purpose = 'product',
 }: {
   name: string
   hero?: boolean
+  purpose?: 'product' | 'login'
+}) {
+  const [failed, setFailed] = useState<string | null>(null)
+  const product = products.find(item => item.pattern.test(name))
+  const file = purpose === 'login' ? 'login-warehouse' : hero ? 'home-commodity-hero' : product?.file
+  const src = file ? `/images/${file}.webp` : undefined
+  if (src && failed !== src) return (
+    <img src={src} width={hero || purpose === 'login' ? 1200 : 800} height={800}
+      className={`commodity-art commodity-photo${hero ? ' hero-art' : ''}`}
+      alt={`${purpose === 'login' ? '金属材料仓储场景' : hero ? '铜板与铝锭' : product?.label}，AI 生成示意图`}
+      loading={hero || purpose === 'login' ? 'eager' : 'lazy'} decoding="async"
+      onError={() => setFailed(src)} />
+  )
+  return <VectorArtwork name={name} hero={hero} />
+}
+
+/** 尚无图片的品类或图片加载失败时显示矢量备用图。 */
+function VectorArtwork({ name, hero }: {
+  name: string
+  hero: boolean
 }) {
   const id = useId().replace(/:/g, '')
   const grain = /粮|麦|玉米|豆|农|稻/.test(name)
