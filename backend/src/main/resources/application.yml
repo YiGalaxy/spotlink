@@ -1,0 +1,152 @@
+server:
+  port: 8081
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: spotlink
+
+  # 开发者机器上默认使用 local profile；其他任何环境都必须显式设置
+  # SPRING_PROFILES_ACTIVE。
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  datasource:
+    # allowPublicKeyRetrieval + useSSL=false 只用于本地 Docker。MySQL 8 默认走 TLS
+    # 加 caching_sha2_password；一次性容器里没有值得验证的证书，而要求证书只会让
+    # `docker compose up` 在一台全新机器上失败，换不来任何安全收益。
+    #
+    # connectionTimeZone=Asia/Shanghai 配上 forceConnectionTimeZoneToSession，把
+    # JDBC 会话钉住，这样一个以 OffsetDateTime 写入的 DATETIME 取回来还是写入时的
+    # 那个时刻。MySQL 没有带时区的时间类型，所以正是这项设置承接了 PostgreSQL 用
+    # TIMESTAMPTZ 保住的含义。
+    url: ${SPOTLINK_DB_URL:jdbc:mysql://localhost:13306/spotlink?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&connectionTimeZone=Asia/Shanghai&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true}
+    username: ${SPOTLINK_DB_USER:spotlink}
+    # 默认值与 docker-compose.yml 里的容器一致，只用于本地开发。任何能从本机之外
+    # 访问到的部署都必须改掉它：写进仓库的密码就是公开的密码，而之所以在这里从环境
+    # 里读，恰恰是为了让改密码成为一次配置，而不是去编辑一个已经在仓库里的文件。
+    password: ${SPOTLINK_DB_PASSWORD:spotlink_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      pool-name: SpotlinkHikari
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  data:
+    redis:
+      host: ${SPOTLINK_REDIS_HOST:localhost}
+      port: ${SPOTLINK_REDIS_PORT:16379}
+      # 理由与上面数据库密码那一处相同。
+      password: ${SPOTLINK_REDIS_PASSWORD:spotlink_2026}
+      database: 0
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: false
+
+  ai:
+    anthropic:
+      # 自动配置要求启动时 key 非空。占位值让平台在没有顾问 key 时也能启动，
+      # 顾问会报告自己不可用，而不是让整个应用拒绝启动。
+      api-key: ${SPOTLINK_ADVISOR_API_KEY:not-configured}
+      base-url: ${SPOTLINK_ADVISOR_BASE_URL:https://api.anthropic.com}
+      chat:
+        model: ${SPOTLINK_ADVISOR_MODEL:claude-opus-5}
+        max-tokens: 8192
+        cache-options:
+          # 缓存系统提示词。它稳定不变的那一半对每个租户都相同，
+          # 所以一条缓存就能服务所有调用方。
+          strategy: SYSTEM_ONLY
+          # 每条 system 消息各成一个块。否则稳定的那一半和随调用方变化的那一半会被
+          # 合并，前缀随用户改变，于是每个请求都命中不了缓存。
+          multi-block-system-caching: true
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+# 本应用自己的设置
+bulk:
+  security:
+    jwt:
+      # Base64 编码的 256 位密钥。任何非本地环境都必须覆盖它。
+      secret: ${SPOTLINK_JWT_SECRET:YnVsay10cmFkZS1kZXYtc2VjcmV0LWtleS1jaGFuZ2UtbWUtMjAyNg==}
+      access-token-ttl: 2h
+      refresh-token-ttl: 7d
+
+  init:
+    # 写入开发账号（admin / seller01 / buyer01 / pending01）。
+    # 任何真实用户能访问到的环境都必须设为 false。
+    enabled: true
+
+  trading:
+    # 后台扫描多久跑一次。它负责答复挂牌方始终未回复的摘牌请求，并让超过有效期的
+    # 挂牌过期——这些活没人会手动触发，所以这个间隔决定了一个停滞的要约能滞留多久。
+    sweep-interval-ms: 300000
+    # 让应用先启动完，再跑第一次扫描。
+    sweep-initial-delay-ms: 60000
+    # 「需挂牌方确认」的挂牌，挂牌方答复一次摘牌的时间上限。受每张挂牌自身的有效期
+    # 封顶，所以它只会缩短等待。把它设成 PT1M，就能不必等一天而观察到自动过期的路径。
+    confirm-window: ${SPOTLINK_CONFIRM_WINDOW:PT24H}
+
+  rag:
+    embedding:
+      # Claude 没有嵌入接口，所以这是顾问技术栈里唯一不属于 Anthropic 的一块。
+      # 由 Ollama 提供 BGE-M3：中文强、每次调用免费，而且无需联网即可运行。
+      enabled: ${SPOTLINK_EMBEDDING_ENABLED:true}
+      base-url: ${SPOTLINK_EMBEDDING_URL:http://localhost:11434}
+      model: ${SPOTLINK_EMBEDDING_MODEL:bge-m3}
+
+  advisor:
+    enabled: true
+    # 端点、密钥、模型和令牌上限都在 spring.ai.anthropic 下，
+    # 这样模型连接只有一个地方需要配置。
+
+logging:
+  level:
+    root: info
+    com.spotlink: debug
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"

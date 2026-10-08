@@ -1,0 +1,19 @@
+# 本地开发覆盖项。这个文件已被 gitignore——见 .gitignore。
+#
+# 这台机器上没有 Anthropic 的官方 key，所以顾问指向一个 Anthropic 兼容网关。
+# 只有端点和模型不同；应用代码一行没改，这正是把它们放进配置里的意义。
+#
+# 要切回 Claude 官方 API，删掉下面这两项覆盖，并把 SPOTLINK_ADVISOR_API_KEY
+# 导出成一个真实的 key。
+
+spring:
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_AUTH_TOKEN:not-configured}
+      base-url: https://api.deepseek.com/anthropic
+      chat:
+        model: deepseek-chat
+        # 兼容网关没有实现 Anthropic 的显式缓存断点，所以要它只会多出一个被拒的字段。
+        # 指向官方 API 时再把它打开。
+        cache-options:
+          strategy: NONE

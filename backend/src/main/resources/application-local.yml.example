@@ -1,0 +1,18 @@
+# application-local.yml 的模板。复制它，填上你自己的值。
+#
+#   cp application-local.yml.example application-local.yml
+#
+# 真正的那个文件已被 gitignore，所以密钥不会进仓库。
+#
+# 整个文件不建也行：应用会退回 application.yml 里的默认值（Claude 官方 API、
+# 空密钥）。在有 api-key 之前，顾问会报告自己不可用。
+
+bulk:
+  advisor:
+    # 官方 API。如果你用 Anthropic 兼容网关，把它改成网关地址。
+    base-url: https://api.anthropic.com
+    # 密钥优先用环境变量而不是字面量，这样它不会留在 shell 历史里，
+    # 也不会留在任何你可能分享出去的文件里。
+    api-key: ${SPOTLINK_ADVISOR_API_KEY:}
+    # claude-opus-5 是官方 API 上最强的模型。
+    model: claude-opus-5
