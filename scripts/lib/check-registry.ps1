@@ -6,5 +6,6 @@ $script:CheckRegistry = [ordered]@{
     C03 = @{ Required = @('static', 'unit', 'integration'); Checks = @{ static = 'static'; unit = 'backend-package'; integration = 'backend-integration' } }
     C04 = @{ Required = @('static', 'unit'); Checks = @{ static = 'static'; unit = 'frontend-build' } }
     C05 = @{ Required = @('static', 'ops', 'e2e'); Checks = @{ static = 'static'; ops = 'compose-runtime'; e2e = 'compose-runtime' } }
+    C06 = @{ Required = @('static', 'unit', 'dataset'); Checks = @{ static = 'static'; unit = 'data-unit'; dataset = 'dataset-generation' } }
 }
 $script:ValidCheckModes = @('task', 'full', 'static', 'unit', 'integration', 'dataset', 'ai-offline', 'rag', 'e2e', 'visual', 'ops', 'ai-live')

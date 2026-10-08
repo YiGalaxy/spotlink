@@ -1,5 +1,10 @@
 name: spotlink-next-tools
 services:
+  data-tools:
+    image: node:22.14.0-alpine
+    working_dir: /workspace
+    volumes: [".:/workspace:ro", "./.local:/workspace/.local"]
+    command: ["node", "data/generators/generate.mjs"]
   backend-tools:
     image: maven:3.9.11-eclipse-temurin-21
     working_dir: /workspace/backend

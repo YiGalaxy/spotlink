@@ -1,0 +1,6 @@
+{
+  "t_enterprise": ["id", "enterprise_code", "name", "short_name", "unified_social_credit_code", "contact_name", "contact_phone", "contact_email", "trader_code", "status", "qualifications", "created_at", "updated_at"],
+  "t_warehouse": ["id", "code", "name", "province", "city", "address", "contact_name", "contact_phone", "status", "created_at", "updated_at"],
+  "t_commodity_category": ["id", "code", "name", "path", "spec_schema", "unit", "status", "created_at", "updated_at"],
+  "t_inventory_note": ["id", "note_no", "enterprise_id", "category_id", "warehouse_id", "commodity_name", "spec", "total_quantity", "available_quantity", "frozen_quantity", "unit", "status", "version", "remark", "created_at", "updated_at"]
+}

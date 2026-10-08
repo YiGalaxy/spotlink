@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpotLink 数据运行清单",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formatVersion", "ruleVersion", "generatorVersion", "sourceHash", "dataset", "batch", "seed", "baseTime", "timeRule", "schema", "dependencies", "counts", "files"],
+  "properties": {
+    "formatVersion": { "const": 1 },
+    "ruleVersion": { "type": "string", "pattern": "^v[0-9]+$" },
+    "generatorVersion": { "type": "string" },
+    "sourceHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "dataset": { "enum": ["minimal", "demo", "acceptance", "performance"] },
+    "batch": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+    "seed": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "baseTime": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
+    "timeRule": { "enum": ["fixed", "anchored"] },
+    "schema": { "type": "object" },
+    "dependencies": { "type": "object" },
+    "counts": { "type": "object" },
+    "files": {
+      "type": "object", "additionalProperties": { "type": "object", "required": ["sha256", "bytes", "rows"], "properties": {
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "rows": { "type": "integer", "minimum": 0 }
+      }, "additionalProperties": false }
+    }
+  }
+}

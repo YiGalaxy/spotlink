@@ -82,6 +82,22 @@ try {
                     & "$PSScriptRoot/tests/compose-runtime.tests.ps1"
                     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
+                'data-unit' {
+                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools node --test data/generators/dataset.test.mjs
+                    if ($LASTEXITCODE -ne 0) { throw '容器内数据生成单元测试失败。' }
+                }
+                'dataset-generation' {
+                    $dataArguments = @('node', 'data/generators/generate.mjs', '--dataset', 'minimal', '--batch', 'c06-check')
+                    if (Test-Path -LiteralPath "$script:ProjectRoot/.local/data/v1/c06-check/manifest.json") { $dataArguments += '--resume' }
+                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools @dataArguments
+                    if ($LASTEXITCODE -ne 0) { throw '容器内实际数据生成失败。' }
+                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools node data/generators/generate.mjs --verify .local/data/v1/c06-check
+                    if ($LASTEXITCODE -ne 0) { throw '生成数据校验失败。' }
+                    foreach ($generated in @('records.json', 'rendered.sql', 'manifest.json', 'expected.json', 'records.jsonl')) {
+                        & git -C $script:ProjectRoot check-ignore --quiet ".local/data/v1/c06-check/$generated"
+                        if ($LASTEXITCODE -ne 0) { throw '生成产物未被 Git 忽略。' }
+                    }
+                }
                 default {
                     Write-Error "执行器 $executor 不存在。" -ErrorAction Continue
                     exit 2
