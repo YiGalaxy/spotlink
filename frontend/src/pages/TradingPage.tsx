@@ -31,7 +31,7 @@ import { PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
-import { useAuthStore } from '@/store/auth'
+import { identityKey, useAuthStore } from '@/store/auth'
 import {
   acceptListing,
   cancelOrder,
@@ -115,15 +115,15 @@ export default function TradingPage() {
   const publishSide = Form.useWatch('side', publishForm)
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['market'] })
-    void queryClient.invalidateQueries({ queryKey: ['my-listings'] })
-    void queryClient.invalidateQueries({ queryKey: ['my-orders'] })
-    void queryClient.invalidateQueries({ queryKey: ['inventory-notes'] })
-    void queryClient.invalidateQueries({ queryKey: ['market-quotes'] })
+    void queryClient.invalidateQueries({ queryKey: identityKey('market') })
+    void queryClient.invalidateQueries({ queryKey: identityKey('my-listings') })
+    void queryClient.invalidateQueries({ queryKey: identityKey('my-orders') })
+    void queryClient.invalidateQueries({ queryKey: identityKey('inventory-notes') })
+    void queryClient.invalidateQueries({ queryKey: identityKey('market-quotes') })
   }
 
   const { data: market = [], isLoading: marketLoading } = useQuery({
-    queryKey: ['market', sideFilter, keyword],
+    queryKey: identityKey('market', sideFilter, keyword),
     // 服务端一直支持关键词搜索——browse() 从写出来那天就接受这个参数——
     // 却从来没有人传过。在一个只会越来越大的大厅里，筛选就是清单和草堆的区别。
     queryFn: () => fetchMarket(undefined, sideFilter, keyword || undefined),
@@ -133,30 +133,30 @@ export default function TradingPage() {
   // 不带登录态去发这些请求会拿到 401，而客户端的 401 处理把它当作会话过期，
   // 会把访客弹到登录页——于是「浏览」就变成了「被赶出去」。
   const { data: myListings = [] } = useQuery({
-    queryKey: ['my-listings'],
+    queryKey: identityKey('my-listings'),
     queryFn: fetchMyListings,
     enabled: isMember,
   })
 
   const { data: myOrders = [] } = useQuery({
-    queryKey: ['my-orders'],
+    queryKey: identityKey('my-orders'),
     queryFn: () => fetchMyOrders(),
     enabled: isMember,
   })
 
   const { data: notes = [] } = useQuery({
-    queryKey: ['inventory-notes'],
+    queryKey: identityKey('inventory-notes'),
     queryFn: () => listInventoryNotes(),
     enabled: isMember,
   })
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['category-tree'],
+    queryKey: identityKey('category-tree'),
     queryFn: fetchCategoryTree,
   })
 
   const { data: warehouses = [] } = useQuery({
-    queryKey: ['warehouses'],
+    queryKey: identityKey('warehouses'),
     queryFn: fetchWarehouses,
     enabled: isMember,
   })
@@ -893,13 +893,13 @@ function OrderDetailModal({
   const orderId = order?.id
 
   const { data: history = [] } = useQuery({
-    queryKey: ['order-history', orderId],
+    queryKey: identityKey('order-history', orderId),
     queryFn: () => fetchOrderHistory(orderId as EntityId),
     enabled: Boolean(orderId),
   })
 
   const { data: contract, refetch: refetchContract } = useQuery({
-    queryKey: ['order-contract', orderId],
+    queryKey: identityKey('order-contract', orderId),
     queryFn: () => fetchOrderContract(orderId as EntityId),
     enabled: Boolean(orderId),
     retry: false,

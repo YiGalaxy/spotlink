@@ -19,6 +19,9 @@ public interface UserAuthorityProvider {
      */
     UserAuthority load(Long userId);
 
+    /** 不经缓存读取账号及企业的当前身份；账号或企业不可用时返回 null。 */
+    LoginUser currentIdentity(Long userId);
+
     /** 变更后丢掉缓存的那一份，让下一个请求看得见。 */
     void evict(Long userId);
 

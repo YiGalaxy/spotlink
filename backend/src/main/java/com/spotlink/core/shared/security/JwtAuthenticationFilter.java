@@ -72,6 +72,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private boolean authenticate(LoginUser identity, HttpServletRequest request) {
         UserAuthority authority;
         try {
+            LoginUser current = authorityProvider.currentIdentity(identity.getUserId());
+            // 企业和账号类型发生变化时，旧令牌必须失效，不能继承旧租户范围。
+            if (current == null
+                    || !java.util.Objects.equals(current.getUsername(), identity.getUsername())
+                    || !java.util.Objects.equals(current.getEnterpriseId(), identity.getEnterpriseId())
+                    || !java.util.Objects.equals(current.getUserType(), identity.getUserType())) {
+                return false;
+            }
             authority = authorityProvider.load(identity.getUserId());
         } catch (RuntimeException e) {
             // 读取权限这件事，绝不能把一个请求失败成未认证状态。它若抛异常，
@@ -107,8 +115,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * 一次性的流票据）被记下来，而不是被装作不存在。
      */
     private static final List<String> TOKEN_IN_QUERY_PATHS = List.of(
-            "/market/stream",
-            "/tasks/stream");
+            "/api/market/stream",
+            "/api/tasks/stream");
 
     private String resolveToken(HttpServletRequest request) {
         String header = request.getHeader(HEADER);
@@ -117,7 +125,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         String uri = request.getRequestURI();
         for (String path : TOKEN_IN_QUERY_PATHS) {
-            if (uri.endsWith(path)) {
+            if (uri.equals(request.getContextPath() + path)) {
                 return request.getParameter("token");
             }
         }

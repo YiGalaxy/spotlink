@@ -15,7 +15,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchTasks } from '@/api/tasks'
 import { useTaskStream } from '@/hooks/useTaskStream'
-import { useAuthStore } from '@/store/auth'
+import { identityKey, useAuthStore } from '@/store/auth'
 
 const { Header, Sider, Content, Footer } = Layout
 
@@ -57,7 +57,7 @@ export default function MainLayout() {
   // SSE 实时刷新，轮询兜底。
   useTaskStream()
   const { data: tasks = [] } = useQuery({
-    queryKey: ['tasks'],
+    queryKey: identityKey('tasks'),
     queryFn: fetchTasks,
     enabled: signedIn,
     refetchInterval: 60_000,

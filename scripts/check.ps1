@@ -86,6 +86,16 @@ try {
                     & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools node --test data/generators/dataset.test.mjs
                     if ($LASTEXITCODE -ne 0) { throw '容器内数据生成单元测试失败。' }
                 }
+                'auth-unit' {
+                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps backend-tools mvn -B -ntp -Punit-tests test
+                    if ($LASTEXITCODE -ne 0) { throw '认证后端单元测试失败。' }
+                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps frontend-tools sh -c 'npm ci && npm test && npm run build'
+                    if ($LASTEXITCODE -ne 0) { throw '认证前端测试或构建失败。' }
+                }
+                'auth-browser' {
+                    & "$PSScriptRoot/tests/auth-runtime.tests.ps1"
+                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                }
                 'dataset-generation' {
                     $dataArguments = @('node', 'data/generators/generate.mjs', '--dataset', 'minimal', '--batch', 'c06-check')
                     if (Test-Path -LiteralPath "$script:ProjectRoot/.local/data/v1/c06-check/manifest.json") { $dataArguments += '--resume' }

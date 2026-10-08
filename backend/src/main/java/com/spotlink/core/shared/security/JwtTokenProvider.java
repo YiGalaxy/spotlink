@@ -27,6 +27,8 @@ public class JwtTokenProvider {
     private static final String CLAIM_USERNAME = "username";
     private static final String CLAIM_ENTERPRISE_ID = "enterpriseId";
     private static final String CLAIM_USER_TYPE = "userType";
+    private static final String ISSUER = "spotlink-next";
+    private static final String AUDIENCE = "spotlink-api";
 
     private final SecretKey secretKey;
     private final Duration accessTokenTtl;
@@ -42,16 +44,20 @@ public class JwtTokenProvider {
     }
 
     public String createAccessToken(LoginUser user) {
-        return createToken(user, accessTokenTtl);
+        return createToken(user, accessTokenTtl, "access");
     }
 
     public String createRefreshToken(LoginUser user) {
-        return createToken(user, refreshTokenTtl);
+        return createToken(user, refreshTokenTtl, "refresh");
     }
 
-    private String createToken(LoginUser user, Duration ttl) {
+    private String createToken(LoginUser user, Duration ttl, String purpose) {
         Date now = new Date();
         var builder = Jwts.builder()
+                .issuer(ISSUER)
+                .audience().add(AUDIENCE).and()
+                .claim("purpose", purpose)
+                .id(java.util.UUID.randomUUID().toString())
                 .subject(String.valueOf(user.getUserId()))
                 .claim(CLAIM_USERNAME, user.getUsername())
                 .claim(CLAIM_USER_TYPE, user.getUserType())
@@ -72,11 +78,19 @@ public class JwtTokenProvider {
      */
     public Claims parse(String token) {
         try {
-            return Jwts.parser()
+            Claims claims = Jwts.parser()
                     .verifyWith(secretKey)
+                    .requireIssuer(ISSUER)
+                    .requireAudience(AUDIENCE)
+                    .require("purpose", "access")
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
+            if (claims.getExpiration() == null || claims.getIssuedAt() == null
+                    || toLoginUser(claims) == null) {
+                return null;
+            }
+            return claims;
         } catch (JwtException | IllegalArgumentException e) {
             log.debug("Rejected JWT: {}", e.getMessage());
             return null;
@@ -84,6 +98,7 @@ public class JwtTokenProvider {
     }
 
     public LoginUser toLoginUser(Claims claims) {
+        try {
         Long enterpriseId = claims.get(CLAIM_ENTERPRISE_ID, Number.class) == null
                 ? null
                 : claims.get(CLAIM_ENTERPRISE_ID, Number.class).longValue();
@@ -91,9 +106,15 @@ public class JwtTokenProvider {
                 ? null
                 : claims.get(CLAIM_USER_TYPE, Number.class).intValue();
 
+        long userId = Long.parseLong(claims.getSubject());
+        String username = claims.get(CLAIM_USERNAME, String.class);
+        if (userId <= 0 || username == null || username.isBlank() || userType == null
+                || (enterpriseId != null && enterpriseId <= 0)) {
+            return null;
+        }
         return LoginUser.builder()
-                .userId(Long.valueOf(claims.getSubject()))
-                .username(claims.get(CLAIM_USERNAME, String.class))
+                .userId(userId)
+                .username(username)
                 .enterpriseId(enterpriseId)
                 .userType(userType)
                 // 占位值，由过滤器替换成账号的真实状态。它过去被硬编码为 1 且从未
@@ -101,5 +122,8 @@ public class JwtTokenProvider {
                 // 会一直工作到令牌过期——而这恰好与「禁用」这件事的目的相反。
                 .status(1)
                 .build();
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 }

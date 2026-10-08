@@ -1,3 +1,4 @@
+import { identityKey } from '@/store/auth'
 import { useMemo, useState } from 'react'
 import {
   Alert,
@@ -74,20 +75,20 @@ export default function InventoryPage() {
   const [editForm] = Form.useForm()
   const queryClient = useQueryClient()
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['inventory-notes'] })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: identityKey('inventory-notes') })
 
   const { data: notes = [], isLoading } = useQuery({
-    queryKey: ['inventory-notes', statusFilter],
+    queryKey: identityKey('inventory-notes', statusFilter),
     queryFn: () => listInventoryNotes(statusFilter),
   })
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['category-tree'],
+    queryKey: identityKey('category-tree'),
     queryFn: fetchCategoryTree,
   })
 
   const { data: warehouses = [] } = useQuery({
-    queryKey: ['warehouses'],
+    queryKey: identityKey('warehouses'),
     queryFn: fetchWarehouses,
   })
 

@@ -20,7 +20,7 @@ import type { EChartsCoreOption } from 'echarts/core'
 import EChart from '@/components/EChart'
 import { fetchQuotes, fetchSeries, type SeriesType } from '@/api/market'
 import { fetchCategoryTree } from '@/api/inventory'
-import { useAuthStore } from '@/store/auth'
+import { identityKey, useAuthStore } from '@/store/auth'
 import type { CategoryNode, EntityId, QuoteRow } from '@/types/api'
 
 function flattenLeaves(nodes: CategoryNode[], depth = 0): { id: EntityId; label: string }[] {
@@ -51,17 +51,17 @@ export default function MarketPage() {
   const [lastEvent, setLastEvent] = useState<string | null>(null)
 
   const { data: quotes = [], isLoading: quotesLoading } = useQuery({
-    queryKey: ['market-quotes'],
+    queryKey: identityKey('market-quotes'),
     queryFn: () => fetchQuotes(180),
   })
 
   const { data: series, isLoading: seriesLoading } = useQuery({
-    queryKey: ['market-series', seriesType, categoryId, days],
+    queryKey: identityKey('market-series', seriesType, categoryId, days),
     queryFn: () => fetchSeries(seriesType, categoryId, days),
   })
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['category-tree'],
+    queryKey: identityKey('category-tree'),
     queryFn: fetchCategoryTree,
   })
 

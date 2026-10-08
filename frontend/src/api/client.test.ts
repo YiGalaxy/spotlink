@@ -1,8 +1,8 @@
 import axios, { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ clear: vi.fn(), notify: vi.fn(), redirect: vi.fn() }))
-vi.mock('@/store/auth', () => ({ useAuthStore: { getState: () => ({ accessToken: 'test-token', clear: mocks.clear }) } }))
+const mocks = vi.hoisted(() => ({ clear: vi.fn(), notify: vi.fn(), redirect: vi.fn(), sessionId: 0 }))
+vi.mock('@/store/auth', () => ({ useAuthStore: { getState: () => ({ sessionId: mocks.sessionId, accessToken: 'test-token', clear: mocks.clear }) } }))
 vi.mock('@/utils/notify', () => ({ notifyError: mocks.notify }))
 
 let adapter: AxiosAdapter
@@ -19,11 +19,33 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.sessionId = 0
   vi.stubGlobal('window', { location: { pathname: '/inventory', replace: mocks.redirect } })
   adapter = async (config) => ({ status: 200, statusText: 'OK', headers: {}, config, data: { code: 0, data: { id: '2101635756223557634' } } })
 })
 
 describe('接口客户端契约', () => {
+  it.each([200, 401])('旧账号迟到的 %s 响应不返回数据、不清理新账号', async (status) => {
+    let finish!: () => void
+    const wait = new Promise<void>((resolve) => { finish = resolve })
+    let started!: () => void
+    const ready = new Promise<void>((resolve) => { started = resolve })
+    adapter = async (config) => {
+      started()
+      await wait
+      if (status === 401) throw new AxiosError('expired', 'ERR_BAD_REQUEST', config, undefined, { status, statusText: '', headers: {}, config, data: {} })
+      return { status, statusText: '', headers: {}, config, data: { code: 0, data: '旧企业私有数据' } }
+    }
+    const result = client.api.get('/inventory')
+    const assertion = expect(result).rejects.toMatchObject({ name: 'CanceledError' })
+    await ready
+    mocks.sessionId++
+    finish()
+    await assertion
+    expect(mocks.clear).not.toHaveBeenCalled()
+    expect(mocks.notify).not.toHaveBeenCalled()
+    expect(mocks.redirect).not.toHaveBeenCalled()
+  })
   it('解包成功响应，保持大 ID 字符串并附带访问令牌', async () => {
     expect(await client.api.get('/inventory')).toEqual({ id: '2101635756223557634' })
     expect(lastRequest.headers.Authorization).toBe('Bearer test-token')

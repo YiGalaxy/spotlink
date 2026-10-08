@@ -26,9 +26,11 @@ export default function LoginPage() {
   const location = useLocation()
 
   const onFinish = async (values: LoginForm) => {
+    const sessionId = useAuthStore.getState().sessionId
     setLoading(true)
     try {
       const data = await loginApi(values.username, values.password)
+      if (useAuthStore.getState().sessionId !== sessionId) return
       login(data)
       notifySuccess('登录成功')
       // 回到守卫当初打断他们的地方，或者工作台。不是首页：刚刚登录的人是

@@ -1,3 +1,4 @@
+import { identityKey } from '@/store/auth'
 import { useEffect, useRef, useState } from 'react'
 import {
   Alert,
@@ -67,12 +68,12 @@ export default function AdvisorPage() {
   const activeIdRef = useRef<EntityId | null>(null)
 
   const { data: conversations = [] } = useQuery({
-    queryKey: ['conversations'],
+    queryKey: identityKey('conversations'),
     queryFn: listConversations,
   })
 
   const { data: status } = useQuery({
-    queryKey: ['advisor-status'],
+    queryKey: identityKey('advisor-status'),
     queryFn: fetchAdvisorStatus,
   })
 
@@ -83,7 +84,7 @@ export default function AdvisorPage() {
     }
   }, [messages, sending])
 
-  const refreshList = () => queryClient.invalidateQueries({ queryKey: ['conversations'] })
+  const refreshList = () => queryClient.invalidateQueries({ queryKey: identityKey('conversations') })
 
   const openConversation = async (id: EntityId) => {
     setActiveId(id)

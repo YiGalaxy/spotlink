@@ -1,0 +1,10 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "launchOptions": {
+      "executablePath": "/usr/bin/chromium-browser",
+      "headless": true,
+      "args": ["--no-sandbox", "--disable-dev-shm-usage", "--host-resolver-rules=MAP localhost host.docker.internal"]
+    }
+  }
+}

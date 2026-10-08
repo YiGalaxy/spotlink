@@ -1,3 +1,4 @@
+import { identityKey } from '@/store/auth'
 import { Card, Descriptions, Tag, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { fetchCurrentUser } from '@/api/auth'
@@ -10,7 +11,7 @@ const USER_TYPES: Record<number, string> = {
 
 export default function EnterprisePage() {
   const { data, isLoading } = useQuery({
-    queryKey: ['current-user'],
+    queryKey: identityKey('current-user'),
     queryFn: fetchCurrentUser,
   })
 

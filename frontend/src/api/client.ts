@@ -1,7 +1,19 @@
-import axios, { AxiosError, type AxiosRequestConfig } from 'axios'
+import axios, { AxiosError, CanceledError, type AxiosRequestConfig } from 'axios'
+import { registerRequest } from '@/lib/queryClient'
 import { useAuthStore } from '@/store/auth'
 import { notifyError } from '@/utils/notify'
 import type { ApiResponse } from '@/types/api'
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    spotlinkSession?: number
+    releaseSessionRequest?: () => void
+  }
+}
+
+function belongsToCurrentSession(config?: AxiosRequestConfig) {
+  return config?.spotlinkSession === useAuthStore.getState().sessionId
+}
 
 /** 后端返回非零业务码时抛出。 */
 export class ApiError extends Error {
@@ -21,6 +33,10 @@ const instance = axios.create({
 })
 
 instance.interceptors.request.use((config) => {
+  if (!belongsToCurrentSession(config)) throw new CanceledError('会话已切换')
+  const controller = new AbortController()
+  config.signal = controller.signal
+  config.releaseSessionRequest = registerRequest(controller)
   const token = useAuthStore.getState().accessToken
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -29,8 +45,16 @@ instance.interceptors.request.use((config) => {
 })
 
 instance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    response.config.releaseSessionRequest?.()
+    if (!belongsToCurrentSession(response.config)) throw new CanceledError('会话已切换')
+    return response
+  },
   (error: AxiosError<ApiResponse<unknown>>) => {
+    error.config?.releaseSessionRequest?.()
+    if (axios.isCancel(error) || !belongsToCurrentSession(error.config)) {
+      return Promise.reject(new CanceledError('请求已取消或会话已切换'))
+    }
     const status = error.response?.status
 
     if (status === 401) {
@@ -52,7 +76,9 @@ instance.interceptors.response.use(
 
 /** 解包响应并统一处理业务错误。 */
 async function request<T>(config: AxiosRequestConfig): Promise<T> {
-  const response = await instance.request<ApiResponse<T>>(config)
+  const response = await instance.request<ApiResponse<T>>({ ...config, spotlinkSession: useAuthStore.getState().sessionId })
+  // 响应拦截器与调用方 continuation 之间也可能发生账号切换。
+  if (!belongsToCurrentSession(response.config)) throw new CanceledError('会话已切换')
   const body = response.data
 
   if (body.code !== 0) {

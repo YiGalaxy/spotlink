@@ -1,5 +1,14 @@
 name: spotlink-next-tools
 services:
+  browser-tools:
+    image: spotlink-next-browser:local
+    build:
+      context: .
+      dockerfile: ops/docker/browser/Dockerfile
+    working_dir: /workspace/.local/browser
+    volumes: [".:/workspace:ro", "./.local:/workspace/.local"]
+    environment:
+      PLAYWRIGHT_CLI_SESSION: spotlink-auth-check
   data-tools:
     image: node:22.14.0-alpine
     working_dir: /workspace

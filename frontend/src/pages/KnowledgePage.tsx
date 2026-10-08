@@ -18,7 +18,7 @@ import { SearchOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { embedPending, fetchKnowledgeStats, searchKnowledge } from '@/api/knowledge'
 import type { KnowledgeHit } from '@/api/knowledge'
-import { useAuthStore } from '@/store/auth'
+import { identityKey, useAuthStore } from '@/store/auth'
 
 const SAMPLES = ['磅差怎么算', '保证金比例是多少', '交易时间是什么时候', '电子库存单是什么']
 
@@ -32,7 +32,7 @@ export default function KnowledgePage() {
   const signedIn = Boolean(useAuthStore((state) => state.accessToken))
 
   const { data: stats } = useQuery({
-    queryKey: ['knowledge-stats'],
+    queryKey: identityKey('knowledge-stats'),
     queryFn: fetchKnowledgeStats,
   })
 
@@ -53,7 +53,7 @@ export default function KnowledgePage() {
     try {
       const result = await embedPending(200)
       void message.success(`已补算 ${result.embedded} 个分块的向量`)
-      void queryClient.invalidateQueries({ queryKey: ['knowledge-stats'] })
+      void queryClient.invalidateQueries({ queryKey: identityKey('knowledge-stats') })
     } finally {
       setEmbedding(false)
     }

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { notification } from 'antd'
-import { useAuthStore } from '@/store/auth'
+import { identityKey, useAuthStore } from '@/store/auth'
 
 /** 通过 SSE 失效相关查询，保持任务和交易数据及时更新。 */
 export function useTaskStream() {
@@ -14,13 +14,13 @@ export function useTaskStream() {
     const source = new EventSource(`/api/tasks/stream?token=${encodeURIComponent(accessToken)}`)
 
     source.addEventListener('tasks', (event) => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      void queryClient.invalidateQueries({ queryKey: identityKey('tasks') })
 
       // 任务变化可能同时影响订单、挂牌、库存和行情。
-      void queryClient.invalidateQueries({ queryKey: ['my-orders'] })
-      void queryClient.invalidateQueries({ queryKey: ['my-listings'] })
-      void queryClient.invalidateQueries({ queryKey: ['inventory-notes'] })
-      void queryClient.invalidateQueries({ queryKey: ['market-quotes'] })
+      void queryClient.invalidateQueries({ queryKey: identityKey('my-orders') })
+      void queryClient.invalidateQueries({ queryKey: identityKey('my-listings') })
+      void queryClient.invalidateQueries({ queryKey: identityKey('inventory-notes') })
+      void queryClient.invalidateQueries({ queryKey: identityKey('market-quotes') })
 
       const reason = readReason(event)
       if (reason) {

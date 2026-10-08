@@ -13,6 +13,9 @@ import com.spotlink.identity.mapper.UserMapper;
 import com.spotlink.identity.mapper.UserRoleMapper;
 import com.spotlink.shared.security.UserAuthority;
 import com.spotlink.shared.security.UserAuthorityProvider;
+import com.spotlink.shared.security.LoginUser;
+import com.spotlink.identity.entity.Enterprise;
+import com.spotlink.identity.mapper.EnterpriseMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -59,12 +62,30 @@ public class UserAuthorityServiceImpl implements UserAuthorityProvider {
     private static final String KEY_PREFIX = "perm:user:";
 
     private final UserMapper userMapper;
+    private final EnterpriseMapper enterpriseMapper;
     private final UserRoleMapper userRoleMapper;
     private final RoleMapper roleMapper;
     private final RolePermissionMapper rolePermissionMapper;
     private final PermissionMapper permissionMapper;
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
+
+    @Override
+    public LoginUser currentIdentity(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null || !Integer.valueOf(UserAuthority.ACTIVE).equals(user.getStatus())) {
+            return null;
+        }
+        if (user.getEnterpriseId() != null) {
+            Enterprise enterprise = enterpriseMapper.selectById(user.getEnterpriseId());
+            if (enterprise == null || !Integer.valueOf(Enterprise.Status.APPROVED).equals(enterprise.getStatus())) {
+                return null;
+            }
+        }
+        return LoginUser.builder().userId(user.getId()).username(user.getUsername())
+                .enterpriseId(user.getEnterpriseId()).userType(user.getUserType())
+                .status(user.getStatus()).build();
+    }
 
     @Override
     public UserAuthority load(Long userId) {

@@ -11,7 +11,7 @@ import dayjs from 'dayjs'
 import { fetchPublicStats } from '@/api/public'
 import { fetchQuotes } from '@/api/market'
 import { fetchMarket } from '@/api/trading'
-import { useAuthStore } from '@/store/auth'
+import { identityKey, useAuthStore } from '@/store/auth'
 import type { ListingView, QuoteRow } from '@/types/api'
 
 const PRIMARY = '#1f4e79'
@@ -31,17 +31,17 @@ export default function LandingPage() {
   const accessToken = useAuthStore((state) => state.accessToken)
 
   const { data: stats } = useQuery({
-    queryKey: ['public-stats'],
+    queryKey: identityKey('public-stats'),
     queryFn: fetchPublicStats,
   })
 
   const { data: quotes = [] } = useQuery({
-    queryKey: ['market-quotes'],
+    queryKey: identityKey('market-quotes'),
     queryFn: () => fetchQuotes(180),
   })
 
   const { data: listings = [] } = useQuery({
-    queryKey: ['market-listings'],
+    queryKey: identityKey('market-listings'),
     queryFn: () => fetchMarket(),
   })
 

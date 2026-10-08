@@ -25,7 +25,7 @@ import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { fetchMyListings, fetchMyOrders, draftContract, signContract, startDelivery, completeOrder, confirmOrder, rejectOrder } from '@/api/trading'
 import { fetchTasks } from '@/api/tasks'
-import { useAuthStore } from '@/store/auth'
+import { identityKey, useAuthStore } from '@/store/auth'
 import type { TaskView } from '@/types/api'
 
 /** 某种待办类型戴哪个图标。纯装饰——动作才是重点。 */
@@ -54,7 +54,7 @@ export default function DashboardPage() {
   const queryClient = useQueryClient()
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery({
-    queryKey: ['tasks'],
+    queryKey: identityKey('tasks'),
     queryFn: fetchTasks,
     // 一个只有重新加载才会更新的工作台，正是这个页面要修掉的 bug；流会推送，
     // 而这里兜住的是流没能保持住的情况。
@@ -62,20 +62,20 @@ export default function DashboardPage() {
   })
 
   const { data: listings = [] } = useQuery({
-    queryKey: ['my-listings'],
+    queryKey: identityKey('my-listings'),
     queryFn: fetchMyListings,
   })
 
   const { data: orders = [] } = useQuery({
-    queryKey: ['my-orders'],
+    queryKey: identityKey('my-orders'),
     queryFn: () => fetchMyOrders(),
   })
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    void queryClient.invalidateQueries({ queryKey: ['my-orders'] })
-    void queryClient.invalidateQueries({ queryKey: ['my-listings'] })
-    void queryClient.invalidateQueries({ queryKey: ['inventory-notes'] })
+    void queryClient.invalidateQueries({ queryKey: identityKey('tasks') })
+    void queryClient.invalidateQueries({ queryKey: identityKey('my-orders') })
+    void queryClient.invalidateQueries({ queryKey: identityKey('my-listings') })
+    void queryClient.invalidateQueries({ queryKey: identityKey('inventory-notes') })
   }
 
   const { mutateAsync: run, isPending } = useMutation({
