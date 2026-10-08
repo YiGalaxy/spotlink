@@ -1,0 +1,288 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: #f5f6f8;
+}
+
+/* ------------------------------------------------------------------ */
+/* 顾问：会话侧边栏                                                    */
+/* ------------------------------------------------------------------ */
+
+.conv-sidebar {
+  width: 244px;
+  flex-shrink: 0;
+  background: #fff;
+  border-right: 1px solid #eceef2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.conv-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px 12px;
+}
+
+.conv-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.conv-item:hover {
+  background: #f4f6f9;
+}
+
+.conv-item.active {
+  background: #eef3ff;
+}
+
+.conv-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.conv-item-title {
+  font-size: 13px;
+  color: #1f2329;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-item.active .conv-item-title {
+  color: #1f5eff;
+  font-weight: 500;
+}
+
+.conv-item-meta {
+  font-size: 11px;
+  color: #9aa0a8;
+  margin-top: 2px;
+}
+
+/* 删除按钮只在悬停时出现，这样列表才能保持安静。 */
+.conv-item .ant-btn {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.conv-item:hover .ant-btn {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* 顾问：聊天区域                                                      */
+/* ------------------------------------------------------------------ */
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid #eceef2;
+}
+
+.chat-scroll {
+  overflow-y: auto;
+  padding: 20px;
+  background: #f7f8fa;
+}
+
+.chat-composer {
+  padding: 16px;
+  background: #fff;
+  border-top: 1px solid #eceef2;
+}
+
+.chat-bubble {
+  max-width: 780px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.chat-bubble.user {
+  margin-left: auto;
+  background: #1f5eff;
+  color: #fff;
+  white-space: pre-wrap;
+}
+
+.chat-bubble.assistant {
+  margin-right: auto;
+  background: #fff;
+  border: 1px solid #eceef2;
+}
+
+.tool-output {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow: auto;
+}
+
+/* Markdown 渲染。Ant Design 会重置文本间距，需显式恢复。 */
+
+.markdown-body > *:first-child {
+  margin-top: 0;
+}
+
+.markdown-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p {
+  margin: 0 0 10px;
+  line-height: 1.75;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 16px 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.markdown-body h1 {
+  font-size: 17px;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.markdown-body li {
+  margin: 4px 0;
+  line-height: 1.75;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+  color: #1f2329;
+}
+
+.markdown-body code {
+  background: #f2f4f7;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12.5px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.markdown-body pre {
+  background: #f7f8fa;
+  border: 1px solid #eceef2;
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+
+.markdown-body pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-body blockquote {
+  margin: 10px 0;
+  padding: 4px 12px;
+  border-left: 3px solid #d9dde3;
+  color: #5c636b;
+}
+
+.md-table-wrap {
+  overflow-x: auto;
+  margin: 12px 0;
+  /* 圆角与内容区保持一致。 */
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  /* 等宽数字便于比较价格和数量。 */
+  font-variant-numeric: tabular-nums;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 7px 12px;
+  text-align: left;
+  /* 正文允许换行，避免宽表格撑开对话区。 */
+  white-space: normal;
+  word-break: break-word;
+  min-width: 72px;
+  vertical-align: top;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.markdown-body th {
+  white-space: nowrap;
+  background: #f7f8fa;
+  font-weight: 600;
+  color: #1f2329;
+  border-bottom: 1px solid #e4e7ec;
+}
+
+.markdown-body tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-body tbody tr:hover td {
+  background: #fafbfc;
+}
+
+/* 第一列作为标签列，保持可读性。 */
+.markdown-body td:first-child {
+  color: #1f2329;
+}
+
+/* 在手机上，对话栏窄到任何表格都免不了横向滚动；收紧内边距，可以在
+   它开始滚动之前多换回一两列。 */
+@media (max-width: 600px) {
+  .markdown-body th,
+  .markdown-body td {
+    padding: 6px 8px;
+    font-size: 12.5px;
+    min-width: 64px;
+  }
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid #eceef2;
+  margin: 14px 0;
+}
