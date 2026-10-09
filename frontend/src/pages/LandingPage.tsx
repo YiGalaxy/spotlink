@@ -16,14 +16,13 @@ import { fetchCategoryTree } from '@/api/inventory'
 import { identityKey, useAuthStore } from '@/store/auth'
 import type { CategoryNode, ListingView } from '@/types/api'
 import CommodityArtwork from '@/components/CommodityArtwork'
+import { formatDecimal as format } from '@/utils/decimal'
 
 function leaves(nodes: CategoryNode[]): CategoryNode[] {
   return nodes.flatMap((node) =>
     node.children.length ? leaves(node.children) : [node],
   )
 }
-const format = (value: number) =>
-  new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 4 }).format(value)
 
 export default function LandingPage() {
   const [params, setParams] = useSearchParams()

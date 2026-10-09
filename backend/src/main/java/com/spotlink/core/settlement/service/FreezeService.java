@@ -66,9 +66,19 @@ public class FreezeService {
                                         String bizType,
                                         Long bizId,
                                         String reason) {
+        return freezeInventory(enterpriseId, noteId, quantity, bizType, bizId, reason, null);
+    }
+
+    /** 发布方读取的属性版本必须与实际冻结时一致，避免并发编辑后仍发布旧货物描述。 */
+    @Transactional
+    public FreezeRecord freezeInventory(Long enterpriseId, Long noteId, BigDecimal quantity,
+                                        String bizType, Long bizId, String reason, Integer expectedVersion) {
 
         com.spotlink.inventory.service.InventoryRules.quantity(quantity);
         InventoryNote note = loadOwnedNote(enterpriseId, noteId);
+        if (expectedVersion != null && !expectedVersion.equals(note.getVersion())) {
+            throw concurrentModification();
+        }
 
         if (!InventoryNote.Status.isTradable(note.getStatus())) {
             throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_AVAILABLE);

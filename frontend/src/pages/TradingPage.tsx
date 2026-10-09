@@ -52,6 +52,7 @@ import {
 } from '@/api/trading'
 import { fetchCategoryTree, fetchWarehouses, listInventoryNotes } from '@/api/inventory'
 import { LIST_PAGINATION, byNumberNullsLast, byTime } from '@/utils/table'
+import { positiveDecimalRule } from '@/utils/decimal'
 import type { CategoryNode, EntityId, ListingView, OrderView } from '@/types/api'
 
 function flattenLeaves(nodes: CategoryNode[], depth = 0): { id: EntityId; label: string }[] {
@@ -127,6 +128,8 @@ export default function TradingPage() {
   const [acceptForm] = Form.useForm()
   const [publishForm] = Form.useForm()
   const publishSide = Form.useWatch('side', publishForm)
+  const publishPriceType = Form.useWatch('priceType', publishForm)
+  const publishNoteId = Form.useWatch('inventoryNoteId', publishForm)
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: identityKey('market') })
@@ -238,6 +241,7 @@ export default function TradingPage() {
     () => notes.filter((n) => Number(n.availableQuantity) > 0 && [2, 3, 4].includes(n.status)),
     [notes],
   )
+  const publishNote = sellableNotes.find(note => note.id === publishNoteId)
 
   // ---- 写操作 ----
 
@@ -290,25 +294,21 @@ export default function TradingPage() {
   }
 
   const handlePublish = async (values: Record<string, unknown>) => {
-    const noteId = values.inventoryNoteId as EntityId | undefined
-    const note = sellableNotes.find((n) => n.id === noteId)
+    const selling = values.side === 'SELL'
     await doPublish({
       side: values.side as 'SELL' | 'BUY',
-      inventoryNoteId: values.side === 'SELL' ? noteId : undefined,
-      categoryId: (values.categoryId as EntityId) ?? note?.categoryId,
-      commodityName: (values.commodityName as string) ?? note?.commodityName,
-      brand: (values.brand as string) ?? note?.brand ?? undefined,
-      origin: (values.origin as string) ?? note?.origin ?? undefined,
-      quantity: values.quantity as number,
-      unit: values.unit as string | undefined,
-      price: values.priceType === 'FIXED' ? (values.price as number) : undefined,
+      inventoryNoteId: selling ? values.inventoryNoteId as EntityId : undefined,
+      categoryId: selling ? undefined : values.categoryId as EntityId,
+      commodityName: selling ? undefined : values.commodityName as string,
+      quantity: String(values.quantity),
+      price: values.priceType === 'FIXED' ? String(values.price) : undefined,
       priceType: values.priceType as 'FIXED' | 'NEGOTIABLE',
       // 服务端会拒绝买方挂牌上的 MANUAL，所以表单干脆不提供它，
       // 而不是让请求去失败一次。
       confirmMode: values.side === 'SELL'
         ? (values.confirmMode as 'AUTO' | 'MANUAL' | undefined)
         : undefined,
-      warehouseId: (values.warehouseId as EntityId) ?? note?.warehouseId,
+      warehouseId: selling ? undefined : values.warehouseId as EntityId | undefined,
       deliveryMethod: values.deliveryMethod as string,
       validUntil: (values.validUntil as dayjs.Dayjs).toISOString(),
       remark: values.remark as string | undefined,
@@ -794,6 +794,8 @@ export default function TradingPage() {
       {/* ---------- publish ---------- */}
       <Modal
         title="发布挂牌"
+        centered
+        styles={{ body: { maxHeight: 'calc(100dvh - 180px)', overflowY: 'auto', paddingRight: 4 } }}
         open={publishOpen}
         onCancel={() => setPublishOpen(false)}
         onOk={() => publishForm.submit()}
@@ -807,7 +809,7 @@ export default function TradingPage() {
           description="卖方挂牌会立即冻结对应库存，冻结期间这部分货物不能再挂牌或注销。
             挂牌在有效期内持续有效，期满未成交自动失效并解冻。" />
         <Form form={publishForm} layout="vertical" onFinish={handlePublish}
-          initialValues={{ side: 'SELL', priceType: 'FIXED', confirmMode: 'AUTO', deliveryMethod: 'SELF_PICKUP' }}>
+          initialValues={{ side: 'SELL', priceType: 'FIXED', confirmMode: 'AUTO', deliveryMethod: 'SELF_PICKUP', validUntil: dayjs().add(7, 'day') }}>
           <Form.Item name="side" label="挂牌方向">
             <Radio.Group optionType="button" buttonStyle="solid">
               <Radio.Button value="SELL">卖方挂牌（我卖货）</Radio.Button>
@@ -825,8 +827,14 @@ export default function TradingPage() {
                 }))} />
             </Form.Item>
           )}
-
-          <Row gutter={12}>
+          {publishSide !== 'BUY' && publishNote && <Descriptions title="货物信息（来自库存）" column={1} size="small" bordered style={{ marginBottom: 16 }} items={[
+            { key: 'name', label: '商品 / 品类', children: `${publishNote.commodityName} / ${publishNote.categoryName}` },
+            { key: 'brand', label: '品牌 / 产地', children: [publishNote.brand, publishNote.origin].filter(Boolean).join(' / ') || '未登记' },
+            { key: 'warehouse', label: '交收仓库', children: publishNote.warehouseName },
+            { key: 'quantity', label: '可用数量', children: `${publishNote.availableQuantity} ${publishNote.unit}` },
+            { key: 'spec', label: '规格', children: Object.entries(publishNote.spec).map(([key, value]) => `${key}：${String(value)}`).join('，') || '未登记' },
+          ]} />}
+          {publishSide === 'BUY' && <Row gutter={12}>
             <Col span={12}>
               <Form.Item name="categoryId" label="品类"
                 rules={[{ required: publishSide === 'BUY', message: '请选择品类' }]}>
@@ -837,18 +845,18 @@ export default function TradingPage() {
             <Col span={12}>
               <Form.Item name="commodityName" label="商品名称"
                 rules={[{ required: publishSide === 'BUY', message: '请填写商品名称' }]}>
-                <Input placeholder="留空则取库存单的商品名" />
+                <Input placeholder="采购商品名称" maxLength={128} />
               </Form.Item>
             </Col>
-          </Row>
+          </Row>}
 
           <Row gutter={12}>
-            <Col span={8}>
-              <Form.Item name="quantity" label="数量" rules={[{ required: true, message: '请填写数量' }]}>
-                <InputNumber min={0.001} step={1} style={{ width: '100%' }} />
+            <Col xs={24} sm={8}>
+              <Form.Item name="quantity" label="数量" rules={[{ required: true, message: '请填写数量' }, positiveDecimalRule(3, '999999999999999.999', '数量')]}>
+                <InputNumber stringMode min="0.001" step="1" style={{ width: '100%' }} addonAfter={publishSide === 'BUY' ? undefined : publishNote?.unit} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={8}>
               <Form.Item name="priceType" label="价格方式">
                 <Radio.Group>
                   <Radio value="FIXED">定价</Radio>
@@ -856,23 +864,23 @@ export default function TradingPage() {
                 </Radio.Group>
               </Form.Item>
             </Col>
-            <Col span={8}>
-              {publishSide !== 'BUY' && publishForm.getFieldValue('priceType') === 'FIXED' && (
+            <Col xs={24} sm={8}>
+              {publishPriceType === 'FIXED' && (
                 <Form.Item name="price" label="单价（元）"
-                  rules={[{ required: true, message: '请填写单价' }]}>
-                  <InputNumber min={0.01} step={100} style={{ width: '100%' }} />
+                  rules={[{ required: true, message: '请填写单价' }, positiveDecimalRule(4, '999999999999999.9999', '单价')]}>
+                  <InputNumber stringMode min="0.0001" step="100" style={{ width: '100%' }} />
                 </Form.Item>
               )}
             </Col>
           </Row>
 
           <Row gutter={12}>
-            <Col span={12}>
+            {publishSide === 'BUY' && <Col span={12}>
               <Form.Item name="warehouseId" label="交收仓库">
-                <Select placeholder="留空则取库存单所在交收仓库"
+                <Select allowClear placeholder="选择要求的交收仓库（可不限定）"
                   options={warehouses.map((w) => ({ value: w.id, label: w.name }))} />
               </Form.Item>
-            </Col>
+            </Col>}
             <Col span={12}>
               <Form.Item name="deliveryMethod" label="交收方式">
                 <Select options={[
@@ -896,8 +904,7 @@ export default function TradingPage() {
           <Form.Item name="validUntil" label="有效期至"
             rules={[{ required: true, message: '请选择有效期' }]}>
             <DatePicker showTime style={{ width: '100%' }}
-              disabledDate={(d) => d && d < dayjs().startOf('day')}
-              defaultValue={dayjs().add(7, 'day')} />
+              disabledDate={(d) => d && d < dayjs().startOf('day')} />
           </Form.Item>
 
           <Form.Item name="remark" label="备注">

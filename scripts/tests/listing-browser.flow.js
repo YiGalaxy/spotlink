@@ -1,0 +1,86 @@
+async (page) => {
+  const base = 'http://localhost:38080'
+  const assert = (ok, why) => { if (!ok) throw new Error(why) }
+  const name = `可信挂牌验收-${Date.now()}`
+  await page.goto(base + '/login')
+  await page.getByLabel('用户名', { exact: true }).fill('seller01')
+  await page.getByLabel('密码', { exact: true }).fill('Admin@123')
+  await page.getByRole('button', { name: /登\s*录/, exact: true }).click()
+  await page.waitForURL(base + '/')
+  const call = async (method, path, data) => page.evaluate(async ({ method, path, data }) => {
+    const { state } = JSON.parse(localStorage.getItem('spotlink-auth'))
+    const result = await (await fetch('/api' + path, { method, headers: { Authorization: `Bearer ${state.accessToken}`, 'Content-Type': 'application/json' }, body: data === undefined ? undefined : JSON.stringify(data) })).json()
+    if (result.code !== 0) throw new Error(result.message)
+    return result.data
+  }, { method, path, data })
+  const note = await call('POST', '/inventory-notes', { categoryId: '1003', warehouseId: '2001', commodityName: name, brand: '原库存品牌', origin: '原库存产地', quantity: '100.001', unit: '吨', spec: { al_content: 99.7, 质检批号: '中文扩展保留' } })
+  const created = []
+  try {
+    await page.goto(base + '/trading?tab=mine')
+    await page.getByRole('button', { name: 'plus 发布挂牌', exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByLabel('对应库存单', { exact: true }).click()
+    await dialog.getByLabel('对应库存单', { exact: true }).fill(name)
+    await page.getByTitle(new RegExp(name)).click()
+    await dialog.getByText('货物信息（来自库存）', { exact: true }).waitFor()
+    await dialog.getByText('质检批号：中文扩展保留', { exact: false }).waitFor()
+    assert(await dialog.getByLabel('品类', { exact: true }).count() === 0, 'SELL 仍可编辑品类')
+    assert(await dialog.getByLabel('交收仓库', { exact: true }).count() === 0, 'SELL 仍可覆盖库存仓库')
+    await dialog.getByLabel('数量', { exact: true }).fill('0.0015')
+    await dialog.getByLabel('单价（元）', { exact: true }).fill('68000.12345')
+    await dialog.getByRole('button', { name: '确认发布' }).click()
+    await dialog.getByText('数量须大于 0，最多 15 位整数和 3 位小数', { exact: true }).waitFor()
+    await dialog.getByText('单价须大于 0，最多 15 位整数和 4 位小数', { exact: true }).waitFor()
+    await dialog.getByLabel('数量', { exact: true }).fill('20.001')
+    await dialog.getByLabel('单价（元）', { exact: true }).fill('68000.1234')
+    await dialog.getByLabel('需我确认', { exact: false }).check()
+    for (const width of [1440, 1280, 1024, 768, 390]) {
+      await page.setViewportSize({ width, height: 900 })
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `发布窗口 ${width}px 横向溢出`)
+      const save = await dialog.getByRole('button', { name: '确认发布' }).boundingBox()
+      assert(save && save.y >= 0 && save.y + save.height <= 900, `发布窗口 ${width}px 确认按钮被挤出视口`)
+    }
+    await dialog.locator('.ant-modal-body').evaluate(node => { node.scrollTop = 0 })
+    await page.screenshot({ path: '/workspace/.local/browser/listing-publish-mobile.png', fullPage: true })
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.screenshot({ path: '/workspace/.local/browser/listing-publish-desktop.png', fullPage: true })
+    const outgoing = page.waitForRequest(request => request.method() === 'POST' && new URL(request.url()).pathname === '/api/listings')
+    await dialog.getByRole('button', { name: '确认发布' }).click()
+    const payload = (await outgoing).postDataJSON()
+    assert(payload.quantity === '20.001' && payload.price === '68000.1234', '报价或数量经过浮点转换')
+    assert(payload.inventoryNoteId === note.id && payload.warehouseId === undefined && payload.unit === undefined && payload.spec === undefined, '客户端仍覆盖源库存属性')
+    await dialog.waitFor({ state: 'hidden' })
+    let rows = await call('GET', '/listings/mine')
+    const listing = rows.find(row => row.commodityName === name && row.status === 'OPEN')
+    assert(listing && listing.confirmMode === 'MANUAL' && listing.price === '68000.1234', '固定价格及确认模式未持久化')
+    created.push(listing.id)
+    assert(listing.warehouseId === note.warehouseId && listing.unit === '吨' && listing.spec['质检批号'] === '中文扩展保留', '可信物理属性丢失')
+    await call('POST', `/listings/${listing.id}/close`)
+    const stock = (await call('GET', '/inventory-notes')).find(row => row.id === note.id)
+    assert(stock.availableQuantity === '100.001' && Number(stock.frozenQuantity) === 0, '撤牌未完整释放预留')
+    await page.reload()
+    await page.getByRole('button', { name: 'plus 发布挂牌', exact: true }).click()
+    await dialog.getByLabel('对应库存单', { exact: true }).click()
+    await dialog.getByLabel('对应库存单', { exact: true }).fill(name)
+    await page.getByTitle(new RegExp(name)).click()
+    await dialog.getByLabel('面议', { exact: true }).check()
+    await dialog.getByLabel('单价（元）', { exact: true }).waitFor({ state: 'hidden' })
+    await dialog.getByLabel('定价', { exact: true }).check()
+    await dialog.getByLabel('单价（元）', { exact: true }).waitFor()
+    await dialog.getByLabel('面议', { exact: true }).check()
+    await dialog.getByLabel('数量', { exact: true }).fill('1')
+    await dialog.getByRole('button', { name: '确认发布' }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    rows = await call('GET', '/listings/mine')
+    const negotiated = rows.find(row => row.commodityName === name && row.status === 'OPEN')
+    assert(negotiated && negotiated.price === null && negotiated.confirmMode === 'AUTO', '面议/默认 AUTO 未生效')
+    created.push(negotiated.id)
+    console.log('SELL 可信属性、中文扩展规格、精度拒绝、字符串提交、AUTO/MANUAL、面议切换、预留释放与五宽度窗口通过')
+  } finally {
+    const fixtures = (await call('GET', '/listings/mine')).filter(row => row.commodityName === name && ['OPEN', 'PARTIALLY_FILLED'].includes(row.status))
+    for (const id of new Set([...created, ...fixtures.map(row => row.id)])) {
+      try { await call('POST', `/listings/${id}/close`) } catch { /* 已撤回的记录保留 */ }
+    }
+    await call('DELETE', `/inventory-notes/${note.id}`)
+  }
+}

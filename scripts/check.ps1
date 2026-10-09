@@ -76,6 +76,18 @@ try {
                         & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
                     }
                 }
+                'sell-listing' {
+                    try {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=ListingBoundaryTest,PartialFillTest,FreezeServiceTest' test
+                        if ($LASTEXITCODE -ne 0) { throw 'SELL 可信属性、部分冻结、精度及失败回滚检查失败。' }
+                    } finally {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
+                    }
+                }
+                'listing-browser' {
+                    & "$PSScriptRoot/tests/auth-runtime.tests.ps1" -Trading
+                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                }
                 'admin-authority' {
                     try {
                         & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=AdminAuthorityIntegrationTest,AuthenticationBoundaryTest,AdminEndpointCoverageTest,EnterpriseIdParameterIsolationTest' test

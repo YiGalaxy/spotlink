@@ -183,10 +183,10 @@ export interface ListingView {
   brand: string | null
   origin: string | null
   spec: Record<string, unknown>
-  quantity: number
-  remainingQuantity: number
+  quantity: string
+  remainingQuantity: string
   unit: string
-  price: number | null
+  price: string | null
   priceType: 'FIXED' | 'NEGOTIABLE'
   priceText: string
   /** AUTO 摘牌即成交；MANUAL 摘牌后需挂牌方确认，确认前货权不转移。 */

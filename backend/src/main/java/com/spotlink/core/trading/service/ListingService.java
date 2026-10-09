@@ -4,6 +4,7 @@ import com.spotlink.commodity.entity.CommodityCategory;
 import com.spotlink.commodity.service.access.CommodityCategoryAccess;
 import com.spotlink.inventory.entity.InventoryNote;
 import com.spotlink.inventory.service.access.InventoryNoteAccess;
+import com.spotlink.inventory.service.InventoryRules;
 import com.spotlink.settlement.entity.FreezeRecord;
 import com.spotlink.settlement.service.FreezeService;
 import com.spotlink.shared.exception.BusinessException;
@@ -67,37 +68,60 @@ public class ListingService {
         if (!Listing.Side.SELL.equals(request.side()) && !Listing.Side.BUY.equals(request.side())) {
             throw BusinessException.of(ResultCode.BAD_REQUEST, "挂牌方向必须是 SELL 或 BUY");
         }
-        if (request.validUntil().isBefore(OffsetDateTime.now())) {
+        InventoryRules.quantity(request.quantity());
+        if (request.validUntil() == null || !request.validUntil().isAfter(OffsetDateTime.now())) {
             throw BusinessException.of(ResultCode.BAD_REQUEST, "有效期必须晚于当前时间");
         }
 
         String priceType = normalisePriceType(request);
         String confirmMode = normaliseConfirmMode(request);
-
-        CommodityCategory category = categoryAccess.selectById(request.categoryId());
+        InventoryNote source = Listing.Side.SELL.equals(request.side())
+                ? sellSource(request.inventoryNoteId(), enterpriseId) : null;
+        Long categoryId = source == null ? request.categoryId() : source.getCategoryId();
+        CommodityCategory category = categoryId == null ? null : categoryAccess.selectById(categoryId);
         if (category == null) {
             throw BusinessException.of(ResultCode.CATEGORY_NOT_FOUND);
+        }
+        if (!Integer.valueOf(1).equals(category.getStatus()) || categoryAccess.hasChildren(categoryId)) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "请选择启用的具体商品品类");
+        }
+        if (source == null && (request.commodityName() == null || request.commodityName().isBlank())) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "请填写商品名称");
+        }
+        Long warehouseId = source == null ? request.warehouseId() : source.getWarehouseId();
+        if (source != null || warehouseId != null) {
+            Warehouse warehouse = warehouseId == null ? null : warehouseAccess.selectById(warehouseId);
+            if (warehouse == null || !Integer.valueOf(1).equals(warehouse.getStatus())) {
+                throw BusinessException.of(ResultCode.NOT_FOUND, "交收仓库不存在或已停用");
+            }
+        }
+        String delivery = request.deliveryMethod() == null
+                ? Listing.DeliveryMethod.SELF_PICKUP : request.deliveryMethod();
+        if (!Listing.DeliveryMethod.SELF_PICKUP.equals(delivery) && !Listing.DeliveryMethod.DELIVERED.equals(delivery)) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "交收方式必须是自提或送到");
+        }
+        if (request.paymentTerms() != null && (request.paymentTerms().isBlank() || request.paymentTerms().length() > 32)) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "付款条款须为 1 到 32 字");
         }
 
         Listing listing = new Listing();
         listing.setListingNo(nextNo("LS"));
         listing.setEnterpriseId(enterpriseId);
         listing.setSide(request.side());
-        listing.setCategoryId(request.categoryId());
-        listing.setCommodityName(request.commodityName());
-        listing.setBrand(request.brand());
-        listing.setOrigin(request.origin());
-        listing.setSpec(writeSpec(request.spec()));
+        listing.setCategoryId(categoryId);
+        listing.setCommodityName(source == null ? request.commodityName().trim() : source.getCommodityName());
+        listing.setBrand(source == null ? request.brand() : source.getBrand());
+        listing.setOrigin(source == null ? request.origin() : source.getOrigin());
+        listing.setSpec(source == null ? writeSpec(request.spec()) : source.getSpec());
         listing.setQuantity(request.quantity());
         listing.setRemainingQuantity(request.quantity());
-        listing.setUnit(request.unit() == null || request.unit().isBlank()
-                ? category.getUnit() : request.unit());
+        listing.setUnit(source == null ? (request.unit() == null || request.unit().isBlank()
+                ? category.getUnit() : request.unit()) : source.getUnit());
         listing.setPrice(Listing.PriceType.FIXED.equals(priceType) ? request.price() : null);
         listing.setPriceType(priceType);
         listing.setConfirmMode(confirmMode);
-        listing.setWarehouseId(request.warehouseId());
-        listing.setDeliveryMethod(request.deliveryMethod() == null
-                ? Listing.DeliveryMethod.SELF_PICKUP : request.deliveryMethod());
+        listing.setWarehouseId(warehouseId);
+        listing.setDeliveryMethod(delivery);
         listing.setPaymentTerms(request.paymentTerms() == null
                 ? "MARGIN_THEN_BALANCE" : request.paymentTerms());
         listing.setValidUntil(request.validUntil());
@@ -106,7 +130,7 @@ public class ListingService {
         listing.setRemark(request.remark());
 
         if (Listing.Side.SELL.equals(request.side())) {
-            listing.setFreezeId(freezeForListing(request, enterpriseId));
+            listing.setFreezeId(freezeForListing(source, request.quantity(), enterpriseId));
         }
 
         listingMapper.insert(listing);
@@ -189,7 +213,9 @@ public class ListingService {
             }
             releaseListingFreeze(listing);
             listing.setStatus(Listing.Status.EXPIRED);
-            listingMapper.updateById(listing);
+            if (listingMapper.updateById(listing) == 0) {
+                throw BusinessException.of(ResultCode.CONFLICT, "挂牌已被其他操作修改，过期扫描稍后重试");
+            }
             expired++;
         }
         if (expired > 0) {
@@ -227,53 +253,50 @@ public class ListingService {
      * <p>库存单由卖方明确指定，而不是由平台从他碰巧持有的库存里挑一份。预留
      * 卖方没有指明的货物，会悄悄占用掉他可能另有安排的库存。
      */
-    private Long freezeForListing(ListingPublishRequest request, Long enterpriseId) {
-        if (request.inventoryNoteId() == null) {
+    private InventoryNote sellSource(Long noteId, Long enterpriseId) {
+        if (noteId == null) {
             throw BusinessException.of(ResultCode.BAD_REQUEST, "卖方挂牌必须指定电子库存单");
         }
 
-        InventoryNote note = inventoryNoteAccess.selectById(request.inventoryNoteId());
+        InventoryNote note = inventoryNoteAccess.selectById(noteId);
         if (note == null || !note.getEnterpriseId().equals(enterpriseId)) {
             throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_FOUND);
         }
-        if (!note.getCategoryId().equals(request.categoryId())) {
-            throw BusinessException.of(ResultCode.BAD_REQUEST, "挂牌品类与库存单品类不一致");
+        if (!InventoryNote.Status.isTradable(note.getStatus())) {
+            throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_AVAILABLE);
         }
-        if (note.getAvailableQuantity().compareTo(request.quantity()) < 0) {
+        return note;
+    }
+
+    private Long freezeForListing(InventoryNote note, BigDecimal quantity, Long enterpriseId) {
+        if (note.getAvailableQuantity().compareTo(quantity) < 0) {
             throw BusinessException.of(ResultCode.INVENTORY_QUANTITY_INSUFFICIENT,
                     "库存单可用数量 %s %s，少于挂牌数量 %s".formatted(
                             note.getAvailableQuantity().stripTrailingZeros().toPlainString(),
                             note.getUnit(),
-                            request.quantity().stripTrailingZeros().toPlainString()));
+                            quantity.stripTrailingZeros().toPlainString()));
         }
 
         FreezeRecord freeze = freezeService.freezeInventory(
                 enterpriseId,
-                request.inventoryNoteId(),
-                request.quantity(),
+                note.getId(),
+                quantity,
                 FreezeRecord.BizType.LISTING,
                 null,
-                "挂牌冻结");
+                "挂牌冻结", note.getVersion());
         return freeze.getId();
     }
 
     /**
      * 释放挂牌的冻结，如果它有的话。
      *
-     * <p>幂等性来自冻结记录自身的状态：一笔已释放或已消耗的冻结会拒绝第二次
-     * 释放，而这个拒绝在这里被吞掉，因为第二次走到本方法并不是值得让一次撤牌
-     * 失败的错误。
+     * <p>冻结不存在、数量冲突或已结清都必须中止事务，不能把释放失败记成撤牌成功。
      */
     private void releaseListingFreeze(Listing listing) {
         if (listing.getFreezeId() == null) {
             return;
         }
-        try {
-            freezeService.releaseInventory(listing.getEnterpriseId(), listing.getFreezeId());
-        } catch (BusinessException e) {
-            log.debug("Listing {} freeze {} was already settled: {}",
-                    listing.getListingNo(), listing.getFreezeId(), e.getMessage());
-        }
+        freezeService.releaseInventory(listing.getEnterpriseId(), listing.getFreezeId());
     }
 
     /**
@@ -313,16 +336,13 @@ public class ListingService {
         if (priceType == null || priceType.isBlank()) {
             // 由有无取值来推断，使该字段对客户端保持可选，同时数据库看到的
             // 仍然正好是两种形态之一。
-            return request.price() == null ? Listing.PriceType.NEGOTIABLE : Listing.PriceType.FIXED;
+            priceType = request.price() == null ? Listing.PriceType.NEGOTIABLE : Listing.PriceType.FIXED;
         }
         if (!Listing.PriceType.FIXED.equals(priceType)
                 && !Listing.PriceType.NEGOTIABLE.equals(priceType)) {
             throw BusinessException.of(ResultCode.BAD_REQUEST, "价格类型必须是 FIXED 或 NEGOTIABLE");
         }
-        if (Listing.PriceType.FIXED.equals(priceType)
-                && (request.price() == null || request.price().signum() <= 0)) {
-            throw BusinessException.of(ResultCode.BAD_REQUEST, "固定价格挂牌必须填写单价");
-        }
+        if (Listing.PriceType.FIXED.equals(priceType)) TradingNumbers.price(request.price());
         return priceType;
     }
 

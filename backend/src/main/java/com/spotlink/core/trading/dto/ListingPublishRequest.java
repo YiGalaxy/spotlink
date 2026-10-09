@@ -27,10 +27,10 @@ public record ListingPublishRequest(
         /** SELL 挂牌必填；BUY 忽略。 */
         Long inventoryNoteId,
 
-        @NotNull(message = "请选择品类")
+        /** BUY 必填；SELL 从库存继承。 */
         Long categoryId,
 
-        @NotBlank(message = "请填写商品名称")
+        /** BUY 必填；SELL 的名称及物理属性全部从库存继承。 */
         @Size(max = 128, message = "商品名称过长")
         String commodityName,
 
@@ -63,7 +63,7 @@ public record ListingPublishRequest(
         /** SELF_PICKUP 或 DELIVERED。 */
         String deliveryMethod,
 
-        String paymentTerms,
+        @Size(max = 32, message = "付款条款过长") String paymentTerms,
 
         @NotNull(message = "请填写挂牌有效期")
         OffsetDateTime validUntil,

@@ -64,7 +64,8 @@ public class TradingViewAssembler {
                         enterprises.getOrDefault(listing.getEnterpriseId(), "—"),
                         categories.getOrDefault(listing.getCategoryId(), "—"),
                         warehouses.getOrDefault(listing.getWarehouseId(), "—"),
-                        listing.getEnterpriseId().equals(viewerEnterpriseId)))
+                        listing.getEnterpriseId().equals(viewerEnterpriseId),
+                        readSpec(listing.getSpec())))
                 .toList();
     }
 

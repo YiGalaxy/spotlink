@@ -10,14 +10,14 @@ import type {
 export interface PublishListingPayload {
   side: 'SELL' | 'BUY'
   inventoryNoteId?: EntityId
-  categoryId: EntityId
-  commodityName: string
+  categoryId?: EntityId
+  commodityName?: string
   brand?: string
   origin?: string
   spec?: Record<string, unknown>
-  quantity: number
+  quantity: string | number
   unit?: string
-  price?: number
+  price?: string | number
   priceType: 'FIXED' | 'NEGOTIABLE'
   /** AUTO（默认）摘牌即成交；MANUAL 摘牌后等挂牌方确认。仅卖方挂牌可用 MANUAL。 */
   confirmMode?: 'AUTO' | 'MANUAL'

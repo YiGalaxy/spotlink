@@ -40,11 +40,11 @@ public record ListingView(
         String origin,
         Map<String, Object> spec,
 
-        BigDecimal quantity,
-        BigDecimal remainingQuantity,
+        @JsonSerialize(using = ToStringSerializer.class) BigDecimal quantity,
+        @JsonSerialize(using = ToStringSerializer.class) BigDecimal remainingQuantity,
         String unit,
 
-        BigDecimal price,
+        @JsonSerialize(using = ToStringSerializer.class) BigDecimal price,
         String priceType,
         String priceText,
 
@@ -73,7 +73,8 @@ public record ListingView(
                                  String enterpriseName,
                                  String categoryName,
                                  String warehouseName,
-                                 boolean mine) {
+                                 boolean mine,
+                                 Map<String, Object> spec) {
         return new ListingView(
                 listing.getId(),
                 listing.getListingNo(),
@@ -86,7 +87,7 @@ public record ListingView(
                 listing.getCommodityName(),
                 listing.getBrand(),
                 listing.getOrigin(),
-                Map.of(),
+                spec,
                 listing.getQuantity(),
                 listing.getRemainingQuantity(),
                 listing.getUnit(),
