@@ -136,7 +136,7 @@ export default function TradingPage() {
     void queryClient.invalidateQueries({ queryKey: identityKey('market-quotes') })
   }
 
-  const { data: market = [], isLoading: marketLoading } = useQuery({
+  const { data: market = [], isLoading: marketLoading, isError: marketError, refetch: reloadMarket } = useQuery({
     queryKey: identityKey('market', sideFilter, keyword),
     // 服务端一直支持关键词搜索——browse() 从写出来那天就接受这个参数——
     // 却从来没有人传过。在一个只会越来越大的大厅里，筛选就是清单和草堆的区别。
@@ -521,10 +521,12 @@ export default function TradingPage() {
   ]
 
   return (
-    <div style={{ padding: 24, maxWidth: 1500, margin: '0 auto' }}>
+    <div className="business-page trading-page">
       <Typography.Title level={4} style={{ marginTop: 0, marginBottom: 16 }}>
         挂牌交易
       </Typography.Title>
+      <Typography.Paragraph type="secondary">浏览现货报价与采购需求。通过企业账号发布挂牌，并在我的订单中完成确认、签约和交收。</Typography.Paragraph>
+      {marketError && <Alert type="error" showIcon message="挂牌读取失败，请重试" action={<Button onClick={() => void reloadMarket()}>重新加载</Button>} style={{ marginBottom: 16 }} />}
 
       <Tabs
         activeKey={activeTab}
@@ -606,7 +608,7 @@ export default function TradingPage() {
                         onClick={() => setPublishOpen(true)}>
                         发布挂牌
                       </Button>
-                      <Table rowKey="id" size="middle" dataSource={myListings}
+                      <Table rowKey="id" size="middle" dataSource={myListings} scroll={{ x: 1200 }}
                         pagination={LIST_PAGINATION}
                         columns={[
                           { title: '挂牌号', dataIndex: 'listingNo', width: 190,
@@ -671,7 +673,7 @@ export default function TradingPage() {
                     <>
                       <Card size="small" style={{ marginBottom: 12 }}
                         styles={{ body: { padding: '10px 16px' } }}>
-                        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                        <Space direction="vertical" size={8} style={{ width: '100%', minWidth: 0 }}>
                           <Segmented
                             value={orderPhase}
                             onChange={(v) => {
@@ -710,7 +712,7 @@ export default function TradingPage() {
                           )}
                         </Space>
                       </Card>
-                      <Table rowKey="id" size="middle" dataSource={visibleOrders} columns={orderColumns}
+                      <Table rowKey="id" size="middle" dataSource={visibleOrders} columns={orderColumns} scroll={{ x: 1200 }}
                         pagination={LIST_PAGINATION}
                         locale={{
                           emptyText: (

@@ -234,9 +234,8 @@ export default function AdvisorPage() {
               <div
                 key={conversation.id}
                 className={`conv-item${conversation.id === activeId ? ' active' : ''}`}
-                onClick={() => void openConversation(conversation.id)}
               >
-                <div className="conv-item-body">
+                <button className="conv-item-body conv-open" type="button" aria-label={`打开会话：${conversation.title}`} aria-current={conversation.id === activeId ? 'true' : undefined} onClick={() => void openConversation(conversation.id)}>
                   <div className="conv-item-title">{conversation.title}</div>
                   <div className="conv-item-meta">
                     {conversation.messageCount} 条 ·{' '}
@@ -244,7 +243,7 @@ export default function AdvisorPage() {
                       ? dayjs(conversation.lastMessageAt).format('MM-DD HH:mm')
                       : '—'}
                   </div>
-                </div>
+                </button>
                 <div onClick={(event) => event.stopPropagation()}>
                   <Popconfirm
                     title="删除这个对话？"
@@ -254,7 +253,7 @@ export default function AdvisorPage() {
                     okButtonProps={{ danger: true }}
                     onConfirm={() => void handleDeleteConversation(conversation.id)}
                   >
-                    <Button type="text" size="small" icon={<DeleteOutlined />} />
+                    <Button type="text" size="small" icon={<DeleteOutlined />} aria-label={`删除会话：${conversation.title}`} />
                   </Popconfirm>
                 </div>
               </div>

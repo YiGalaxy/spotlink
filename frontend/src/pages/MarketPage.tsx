@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Badge,
+  Button,
   Card,
   Col,
   Empty,
@@ -50,12 +51,12 @@ export default function MarketPage() {
   const [liveCount, setLiveCount] = useState(0)
   const [lastEvent, setLastEvent] = useState<string | null>(null)
 
-  const { data: quotes = [], isLoading: quotesLoading } = useQuery({
+  const { data: quotes = [], isLoading: quotesLoading, isError: quotesError, refetch: reloadQuotes } = useQuery({
     queryKey: identityKey('market-quotes'),
     queryFn: () => fetchQuotes(180),
   })
 
-  const { data: series, isLoading: seriesLoading } = useQuery({
+  const { data: series, isLoading: seriesLoading, isError: seriesError, refetch: reloadSeries } = useQuery({
     queryKey: identityKey('market-series', seriesType, categoryId, days),
     queryFn: () => fetchSeries(seriesType, categoryId, days),
   })
@@ -236,7 +237,7 @@ export default function MarketPage() {
   ]
 
   return (
-    <div style={{ padding: 24, maxWidth: 1500, margin: '0 auto' }}>
+    <div className="business-page market-page">
       <div
         style={{
           display: 'flex',
@@ -263,6 +264,7 @@ export default function MarketPage() {
         </Space>
       </div>
 
+      {(quotesError || seriesError) && <Alert type="error" showIcon message="行情读取失败" action={<Button onClick={() => { void reloadQuotes(); void reloadSeries() }}>重新加载</Button>} style={{ marginBottom: 16 }} />}
       <Card size="small" title="品种行情" style={{ marginBottom: 16 }}>
         <Table
           rowKey="categoryId"
@@ -270,6 +272,7 @@ export default function MarketPage() {
           loading={quotesLoading}
           dataSource={quotes}
           columns={columns}
+          scroll={{ x: 1000 }}
           pagination={false}
           locale={{ emptyText: <Empty description="还没有成交记录" /> }}
         />

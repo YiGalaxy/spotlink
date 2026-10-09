@@ -58,6 +58,8 @@ export default function LandingPage() {
     [market.data],
   )
   const categoryLeaves = leaves(categories.data ?? [])
+  // 同名品类可来自多个数据源；入口图按名称去重，筛选仍保留各自真实 ID。
+  const galleryCategories = categoryLeaves.filter((category, index, all) => all.findIndex(item => item.name === category.name) === index)
   const activeCategory = categoryLeaves.find((c) => c.id === categoryId)
   const changeFilter = (key: string, value?: string) => {
     setParams((current) => {
@@ -291,7 +293,7 @@ export default function LandingPage() {
           <h2>按品类逛现货</h2><span>AI 生成品类示意</span>
         </div>
         <div className="category-gallery-grid">
-          {categoryLeaves.slice(0, 6).map(category => <button key={category.id}
+          {galleryCategories.slice(0, 6).map(category => <button key={category.id}
             aria-label={`浏览${category.name}现货`}
             onClick={() => {
               changeFilter('category', category.id)

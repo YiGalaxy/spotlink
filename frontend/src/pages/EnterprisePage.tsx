@@ -1,5 +1,5 @@
 import { identityKey } from '@/store/auth'
-import { Card, Descriptions, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Descriptions, Tag, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { fetchCurrentUser } from '@/api/auth'
 
@@ -10,19 +10,20 @@ const USER_TYPES: Record<number, string> = {
 }
 
 export default function EnterprisePage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: identityKey('current-user'),
     queryFn: fetchCurrentUser,
   })
 
   return (
-    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
+    <div className="business-page">
       <Typography.Title level={4} style={{ marginTop: 0 }}>
         企业信息
       </Typography.Title>
+      {isError && <Alert type="error" showIcon message="企业资料读取失败" action={<Button onClick={() => void refetch()}>重新加载</Button>} style={{ marginBottom: 16 }} />}
 
       <Card loading={isLoading} title="账号" size="small" style={{ marginBottom: 16 }}>
-        <Descriptions column={2} size="small">
+        <Descriptions column={{ xs: 1, sm: 2 }} size="small">
           <Descriptions.Item label="用户名">{data?.username ?? '—'}</Descriptions.Item>
           <Descriptions.Item label="姓名">{data?.realName ?? '—'}</Descriptions.Item>
           <Descriptions.Item label="账号类型">
@@ -44,7 +45,7 @@ export default function EnterprisePage() {
             当前账号是平台运营账号，未绑定企业。
           </Typography.Text>
         ) : (
-          <Descriptions column={2} size="small">
+          <Descriptions column={{ xs: 1, sm: 2 }} size="small">
             <Descriptions.Item label="企业名称" span={2}>
               {data?.enterpriseName ?? '—'}
             </Descriptions.Item>

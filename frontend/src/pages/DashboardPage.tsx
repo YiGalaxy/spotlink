@@ -1,5 +1,6 @@
 import {
   Badge,
+  Alert,
   Button,
   Card,
   Col,
@@ -53,7 +54,7 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const { data: tasks = [], isLoading: tasksLoading } = useQuery({
+  const { data: tasks = [], isLoading: tasksLoading, isError: tasksError, refetch: reloadTasks } = useQuery({
     queryKey: identityKey('tasks'),
     queryFn: fetchTasks,
     // 一个只有重新加载才会更新的工作台，正是这个页面要修掉的 bug；流会推送，
@@ -110,10 +111,11 @@ export default function DashboardPage() {
   const openOrders = orders.filter((o) => !['COMPLETED', 'CANCELLED'].includes(o.status))
 
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
+    <div className="business-page dashboard-page">
       <Typography.Title level={4} style={{ marginTop: 0 }}>
         你好，{user?.realName || user?.username}
       </Typography.Title>
+      {tasksError && <Alert type="error" showIcon message="待办读取失败" action={<Button onClick={() => void reloadTasks()}>重新加载</Button>} style={{ marginBottom: 16 }} />}
       <Typography.Text type="secondary">
         {user?.platformOperator
           ? '当前是平台运营账号，未绑定企业。请从右上角进入管理后台。'
