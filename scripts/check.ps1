@@ -116,6 +116,15 @@ try {
                         & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
                     }
                 }
+                'early-advisor' {
+                    if ($Engine -eq 'langchain') {
+                        Write-Error '该早期节点只实现了 Spring AI，LangChain 验收须等待独立引擎节点。' -ErrorAction Continue
+                        exit 2
+                    }
+                    Write-Host '早期最小闭环实际引擎：Spring AI；固定模型替身，不是双引擎或真实模型效果验收。'
+                    & "$PSScriptRoot/tests/advisor-baseline.tests.ps1" -Browser
+                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                }
                 'image-browser' {
                     & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools node scripts/assets/verify-images.mjs
                     if ($LASTEXITCODE -ne 0) { throw '本地图片来源、散列或预算校验失败。' }

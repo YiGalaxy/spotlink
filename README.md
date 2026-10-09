@@ -51,6 +51,8 @@ cd spotlink
 
 首次初始化也可运行 `.\setup-demo.cmd -NoPause`；`start.cmd` 共用最小数据生成、业务/知识导入和验证流程。独立入口为 `import-data.cmd`、`data-status.cmd`，各步骤及失败恢复见[数据初始化](docs/数据初始化.md)。当前包为 minimal，完整 demo 仍按计划扩展。
 
+导入后的库存查询、多轮会话和规则引用可用 `check.cmd -Task C16 -Mode ai-offline -Engine spring-ai -NoPause` 在独立环境复现，包含 10 条基线和桌面/手机页面检查。模型为固定替身，真实接口与工具取数使用隔离数据库，详见[早期顾问基线](evals/README.md)。
+
 | 入口 | 地址 |
 | --- | --- |
 | 现货商城 | [http://127.0.0.1:18080](http://127.0.0.1:18080) |

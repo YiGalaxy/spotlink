@@ -1,0 +1,31 @@
+services:
+  eval-model:
+    image: node:22.14.0-alpine
+    command: ["node", "/workspace/evals/mock.mjs"]
+    volumes: ["./evals:/workspace/evals:ro"]
+    networks: [spotlink-next]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/stats').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  backend:
+    environment:
+      SPOTLINK_ADVISOR_ENABLED: 'true'
+      SPOTLINK_ADVISOR_API_KEY: offline-evaluation-only
+      SPOTLINK_ADVISOR_BASE_URL: http://eval-model:8080/v1
+      SPOTLINK_ADVISOR_MODEL: offline-early-v1
+      SPOTLINK_EMBEDDING_ENABLED: 'false'
+      SPOTLINK_SWEEP_INITIAL_DELAY: '86400000'
+    depends_on:
+      eval-model: { condition: service_healthy }
+  eval-runner:
+    image: node:22.14.0-alpine
+    profiles: [eval]
+    working_dir: /workspace
+    command: ["node", "evals/run.mjs"]
+    environment:
+      SPOTLINK_EVAL_BASE_URL: http://backend:8081
+      SPOTLINK_EVAL_MOCK_URL: http://eval-model:8080
+    volumes: ["./evals:/workspace/evals:ro", "./.local:/workspace/.local"]
+    networks: [spotlink-next]
