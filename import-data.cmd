@@ -1,3 +1,3 @@
 @echo off
-echo 数据导入尚未实现，请先完成 C06-C11。
-exit /b 2
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\data\run-step.ps1" -Step all %*
+exit /b %ERRORLEVEL%

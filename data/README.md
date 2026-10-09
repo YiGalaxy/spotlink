@@ -2,14 +2,14 @@
 
 Git 保存 `rules`、`schemas`、`sql`、`coverage` 与生成器，运行实体与 SQL 全部写入 `.local/data/<规则版本>/<批次>/`。Node 22 工具容器只读挂载源码，只有 `.local` 可写，不安装宿主依赖。
 
-当前 C06 定义三个虚构企业、一个交收仓库、电解铜品类和双方全可用库存。账号散列及事务导入将在 C09 实现；生成不代表已导入。完整 demo 在 C37 补全以前明确拒绝生成，acceptance 的非法输入仅保存为请求预期，不能插入数据库。
+当前定义三个虚构企业、一个交收仓库、电解铜品类、双方全可用库存、五个演示账号与平台角色，以及中文原文/可复现知识分块。账号 BCrypt 编码、事务台账、重复跳过与一键入口见[数据初始化](../docs/数据初始化.md)。生成不代表已导入。完整 demo 在 C37 补全以前明确拒绝生成，acceptance 的非法输入仅保存为请求预期，不能插入数据库。
 
 在根目录执行：
 
 ```powershell
-docker compose -p spotlink-next-tools --project-directory . -f ops/compose.tools.yml run --rm data-tools node data/generators/generate.mjs --dataset minimal --batch minimal-default
-docker compose -p spotlink-next-tools --project-directory . -f ops/compose.tools.yml run --rm data-tools node data/generators/generate.mjs --verify .local/data/v1/minimal-default
-docker compose -p spotlink-next-tools --project-directory . -f ops/compose.tools.yml run --rm data-tools node data/generators/generate.mjs --batch minimal-default --resume
+docker compose -p spotlink-next-tools --project-directory . -f ops/compose.tools.yml run --rm data-tools node data/generators/generate.mjs --dataset minimal --batch minimal-v1-20261009
+docker compose -p spotlink-next-tools --project-directory . -f ops/compose.tools.yml run --rm data-tools node data/generators/generate.mjs --verify .local/data/v1/minimal-v1-20261009
+docker compose -p spotlink-next-tools --project-directory . -f ops/compose.tools.yml run --rm data-tools node data/generators/generate.mjs --batch minimal-v1-20261009 --resume
 check.cmd -Task C06 -Mode task -NoPause
 ```
 

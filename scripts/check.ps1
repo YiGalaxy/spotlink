@@ -115,16 +115,20 @@ try {
                     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
                 'dataset-generation' {
-                    $dataArguments = @('node', 'data/generators/generate.mjs', '--dataset', 'minimal', '--batch', 'c06-check')
-                    if (Test-Path -LiteralPath "$script:ProjectRoot/.local/data/v1/c06-check/manifest.json") { $dataArguments += '--resume' }
+                    $dataArguments = @('node', 'data/generators/generate.mjs', '--dataset', 'minimal', '--batch', 'c06-1-1-check')
+                    if (Test-Path -LiteralPath "$script:ProjectRoot/.local/data/v1/c06-1-1-check/manifest.json") { $dataArguments += '--resume' }
                     & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools @dataArguments
                     if ($LASTEXITCODE -ne 0) { throw '容器内实际数据生成失败。' }
-                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools node data/generators/generate.mjs --verify .local/data/v1/c06-check
+                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools node data/generators/generate.mjs --verify .local/data/v1/c06-1-1-check
                     if ($LASTEXITCODE -ne 0) { throw '生成数据校验失败。' }
                     foreach ($generated in @('records.json', 'rendered.sql', 'manifest.json', 'expected.json', 'records.jsonl')) {
-                        & git -C $script:ProjectRoot check-ignore --quiet ".local/data/v1/c06-check/$generated"
+                        & git -C $script:ProjectRoot check-ignore --quiet ".local/data/v1/c06-1-1-check/$generated"
                         if ($LASTEXITCODE -ne 0) { throw '生成产物未被 Git 忽略。' }
                     }
+                }
+                'data-runtime' {
+                    & "$PSScriptRoot/tests/data-runtime.tests.ps1"
+                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
                 default {
                     Write-Error "执行器 $executor 不存在。" -ErrorAction Continue

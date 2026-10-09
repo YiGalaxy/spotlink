@@ -49,6 +49,8 @@ cd spotlink
 
 首次启动会生成被 Git 忽略的 `.env`，随机配置 MySQL、Redis、JWT 和后台模型凭证加密密钥，构建镜像并等待服务健康。重复启动保留配置和数据卷。
 
+首次初始化也可运行 `.\setup-demo.cmd -NoPause`；`start.cmd` 共用最小数据生成、业务/知识导入和验证流程。独立入口为 `import-data.cmd`、`data-status.cmd`，各步骤及失败恢复见[数据初始化](docs/数据初始化.md)。当前包为 minimal，完整 demo 仍按计划扩展。
+
 | 入口 | 地址 |
 | --- | --- |
 | 现货商城 | [http://127.0.0.1:18080](http://127.0.0.1:18080) |
