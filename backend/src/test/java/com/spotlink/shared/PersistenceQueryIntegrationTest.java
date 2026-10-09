@@ -57,7 +57,7 @@ class PersistenceQueryIntegrationTest {
         conversation.setTitle("新会话"); conversation.setMessageCount(0);
         conversations.insert(conversation);
         assertThat(conversations.recordCompletedTurn(conversation.getId(), OffsetDateTime.now(), "首次问题")).isEqualTo(1);
-        assertThat(conversations.recordCompletedTurn(conversation.getId(), OffsetDateTime.now(), null)).isEqualTo(1);
+        assertThat(conversations.recordCompletedTurn(conversation.getId(), OffsetDateTime.now(), "重复首轮不改标题")).isEqualTo(1);
         var updated = conversations.selectById(conversation.getId());
         assertThat(updated.getMessageCount()).isEqualTo(4);
         assertThat(updated.getTitle()).isEqualTo("首次问题");

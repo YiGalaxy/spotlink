@@ -108,6 +108,14 @@ try {
                     & "$PSScriptRoot/tests/advisor-runtime.tests.ps1"
                     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
+                'advisor-memory' {
+                    try {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=ConversationPersistenceTest,PersistenceQueryIntegrationTest' test
+                        if ($LASTEXITCODE -ne 0) { throw '隔离会话持久化与短事务回归失败。' }
+                    } finally {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
+                    }
+                }
                 'image-browser' {
                     & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools node scripts/assets/verify-images.mjs
                     if ($LASTEXITCODE -ne 0) { throw '本地图片来源、散列或预算校验失败。' }

@@ -126,9 +126,10 @@ public class ConversationService {
             // 模型调用不占用数据库事务；问答与计数在同一短事务中提交。
             return new TransactionTemplate(transactionManager).execute(status -> {
                 requireOwned(conversationId, user.getUserId());
+                // 先锁定仍存在的会话行；删除或更新失败时，不能留下悬空消息。
+                touchConversation(conversation, content);
                 persistUserMessage(conversation, user, content);
                 AdvisorMessage assistantRow = persistAssistantMessage(conversation, user, result);
-                touchConversation(conversation, content);
                 return MessageView.from(assistantRow, objectMapper);
             });
         }
@@ -140,7 +141,7 @@ public class ConversationService {
      * <p>先按由新到旧并带上 limit 读取，然后反转，这样截断保留下来的是最近的消息，
      * 而不是最早的消息。
      */
-    public List<ConversationTurn> loadHistory(Long conversationId) {
+    private List<ConversationTurn> loadHistory(Long conversationId) {
         List<AdvisorMessage> recent = messageMapper.findRecentMessages(conversationId, MAX_HISTORY_MESSAGES);
         Collections.reverse(recent);
 
@@ -222,8 +223,9 @@ public class ConversationService {
         boolean isFirstTurn = conversation.getMessageCount() == null
                 || conversation.getMessageCount() == 0;
 
-        conversationMapper.recordCompletedTurn(conversation.getId(), OffsetDateTime.now(),
+        int changed = conversationMapper.recordCompletedTurn(conversation.getId(), OffsetDateTime.now(),
                 isFirstTurn ? deriveTitle(firstQuestion) : null);
+        if (changed != 1) throw BusinessException.of(ResultCode.CONVERSATION_NOT_FOUND);
     }
 
     private String deriveTitle(String question) {

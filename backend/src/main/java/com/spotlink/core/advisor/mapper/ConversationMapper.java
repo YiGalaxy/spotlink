@@ -17,9 +17,10 @@ public interface ConversationMapper extends BaseMapper<Conversation> {
     }
 
     default int recordCompletedTurn(Long id, OffsetDateTime now, String firstTitle) {
-        var update = Wrappers.<Conversation>lambdaUpdate().eq(Conversation::getId, id)
-                .setSql("message_count = message_count + 2").set(Conversation::getLastMessageAt, now);
-        if (firstTitle != null) update.set(Conversation::getTitle, firstTitle);
+        var update = Wrappers.<Conversation>lambdaUpdate().eq(Conversation::getId, id);
+        // MySQL 的 SET 按从左到右执行：先按旧计数决定标题，再递增。
+        if (firstTitle != null) update.setSql("title = CASE WHEN message_count = 0 THEN {0} ELSE title END", firstTitle);
+        update.setSql("message_count = message_count + 2").set(Conversation::getLastMessageAt, now);
         return update(null, update);
     }
 }

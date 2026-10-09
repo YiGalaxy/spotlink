@@ -13,6 +13,7 @@ $script:CheckRegistry = [ordered]@{
     C10 = @{ Required = @('static', 'unit', 'integration', 'dataset'); Checks = @{ static = 'static'; unit = 'data-unit'; integration = 'backend-integration'; dataset = 'data-runtime' } }
     C11 = @{ Required = @('static', 'ops', 'dataset'); Checks = @{ static = 'static'; ops = 'compose-config'; dataset = 'data-runtime' } }
     C12 = @{ Required = @('static', 'unit', 'integration', 'ai-offline', 'e2e'); Checks = @{ static = 'static'; unit = 'auth-unit'; integration = 'backend-integration'; 'ai-offline' = 'advisor-offline'; e2e = 'advisor-browser' } }
+    C13 = @{ Required = @('static', 'unit', 'integration', 'ai-offline'); Checks = @{ static = 'static'; unit = 'backend-package'; integration = 'advisor-memory'; 'ai-offline' = 'advisor-memory' } }
     C18 = @{ Required = @('static', 'unit', 'visual'); Checks = @{ static = 'static'; unit = 'frontend-build'; visual = 'image-browser' } }
 }
 $script:ValidCheckModes = @('task', 'full', 'static', 'unit', 'integration', 'dataset', 'ai-offline', 'rag', 'e2e', 'visual', 'ops', 'ai-live')
