@@ -1,7 +1,8 @@
 {
   "ruleVersion": "v1",
-  "generatorVersion": "1.0.0",
-  "schema": { "requiredMigrations": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
+  "generatorVersion": "1.1.0",
+  "schema": { "requiredMigrations": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] },
+  "chunking": { "version": "paragraph-v1", "maxCharacters": 600, "overlapCharacters": 0 },
   "precision": { "quantity": 3, "price": 4, "amount": 4 },
   "identityNamespace": "8700000000000000000",
   "datasets": {

@@ -8,8 +8,8 @@
     "required": ["scenarioId", "table", "values"],
     "properties": {
       "scenarioId": { "type": "string", "pattern": "^[A-Z0-9-]+$" },
-      "table": { "enum": ["t_enterprise", "t_warehouse", "t_commodity_category", "t_inventory_note"] },
-      "values": { "type": "object", "required": ["id", "created_at", "updated_at"], "properties": {
+      "table": { "enum": ["t_enterprise", "t_user", "t_user_role", "t_warehouse", "t_commodity_category", "t_inventory_note", "t_knowledge_doc", "t_knowledge_chunk"] },
+      "values": { "type": "object", "required": ["id", "created_at"], "properties": {
         "id": { "type": "string", "pattern": "^[0-9]{1,19}$" },
         "created_at": { "type": "string" }, "updated_at": { "type": "string" }
       } }

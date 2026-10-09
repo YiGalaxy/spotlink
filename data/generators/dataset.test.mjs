@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { root, buildDataset, generate, verifyDirectory, validateRecords, renderSql, decimal, sha256 } from './dataset.mjs';
 
 const batch = label => `c06-test-${process.pid}-${label}`;
+const inventory = records => records.filter(row => row.table === 't_inventory_note');
 const clean = (name) => rmSync(join(root, '.local/data/v1', name), { recursive: true, force: true });
 
 test('相同 seed 与时钟生成逐字一致；大 ID 和三位数量不经过浮点', () => {
@@ -29,17 +30,17 @@ test('拒绝不存在/未完成的数据包、非规范时间、无上限规模'
 test('非法数量、精度、单位和缺关联拒绝；额外规格键保留', () => {
   for (const [key, value, expected] of [['total_quantity', '-1.000', /小数/], ['available_quantity', '1.0001', /小数/], ['warehouse_id', '1', /关联/], ['unit', '千克', /单位/]]) {
     const records = structuredClone(buildDataset().records);
-    records.at(-1).values[key] = value;
+    inventory(records).at(-1).values[key] = value;
     assert.throws(() => validateRecords(records), expected);
   }
-  assert.equal(buildDataset().records.at(-1).values.spec.custom_demo, '保留未知键');
+  assert.equal(inventory(buildDataset().records).at(-1).values.spec.custom_demo, '保留未知键');
 });
 test('ID/编号重复、任意 SQL 表和插入列拒绝', () => {
   const duplicate = buildDataset().records;
   duplicate.push(structuredClone(duplicate.at(-1)));
   assert.throws(() => validateRecords(duplicate), /重复 ID/);
   const numbers = buildDataset().records;
-  numbers.at(-1).values.note_no = numbers.at(-2).values.note_no;
+  inventory(numbers).at(-1).values.note_no = inventory(numbers).at(-2).values.note_no;
   assert.throws(() => validateRecords(numbers), /重复业务编号/);
   const table = buildDataset().records;
   table[0].table = 't_user; DROP TABLE t_user';
@@ -117,4 +118,21 @@ test('命令入口失败退出码明确，禁止未知参数与不存在的恢�
     const result = spawnSync(process.execPath, [join(root, 'data/generators/generate.mjs'), ...args], { encoding: 'utf8' });
     assert.equal(result.status, 4, result.stderr);
   }
+});
+
+test('账号口令由导入器编码；中文分块可复现并携带版本来源定位', () => {
+  const result = buildDataset();
+  assert.equal(result.expected.counts.t_user, 5);
+  assert.equal(result.expected.counts.t_user_role, 2);
+  assert.ok(result.records.filter(row => row.table === 't_user').every(row => row.values.password === 'LOCAL_DEMO_BCRYPT'));
+  const docs = result.records.filter(row => row.table === 't_knowledge_doc');
+  assert.equal(docs.length, 3);
+  assert.ok(docs.every(row => JSON.parse(row.values.remark).visibility === 'PUBLIC'));
+  const chunks = result.records.filter(row => row.table === 't_knowledge_chunk');
+  assert.ok(chunks.length > 3);
+  assert.ok(chunks.every(row => row.values.content.length <= 600 && /来源：data\/knowledge\/.* · v1 · 原文第\d+行/.test(row.values.content)));
+  assert.deepEqual(chunks, buildDataset().records.filter(row => row.table === 't_knowledge_chunk'));
+  const corrupt = structuredClone(result.records);
+  corrupt.find(row => row.table === 't_user').values.password = 'plaintext';
+  assert.throws(() => validateRecords(corrupt), /编码/);
 });

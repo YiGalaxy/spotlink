@@ -1,8 +1,9 @@
 {
-  "scope": "C06 基础定义；后续节点同步扩充，不宣称完整业务覆盖",
+  "scope": "C09–C11 最小身份、库存和公开知识；后续节点同步扩充，不宣称完整业务覆盖",
   "scenarios": [
-    { "scenarioId": "IDENTITY-BASE", "role": "seller01/buyer01/empty01", "page": "/enterprise", "steps": ["登录后查看企业信息"], "question": "我的企业身份是什么？", "tools": [], "sources": [], "assertions": ["两个已审核企业与一家无业务企业"] },
-    { "scenarioId": "INVENTORY-BASE", "role": "seller01", "page": "/inventory", "steps": ["查看本企业库存与买方数据隔离"], "question": "我的可用库存有多少？", "tools": ["getMyInventory"], "sources": [], "assertions": ["总量=可用+冻结", "数量三位小数", "单位吨", "企业范围" ] }
+    { "scenarioId": "IDENTITY-BASE", "role": "min_seller01/min_buyer01/min_empty01/min_admin/min_auditor", "page": "/enterprise", "steps": ["登录后查看企业信息", "管理员与审计员权限不同"], "question": "我的企业身份是什么？", "tools": [], "sources": [], "assertions": ["三个已审核企业，其中一家无业务库存", "五个账号与两组平台角色", "密码实际 BCrypt 编码"] },
+    { "scenarioId": "INVENTORY-BASE", "role": "min_seller01", "page": "/inventory", "steps": ["查看本企业库存与买方数据隔离"], "question": "我的可用库存有多少？", "tools": ["query_my_inventory", "summarise_my_inventory"], "sources": [], "assertions": ["总量=可用+冻结", "数量三位小数", "单位吨", "企业范围" ] },
+    { "scenarioId": "KNOWLEDGE-BASE", "role": "min_buyer01", "page": "/advisor", "steps": ["查询库存或运费规则并核对来源"], "question": "库存总量和可用量有什么区别？运费能直接报价吗？", "tools": ["search_platform_rules"], "sources": ["data/knowledge/inventory.md", "data/knowledge/procurement.md", "data/knowledge/trading.md"], "assertions": ["三篇公开中文原文", "分块标题版本与原文定位", "向量未构建时明确标记"] }
   ],
   "rejections": ["负数量", "超过三位数量精度", "缺少仓库关联", "同一业务编号重复", "数据文件损坏", "未知数据包", "不兼容规则版本"]
 }

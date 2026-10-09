@@ -32,6 +32,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class SpotLinkApplication {
 
     public static void main(String[] args) {
+        if (args.length > 0 && "data".equals(args[0])) {
+            System.exit(com.spotlink.bootstrap.data.DataImportCli.run(args));
+            return;
+        }
         SpringApplication.run(SpotLinkApplication.class, args);
     }
 }

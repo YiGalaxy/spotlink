@@ -80,6 +80,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+  # 可选部署作业，只传数据库配置，不启动 Web 或模型客户端。
+  data-cli:
+    image: spotlink-next-backend:local
+    profiles: [data-cli]
+    environment:
+      SPOTLINK_DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-spotlink}?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&connectionTimeZone=Asia/Shanghai&forceConnectionTimeZoneToSession=true
+      SPOTLINK_DB_USER: ${MYSQL_USER:-spotlink}
+      SPOTLINK_DB_PASSWORD: ${MYSQL_PASSWORD:-change-me-local}
+      SPOTLINK_DATA_ROOT: /workspace
+    volumes: ["./data:/workspace/data:ro", "./.local/data:/workspace/.local/data:ro"]
+    networks: [spotlink-next]
+    command: ["data", "status"]
   # 可选本地推理服务，后端通过内部网络调用；不向浏览器暴露模型端口。
   ollama:
     image: ollama/ollama:0.11.10
