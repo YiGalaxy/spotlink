@@ -1,10 +1,9 @@
 package com.spotlink.advisor.tool;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.contract.entity.Contract;
-import com.spotlink.contract.mapper.ContractMapper;
+import com.spotlink.contract.service.access.ContractAccess;
 import com.spotlink.identity.entity.Enterprise;
-import com.spotlink.identity.mapper.EnterpriseMapper;
+import com.spotlink.identity.service.access.EnterpriseAccess;
 import com.spotlink.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
@@ -36,8 +35,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ContractReviewTools {
 
-    private final ContractMapper contractMapper;
-    private final EnterpriseMapper enterpriseMapper;
+    private final ContractAccess contractAccess;
+    private final EnterpriseAccess enterpriseAccess;
 
     @Tool(name = "get_contract_detail",
             description = """
@@ -60,8 +59,7 @@ public class ContractReviewTools {
             return "请提供合同编号。可以先用 list_my_contracts 查看你有哪些合同。";
         }
 
-        Contract contract = contractMapper.selectOne(Wrappers.<Contract>lambdaQuery()
-                .eq(Contract::getContractNo, contractNo.trim()));
+        Contract contract = contractAccess.findByContractNo(contractNo.trim());
         if (contract == null || !contract.involves(enterpriseId)) {
             // 「不存在」和「不是你的」给同一个回答：只要措辞有一点差别，
             // 这个差别本身就确认了另一家公司的合同编号存在。
@@ -97,7 +95,7 @@ public class ContractReviewTools {
     }
 
     private String enterpriseName(Long id) {
-        Enterprise enterprise = enterpriseMapper.selectById(id);
+        Enterprise enterprise = enterpriseAccess.selectById(id);
         return enterprise == null ? "—" : enterprise.getName();
     }
 

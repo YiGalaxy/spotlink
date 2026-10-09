@@ -1,6 +1,6 @@
 package com.spotlink.shared.audit;
 
-import com.spotlink.shared.audit.mapper.AuditLogMapper;
+import com.spotlink.shared.audit.service.access.AuditLogAccess;
 import com.spotlink.shared.security.LoginUser;
 import com.spotlink.shared.security.SecurityUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,7 +39,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @RequiredArgsConstructor
 public class AuditService {
 
-    private final AuditLogMapper auditLogMapper;
+    private final AuditLogAccess auditLogAccess;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
@@ -116,7 +116,7 @@ public class AuditService {
      */
     private void insert(AuditLog row) {
         try {
-            transactionTemplate.executeWithoutResult(status -> auditLogMapper.insert(row));
+            transactionTemplate.executeWithoutResult(status -> auditLogAccess.insert(row));
         } catch (Exception e) {
             log.error("Could not write an audit row for {}:{} on {}/{}",
                     row.getModule(), row.getAction(), row.getTargetType(), row.getTargetId(), e);

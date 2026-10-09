@@ -1,17 +1,16 @@
 package com.spotlink.marketdata.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.commodity.entity.CommodityCategory;
-import com.spotlink.commodity.mapper.CommodityCategoryMapper;
+import com.spotlink.commodity.service.access.CommodityCategoryAccess;
 import com.spotlink.inventory.entity.InventoryNote;
-import com.spotlink.inventory.mapper.InventoryNoteMapper;
+import com.spotlink.inventory.service.access.InventoryNoteAccess;
 import com.spotlink.marketdata.dto.MarketDtos.QuoteRow;
 import com.spotlink.marketdata.dto.MarketDtos.SeriesData;
 import com.spotlink.marketdata.dto.MarketDtos.SeriesPoint;
 import com.spotlink.trading.entity.Listing;
 import com.spotlink.trading.entity.Order;
-import com.spotlink.trading.mapper.ListingMapper;
-import com.spotlink.trading.mapper.OrderMapper;
+import com.spotlink.trading.service.access.ListingAccess;
+import com.spotlink.trading.service.access.OrderAccess;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,10 +48,10 @@ public class MarketService {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
-    private final OrderMapper orderMapper;
-    private final ListingMapper listingMapper;
-    private final InventoryNoteMapper inventoryNoteMapper;
-    private final CommodityCategoryMapper categoryMapper;
+    private final OrderAccess orderAccess;
+    private final ListingAccess listingAccess;
+    private final InventoryNoteAccess inventoryNoteAccess;
+    private final CommodityCategoryAccess categoryAccess;
 
     // ------------------------------------------------------------------
     // 最新行情
@@ -197,8 +196,7 @@ public class MarketService {
 
     /** 每日在挂挂牌的报盘总量。 */
     private SeriesData listingSeries(Long categoryId, LocalDate from) {
-        List<Listing> listings = listingMapper.selectList(Wrappers.<Listing>lambdaQuery()
-                .eq(categoryId != null, Listing::getCategoryId, categoryId));
+        List<Listing> listings = listingAccess.findByCategory(categoryId);
         Map<LocalDate, BigDecimal> byDay = new LinkedHashMap<>();
         for (Listing listing : listings) {
             if (listing.getCreatedAt() == null) {
@@ -212,10 +210,7 @@ public class MarketService {
 
     /** 每日在库总量，按入库日期归集。 */
     private SeriesData inventorySeries(Long categoryId, LocalDate from) {
-        List<InventoryNote> notes = inventoryNoteMapper.selectList(
-                Wrappers.<InventoryNote>lambdaQuery()
-                        .eq(categoryId != null, InventoryNote::getCategoryId, categoryId)
-                        .ne(InventoryNote::getStatus, InventoryNote.Status.CANCELLED));
+        List<InventoryNote> notes = inventoryNoteAccess.findMarketInventory(categoryId);
         Map<LocalDate, BigDecimal> byDay = new LinkedHashMap<>();
         for (InventoryNote note : notes) {
             if (note.getCreatedAt() == null) {
@@ -246,17 +241,14 @@ public class MarketService {
     private List<Order> recentOrders(int days) {
         OffsetDateTime since = LocalDate.now(ZONE).minusDays(days)
                 .atStartOfDay(ZONE).toOffsetDateTime();
-        return orderMapper.selectList(Wrappers.<Order>lambdaQuery()
-                .ge(Order::getCreatedAt, since)
-                .orderByAsc(Order::getCreatedAt)
-                .last("limit 5000"));
+        return orderAccess.findCreatedSince(since);
     }
 
     private Map<Long, String> categoryNames(java.util.Set<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return Map.of();
         }
-        return categoryMapper.selectBatchIds(ids).stream()
+        return categoryAccess.selectBatchIds(ids).stream()
                 .collect(Collectors.toMap(CommodityCategory::getId, CommodityCategory::getName));
     }
 }

@@ -1,19 +1,18 @@
 package com.spotlink.bootstrap;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.identity.entity.Enterprise;
 import com.spotlink.identity.entity.User;
-import com.spotlink.identity.mapper.EnterpriseMapper;
+import com.spotlink.identity.service.access.EnterpriseAccess;
 import com.spotlink.identity.entity.Permission;
 import com.spotlink.identity.entity.Role;
 import com.spotlink.identity.entity.RolePermission;
 import com.spotlink.identity.entity.UserRole;
-import com.spotlink.identity.mapper.PermissionMapper;
-import com.spotlink.identity.mapper.RoleMapper;
-import com.spotlink.identity.mapper.RolePermissionMapper;
-import com.spotlink.identity.mapper.UserRoleMapper;
+import com.spotlink.identity.service.access.PermissionAccess;
+import com.spotlink.identity.service.access.RoleAccess;
+import com.spotlink.identity.service.access.RolePermissionAccess;
+import com.spotlink.identity.service.access.UserRoleAccess;
 import java.util.List;
-import com.spotlink.identity.mapper.UserMapper;
+import com.spotlink.identity.service.access.UserAccess;
 import com.spotlink.settlement.service.FundService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,12 +37,12 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
 
     private static final String DEFAULT_PASSWORD = "Admin@123";
 
-    private final UserMapper userMapper;
-    private final EnterpriseMapper enterpriseMapper;
-    private final RoleMapper roleMapper;
-    private final UserRoleMapper userRoleMapper;
-    private final RolePermissionMapper rolePermissionMapper;
-    private final PermissionMapper permissionMapper;
+    private final UserAccess userAccess;
+    private final EnterpriseAccess enterpriseAccess;
+    private final RoleAccess roleAccess;
+    private final UserRoleAccess userRoleAccess;
+    private final RolePermissionAccess rolePermissionAccess;
+    private final PermissionAccess permissionAccess;
     private final PasswordEncoder passwordEncoder;
     private final FundService fundService;
 
@@ -101,22 +100,18 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         if (user == null) {
             return;
         }
-        Role role = roleMapper.selectOne(Wrappers.<Role>lambdaQuery()
-                .eq(Role::getCode, roleCode)
-                .isNull(Role::getEnterpriseId));
+        Role role = roleAccess.findPlatformRole(roleCode);
         if (role == null) {
             log.warn("Role {} is not seeded; skipping the grant to {}", roleCode, user.getUsername());
             return;
         }
 
-        boolean held = userRoleMapper.selectCount(Wrappers.<UserRole>lambdaQuery()
-                .eq(UserRole::getUserId, user.getId())
-                .eq(UserRole::getRoleId, role.getId())) > 0;
+        boolean held = userRoleAccess.existsGrant(user.getId(), role.getId());
         if (!held) {
             UserRole grant = new UserRole();
             grant.setUserId(user.getId());
             grant.setRoleId(role.getId());
-            userRoleMapper.insert(grant);
+            userRoleAccess.insert(grant);
             log.info("Granted role {} to {}", roleCode, user.getUsername());
         }
 
@@ -124,17 +119,14 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
             return;
         }
         // 全部 admin:* 权限码，包括后来的迁移新增的那些。
-        List<Permission> all = permissionMapper.selectList(Wrappers.<Permission>lambdaQuery()
-                .likeRight(Permission::getCode, "admin:"));
+        List<Permission> all = permissionAccess.findAdminPermissions();
         for (Permission permission : all) {
-            boolean granted = rolePermissionMapper.selectCount(Wrappers.<RolePermission>lambdaQuery()
-                    .eq(RolePermission::getRoleId, role.getId())
-                    .eq(RolePermission::getPermissionId, permission.getId())) > 0;
+            boolean granted = rolePermissionAccess.existsGrant(role.getId(), permission.getId());
             if (!granted) {
                 RolePermission grant = new RolePermission();
                 grant.setRoleId(role.getId());
                 grant.setPermissionId(permission.getId());
-                rolePermissionMapper.insert(grant);
+                rolePermissionAccess.insert(grant);
                 log.info("Added newly declared permission {} to {}", permission.getCode(), roleCode);
             }
         }
@@ -144,8 +136,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
                                                 String uscc, String traderCode,
                                                 String contactName, String contactPhone,
                                                 int status, OffsetDateTime now) {
-        Enterprise existing = enterpriseMapper.selectOne(Wrappers.<Enterprise>lambdaQuery()
-                .eq(Enterprise::getEnterpriseCode, code));
+        Enterprise existing = enterpriseAccess.findByCode(code);
         if (existing != null) {
             ensureAccount(existing);
             return existing;
@@ -168,7 +159,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         if (status == Enterprise.Status.APPROVED) {
             enterprise.setApprovedAt(now);
         }
-        enterpriseMapper.insert(enterprise);
+        enterpriseAccess.insert(enterprise);
         log.info("Seeded enterprise {} ({}), status={}", name, code, status);
         ensureAccount(enterprise);
         return enterprise;
@@ -198,8 +189,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
      */
     private User createUserIfAbsent(Long enterpriseId, String username, String realName,
                                     int userType, OffsetDateTime now) {
-        User existing = userMapper.selectOne(Wrappers.<User>lambdaQuery()
-                .eq(User::getUsername, username));
+        User existing = userAccess.findByUsername(username);
         if (existing != null) {
             return existing;
         }
@@ -211,7 +201,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         user.setRealName(realName);
         user.setUserType(userType);
         user.setStatus(User.Status.ACTIVE);
-        userMapper.insert(user);
+        userAccess.insert(user);
         log.info("Seeded user '{}' ({}), enterpriseId={}", username, realName, enterpriseId);
         return user;
     }

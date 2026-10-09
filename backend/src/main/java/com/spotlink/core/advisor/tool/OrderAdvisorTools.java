@@ -1,7 +1,7 @@
 package com.spotlink.advisor.tool;
 
 import com.spotlink.identity.entity.Enterprise;
-import com.spotlink.identity.mapper.EnterpriseMapper;
+import com.spotlink.identity.service.access.EnterpriseAccess;
 import com.spotlink.shared.security.SecurityUtils;
 import com.spotlink.trading.entity.Order;
 import com.spotlink.trading.entity.OrderStatus;
@@ -40,7 +40,7 @@ public class OrderAdvisorTools {
     private static final int MAX_ROWS = 20;
 
     private final OrderService orderService;
-    private final EnterpriseMapper enterpriseMapper;
+    private final EnterpriseAccess enterpriseAccess;
 
     @Tool(name = "list_my_orders",
             description = """
@@ -223,7 +223,7 @@ public class OrderAdvisorTools {
         if (id == null) {
             return "—";
         }
-        Enterprise enterprise = enterpriseMapper.selectById(id);
+        Enterprise enterprise = enterpriseAccess.selectById(id);
         return enterprise == null ? "—" : enterprise.getName();
     }
 

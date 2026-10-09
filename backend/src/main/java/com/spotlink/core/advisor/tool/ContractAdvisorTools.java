@@ -1,10 +1,9 @@
 package com.spotlink.advisor.tool;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.contract.entity.Contract;
-import com.spotlink.contract.mapper.ContractMapper;
+import com.spotlink.contract.service.access.ContractAccess;
 import com.spotlink.identity.entity.Enterprise;
-import com.spotlink.identity.mapper.EnterpriseMapper;
+import com.spotlink.identity.service.access.EnterpriseAccess;
 import com.spotlink.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
@@ -26,8 +25,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ContractAdvisorTools {
 
-    private final ContractMapper contractMapper;
-    private final EnterpriseMapper enterpriseMapper;
+    private final ContractAccess contractAccess;
+    private final EnterpriseAccess enterpriseAccess;
 
     @Tool(name = "list_my_contracts",
             description = """
@@ -39,12 +38,7 @@ public class ContractAdvisorTools {
             return "该账号是平台运营账号，未绑定企业。";
         }
 
-        List<Contract> contracts = contractMapper.selectList(Wrappers.<Contract>lambdaQuery()
-                .and(w -> w.eq(Contract::getBuyerId, enterpriseId)
-                        .or()
-                        .eq(Contract::getSellerId, enterpriseId))
-                .orderByDesc(Contract::getId)
-                .last("limit 20"));
+        List<Contract> contracts = contractAccess.findRecentParticipantContracts(enterpriseId, 20);
 
         if (contracts.isEmpty()) {
             return "当前企业还没有合同。";
@@ -63,7 +57,7 @@ public class ContractAdvisorTools {
     }
 
     private String enterpriseName(Long id) {
-        Enterprise enterprise = enterpriseMapper.selectById(id);
+        Enterprise enterprise = enterpriseAccess.selectById(id);
         return enterprise == null ? "—" : enterprise.getName();
     }
 

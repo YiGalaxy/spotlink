@@ -1,9 +1,8 @@
 package com.spotlink.admin.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.admin.dto.AdminViews;
 import com.spotlink.identity.entity.Enterprise;
-import com.spotlink.identity.mapper.EnterpriseMapper;
+import com.spotlink.identity.service.access.EnterpriseAccess;
 import com.spotlink.shared.audit.AuditService;
 import com.spotlink.shared.exception.BusinessException;
 import com.spotlink.shared.security.SecurityUtils;
@@ -29,22 +28,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdminEnterpriseService {
 
-    private final EnterpriseMapper enterpriseMapper;
+    private final EnterpriseAccess enterpriseAccess;
     private final AuditService audit;
     private final FundService fundService;
 
     public List<AdminViews.EnterpriseRow> search(Integer status, String keyword) {
-        var query = Wrappers.<Enterprise>lambdaQuery().orderByDesc(Enterprise::getId);
-        if (status != null) {
-            query.eq(Enterprise::getStatus, status);
-        }
-        if (keyword != null && !keyword.isBlank()) {
-            // name 上的 trigram 索引就是为这个搜索框而建的。
-            query.and(w -> w.like(Enterprise::getName, keyword.trim())
-                    .or().like(Enterprise::getEnterpriseCode, keyword.trim())
-                    .or().like(Enterprise::getUnifiedSocialCreditCode, keyword.trim()));
-        }
-        return enterpriseMapper.selectList(query).stream().map(AdminEnterpriseService::toRow).toList();
+        return enterpriseAccess.searchEnterprises(status, keyword).stream().map(AdminEnterpriseService::toRow).toList();
     }
 
     /**
@@ -139,7 +128,7 @@ public class AdminEnterpriseService {
     // ------------------------------------------------------------------
 
     private Enterprise require(Long id) {
-        Enterprise enterprise = enterpriseMapper.selectById(id);
+        Enterprise enterprise = enterpriseAccess.selectById(id);
         if (enterprise == null) {
             throw BusinessException.of(ResultCode.ADMIN_ENTERPRISE_NOT_FOUND);
         }
@@ -147,7 +136,7 @@ public class AdminEnterpriseService {
     }
 
     private void update(Enterprise enterprise) {
-        if (enterpriseMapper.updateById(enterprise) == 0) {
+        if (enterpriseAccess.updateById(enterprise) == 0) {
             throw BusinessException.of(ResultCode.CONFLICT, "该企业正在被其他操作修改，请重试");
         }
     }

@@ -1,13 +1,12 @@
 package com.spotlink.advisor.tool;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.commodity.entity.CommodityCategory;
-import com.spotlink.commodity.mapper.CommodityCategoryMapper;
+import com.spotlink.commodity.service.access.CommodityCategoryAccess;
 import com.spotlink.inventory.entity.InventoryNote;
-import com.spotlink.inventory.mapper.InventoryNoteMapper;
+import com.spotlink.inventory.service.access.InventoryNoteAccess;
 import com.spotlink.shared.security.SecurityUtils;
 import com.spotlink.warehouse.entity.Warehouse;
-import com.spotlink.warehouse.mapper.WarehouseMapper;
+import com.spotlink.warehouse.service.access.WarehouseAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -35,9 +34,9 @@ public class InventoryAdvisorTools {
     /** 工具结果会作为输入 token 再次发送；要控制体积。 */
     private static final int MAX_ROWS = 30;
 
-    private final InventoryNoteMapper inventoryNoteMapper;
-    private final CommodityCategoryMapper categoryMapper;
-    private final WarehouseMapper warehouseMapper;
+    private final InventoryNoteAccess inventoryNoteAccess;
+    private final CommodityCategoryAccess categoryAccess;
+    private final WarehouseAccess warehouseAccess;
 
     @Tool(name = "query_my_inventory",
             description = """
@@ -55,19 +54,7 @@ public class InventoryAdvisorTools {
             return "该账号是平台运营账号，未绑定企业，因此没有库存单。";
         }
 
-        var query = Wrappers.<InventoryNote>lambdaQuery()
-                .eq(InventoryNote::getEnterpriseId, enterpriseId)
-                .orderByDesc(InventoryNote::getId)
-                .last("limit " + MAX_ROWS);
-
-        if (commodityKeyword != null && !commodityKeyword.isBlank()) {
-            query.like(InventoryNote::getCommodityName, commodityKeyword.trim());
-        }
-        if (Boolean.TRUE.equals(onlyFrozen)) {
-            query.gt(InventoryNote::getFrozenQuantity, BigDecimal.ZERO);
-        }
-
-        List<InventoryNote> notes = inventoryNoteMapper.selectList(query);
+        List<InventoryNote> notes = inventoryNoteAccess.searchOwned(enterpriseId, commodityKeyword, Boolean.TRUE.equals(onlyFrozen), MAX_ROWS);
         if (notes.isEmpty()) {
             return "没有符合条件的库存单。";
         }
@@ -101,13 +88,7 @@ public class InventoryAdvisorTools {
             return "该账号是平台运营账号，未绑定企业，因此没有库存。";
         }
 
-        List<InventoryNote> notes = inventoryNoteMapper.selectList(
-                Wrappers.<InventoryNote>lambdaQuery()
-                        .eq(InventoryNote::getEnterpriseId, enterpriseId)
-                        .in(InventoryNote::getStatus,
-                                InventoryNote.Status.IN_STOCK,
-                                InventoryNote.Status.PARTIALLY_FROZEN,
-                                InventoryNote.Status.FULLY_FROZEN));
+        List<InventoryNote> notes = inventoryNoteAccess.findInStockOwned(enterpriseId);
 
         if (notes.isEmpty()) {
             return "当前没有在库的库存单。";
@@ -148,7 +129,7 @@ public class InventoryAdvisorTools {
         if (ids.isEmpty()) {
             return Map.of();
         }
-        return warehouseMapper.selectBatchIds(ids).stream()
+        return warehouseAccess.selectBatchIds(ids).stream()
                 .collect(Collectors.toMap(Warehouse::getId, Warehouse::getName));
     }
 
@@ -157,7 +138,7 @@ public class InventoryAdvisorTools {
         if (ids.isEmpty()) {
             return Map.of();
         }
-        return categoryMapper.selectBatchIds(ids).stream()
+        return categoryAccess.selectBatchIds(ids).stream()
                 .collect(Collectors.toMap(CommodityCategory::getId, CommodityCategory::getName));
     }
 

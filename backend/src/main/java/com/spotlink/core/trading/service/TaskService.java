@@ -1,10 +1,9 @@
 package com.spotlink.trading.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.contract.entity.Contract;
-import com.spotlink.contract.mapper.ContractMapper;
+import com.spotlink.contract.service.access.ContractAccess;
 import com.spotlink.identity.entity.Enterprise;
-import com.spotlink.identity.mapper.EnterpriseMapper;
+import com.spotlink.identity.service.access.EnterpriseAccess;
 import com.spotlink.trading.dto.TaskView;
 import com.spotlink.trading.entity.Order;
 import com.spotlink.trading.entity.OrderStatus;
@@ -58,8 +57,8 @@ public class TaskService {
                             Comparator.nullsLast(Comparator.naturalOrder()));
 
     private final OrderService orderService;
-    private final ContractMapper contractMapper;
-    private final EnterpriseMapper enterpriseMapper;
+    private final ContractAccess contractAccess;
+    private final EnterpriseAccess enterpriseAccess;
 
     /**
      * 该企业名下所有待办，最紧急的排在前面。
@@ -179,12 +178,7 @@ public class TaskService {
     }
 
     private List<Contract> myContracts(Long enterpriseId) {
-        return contractMapper.selectList(Wrappers.<Contract>lambdaQuery()
-                .and(w -> w.eq(Contract::getBuyerId, enterpriseId)
-                        .or()
-                        .eq(Contract::getSellerId, enterpriseId))
-                .orderByDesc(Contract::getId)
-                .last("limit 50"));
+        return contractAccess.findRecentParticipantContracts(enterpriseId, 50);
     }
 
     private boolean hasSigned(Contract contract, Long enterpriseId) {
@@ -228,7 +222,7 @@ public class TaskService {
                 return "—";
             }
             return cache.computeIfAbsent(id, key -> {
-                Enterprise enterprise = enterpriseMapper.selectById(key);
+                Enterprise enterprise = enterpriseAccess.selectById(key);
                 return enterprise == null ? "—" : enterprise.getName();
             });
         }

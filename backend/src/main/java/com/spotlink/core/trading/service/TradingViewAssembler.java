@@ -2,17 +2,17 @@ package com.spotlink.trading.service;
 
 import com.spotlink.commodity.entity.CommodityCategory;
 import com.spotlink.contract.entity.Contract;
-import com.spotlink.contract.mapper.ContractMapper;
-import com.spotlink.commodity.mapper.CommodityCategoryMapper;
+import com.spotlink.contract.service.access.ContractAccess;
+import com.spotlink.commodity.service.access.CommodityCategoryAccess;
 import com.spotlink.identity.entity.Enterprise;
-import com.spotlink.identity.mapper.EnterpriseMapper;
+import com.spotlink.identity.service.access.EnterpriseAccess;
 import com.spotlink.trading.dto.ListingView;
 import com.spotlink.trading.dto.OrderView;
 import com.spotlink.trading.entity.Listing;
 import com.spotlink.trading.entity.Order;
 import com.spotlink.trading.mapper.ListingMapper;
 import com.spotlink.warehouse.entity.Warehouse;
-import com.spotlink.warehouse.mapper.WarehouseMapper;
+import com.spotlink.warehouse.service.access.WarehouseAccess;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -40,11 +40,11 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class TradingViewAssembler {
 
-    private final EnterpriseMapper enterpriseMapper;
-    private final CommodityCategoryMapper categoryMapper;
-    private final WarehouseMapper warehouseMapper;
+    private final EnterpriseAccess enterpriseAccess;
+    private final CommodityCategoryAccess categoryAccess;
+    private final WarehouseAccess warehouseAccess;
     private final ListingMapper listingMapper;
-    private final ContractMapper contractMapper;
+    private final ContractAccess contractAccess;
     private final ObjectMapper objectMapper;
 
     public List<ListingView> toListingViews(Collection<Listing> listings, Long viewerEnterpriseId) {
@@ -53,7 +53,7 @@ public class TradingViewAssembler {
         }
         Map<Long, String> enterprises = lookup(
                 listings.stream().map(Listing::getEnterpriseId),
-                ids -> enterpriseMapper.selectBatchIds(ids).stream()
+                ids -> enterpriseAccess.selectBatchIds(ids).stream()
                         .collect(Collectors.toMap(Enterprise::getId, Enterprise::getName)));
         Map<Long, String> categories = categories(listings.stream().map(Listing::getCategoryId));
         Map<Long, String> warehouses = warehouses(listings.stream().map(Listing::getWarehouseId));
@@ -78,7 +78,7 @@ public class TradingViewAssembler {
             partyIds.add(order.getSellerId());
         });
         Map<Long, String> enterprises = lookup(partyIds.stream(),
-                ids -> enterpriseMapper.selectBatchIds(ids).stream()
+                ids -> enterpriseAccess.selectBatchIds(ids).stream()
                         .collect(Collectors.toMap(Enterprise::getId, Enterprise::getName)));
         Map<Long, String> categories = categories(orders.stream().map(Order::getCategoryId));
         Map<Long, String> warehouses = warehouses(orders.stream().map(Order::getWarehouseId));
@@ -135,7 +135,7 @@ public class TradingViewAssembler {
         if (distinct.isEmpty()) {
             return Map.of();
         }
-        return contractMapper.selectBatchIds(distinct).stream()
+        return contractAccess.selectBatchIds(distinct).stream()
                 .collect(Collectors.toMap(Contract::getId, contract -> contract));
     }
 
@@ -166,12 +166,12 @@ public class TradingViewAssembler {
     }
 
     private Map<Long, String> categories(Stream<Long> ids) {
-        return lookup(ids, batch -> categoryMapper.selectBatchIds(batch).stream()
+        return lookup(ids, batch -> categoryAccess.selectBatchIds(batch).stream()
                 .collect(Collectors.toMap(CommodityCategory::getId, CommodityCategory::getName)));
     }
 
     private Map<Long, String> warehouses(Stream<Long> ids) {
-        return lookup(ids, batch -> warehouseMapper.selectBatchIds(batch).stream()
+        return lookup(ids, batch -> warehouseAccess.selectBatchIds(batch).stream()
                 .collect(Collectors.toMap(Warehouse::getId, Warehouse::getName)));
     }
 

@@ -1,11 +1,11 @@
 package com.spotlink.inventory.service;
 
 import com.spotlink.commodity.entity.CommodityCategory;
-import com.spotlink.commodity.mapper.CommodityCategoryMapper;
+import com.spotlink.commodity.service.access.CommodityCategoryAccess;
 import com.spotlink.inventory.dto.InventoryNoteView;
 import com.spotlink.inventory.entity.InventoryNote;
 import com.spotlink.warehouse.entity.Warehouse;
-import com.spotlink.warehouse.mapper.WarehouseMapper;
+import com.spotlink.warehouse.service.access.WarehouseAccess;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -31,8 +31,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class InventoryViewAssembler {
 
-    private final CommodityCategoryMapper categoryMapper;
-    private final WarehouseMapper warehouseMapper;
+    private final CommodityCategoryAccess categoryAccess;
+    private final WarehouseAccess warehouseAccess;
     private final ObjectMapper objectMapper;
 
     public InventoryNoteView toView(InventoryNote note) {
@@ -46,12 +46,12 @@ public class InventoryViewAssembler {
 
         Map<Long, String> categoryNames = lookup(
                 notes.stream().map(InventoryNote::getCategoryId).collect(Collectors.toSet()),
-                ids -> categoryMapper.selectBatchIds(ids).stream()
+                ids -> categoryAccess.selectBatchIds(ids).stream()
                         .collect(Collectors.toMap(CommodityCategory::getId, CommodityCategory::getName)));
 
         Map<Long, String> warehouseNames = lookup(
                 notes.stream().map(InventoryNote::getWarehouseId).collect(Collectors.toSet()),
-                ids -> warehouseMapper.selectBatchIds(ids).stream()
+                ids -> warehouseAccess.selectBatchIds(ids).stream()
                         .collect(Collectors.toMap(Warehouse::getId, Warehouse::getName)));
 
         return notes.stream()

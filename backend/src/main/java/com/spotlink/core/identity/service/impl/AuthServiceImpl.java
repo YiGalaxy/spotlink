@@ -1,6 +1,5 @@
 package com.spotlink.identity.service.impl;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.identity.dto.LoginRequest;
 import com.spotlink.identity.dto.LoginResponse;
 import com.spotlink.identity.entity.Enterprise;
@@ -44,8 +43,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse login(LoginRequest request, String clientIp) {
-        User user = userMapper.selectOne(Wrappers.<User>lambdaQuery()
-                .eq(User::getUsername, request.username()));
+        User user = userMapper.findByUsername(request.username());
 
         // 「没有这个用户」和「密码错误」刻意返回同一个错误码。区分开的提示会让攻击者能够
         // 枚举出有效用户名，而在一个交易平台上，一份用户名清单就是一份客户清单。

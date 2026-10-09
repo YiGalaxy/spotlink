@@ -1,6 +1,5 @@
 package com.spotlink.identity.service.impl;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.identity.entity.Permission;
 import com.spotlink.identity.entity.Role;
 import com.spotlink.identity.entity.RolePermission;
@@ -140,8 +139,7 @@ public class UserAuthorityServiceImpl implements UserAuthorityProvider {
 
     @Override
     public Set<String> rolesOf(Long userId) {
-        List<UserRole> grants = userRoleMapper.selectList(
-                Wrappers.<UserRole>lambdaQuery().eq(UserRole::getUserId, userId));
+        List<UserRole> grants = userRoleMapper.findByUserId(userId);
         if (grants.isEmpty()) {
             return Set.of();
         }
@@ -164,8 +162,7 @@ public class UserAuthorityServiceImpl implements UserAuthorityProvider {
      * 而这正是 MyBatis 不用手写语句就能表达的形态。它只在缓存未命中时执行。
      */
     private Set<String> permissionsOf(Long userId) {
-        List<UserRole> grants = userRoleMapper.selectList(
-                Wrappers.<UserRole>lambdaQuery().eq(UserRole::getUserId, userId));
+        List<UserRole> grants = userRoleMapper.findByUserId(userId);
         if (grants.isEmpty()) {
             return Set.of();
         }
@@ -179,8 +176,7 @@ public class UserAuthorityServiceImpl implements UserAuthorityProvider {
         }
 
         Set<Long> permissionIds = new LinkedHashSet<>();
-        rolePermissionMapper.selectList(Wrappers.<RolePermission>lambdaQuery()
-                        .in(RolePermission::getRoleId, roleIds))
+        rolePermissionMapper.findByRoleIds(roleIds)
                 .forEach(grant -> permissionIds.add(grant.getPermissionId()));
         if (permissionIds.isEmpty()) {
             return Set.of();

@@ -1,10 +1,9 @@
 package com.spotlink.advisor.tool;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.identity.entity.Enterprise;
 import com.spotlink.identity.entity.User;
-import com.spotlink.identity.mapper.EnterpriseMapper;
-import com.spotlink.identity.mapper.UserMapper;
+import com.spotlink.identity.service.access.EnterpriseAccess;
+import com.spotlink.identity.service.access.UserAccess;
 import com.spotlink.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
@@ -34,8 +33,8 @@ public class AdvisorTools {
     /** 工具结果会作为输入 token 再次发送；要控制体积。 */
     private static final int MAX_MEMBERS = 50;
 
-    private final EnterpriseMapper enterpriseMapper;
-    private final UserMapper userMapper;
+    private final EnterpriseAccess enterpriseAccess;
+    private final UserAccess userAccess;
 
     @Tool(name = "query_my_enterprise",
             description = """
@@ -48,7 +47,7 @@ public class AdvisorTools {
             return "该账号是平台运营账号，未绑定企业。";
         }
 
-        Enterprise enterprise = enterpriseMapper.selectById(enterpriseId);
+        Enterprise enterprise = enterpriseAccess.selectById(enterpriseId);
         if (enterprise == null) {
             return "未找到企业记录。";
         }
@@ -90,15 +89,7 @@ public class AdvisorTools {
 
         boolean withDisabled = Boolean.TRUE.equals(includeDisabled);
 
-        var query = Wrappers.<User>lambdaQuery()
-                .eq(User::getEnterpriseId, enterpriseId)
-                .orderByAsc(User::getId)
-                .last("limit " + MAX_MEMBERS);
-        if (!withDisabled) {
-            query.eq(User::getStatus, User.Status.ACTIVE);
-        }
-
-        List<User> members = userMapper.selectList(query);
+        List<User> members = userAccess.findEnterpriseMembers(enterpriseId, withDisabled, MAX_MEMBERS);
         if (members.isEmpty()) {
             return "当前企业没有符合条件的账号。";
         }

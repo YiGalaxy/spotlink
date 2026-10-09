@@ -1,14 +1,13 @@
 package com.spotlink.admin.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.admin.dto.AdminViews;
 import com.spotlink.identity.entity.Enterprise;
-import com.spotlink.identity.mapper.EnterpriseMapper;
+import com.spotlink.identity.service.access.EnterpriseAccess;
 import com.spotlink.trading.entity.Order;
 import com.spotlink.trading.entity.OrderStatus;
-import com.spotlink.trading.mapper.OrderMapper;
+import com.spotlink.trading.service.access.OrderAccess;
 import com.spotlink.warehouse.entity.Warehouse;
-import com.spotlink.warehouse.mapper.WarehouseMapper;
+import com.spotlink.warehouse.service.access.WarehouseAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -39,9 +38,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminOrderService {
 
-    private final OrderMapper orderMapper;
-    private final EnterpriseMapper enterpriseMapper;
-    private final WarehouseMapper warehouseMapper;
+    private final OrderAccess orderAccess;
+    private final EnterpriseAccess enterpriseAccess;
+    private final WarehouseAccess warehouseAccess;
 
     /**
      * @param enterpriseId 传入时，把结果限定为该企业作为买方或卖方参与的订单；
@@ -49,19 +48,7 @@ public class AdminOrderService {
      */
     public List<AdminViews.OrderRow> search(Long enterpriseId, String status,
                                             String orderNo, int limit) {
-        var query = Wrappers.<Order>lambdaQuery().orderByDesc(Order::getId).last("limit " + clamp(limit));
-        if (enterpriseId != null) {
-            query.and(w -> w.eq(Order::getBuyerId, enterpriseId)
-                    .or().eq(Order::getSellerId, enterpriseId));
-        }
-        if (status != null && !status.isBlank()) {
-            query.eq(Order::getStatus, status.trim().toUpperCase());
-        }
-        if (orderNo != null && !orderNo.isBlank()) {
-            query.like(Order::getOrderNo, orderNo.trim());
-        }
-
-        List<Order> orders = orderMapper.selectList(query);
+        List<Order> orders = orderAccess.searchPlatformOrders(enterpriseId, status, orderNo, clamp(limit));
         if (orders.isEmpty()) {
             return List.of();
         }
@@ -73,11 +60,11 @@ public class AdminOrderService {
             partyIds.add(order.getSellerId());
             warehouseIds.add(order.getWarehouseId());
         }
-        Map<Long, String> enterprises = names(enterpriseMapper.selectBatchIds(partyIds),
+        Map<Long, String> enterprises = names(enterpriseAccess.selectBatchIds(partyIds),
                 Enterprise::getId, Enterprise::getName);
         Map<Long, String> warehouses = names(
                 warehouseIds.stream().filter(java.util.Objects::nonNull).collect(Collectors.toSet()).isEmpty()
-                        ? List.of() : warehouseMapper.selectBatchIds(warehouseIds),
+                        ? List.of() : warehouseAccess.selectBatchIds(warehouseIds),
                 Warehouse::getId, Warehouse::getName);
 
         return orders.stream()
@@ -104,9 +91,7 @@ public class AdminOrderService {
     /** 每一家在订单中出现过的企业，供筛选下拉框使用。 */
     public List<AdminViews.EnterpriseRow> orderParties() {
         Set<Long> ids = new HashSet<>();
-        orderMapper.selectList(Wrappers.<Order>lambdaQuery()
-                        .select(Order::getBuyerId, Order::getSellerId)
-                        .last("limit 2000"))
+        orderAccess.findPartyReferences()
                 .forEach(order -> {
                     ids.add(order.getBuyerId());
                     ids.add(order.getSellerId());
@@ -114,7 +99,7 @@ public class AdminOrderService {
         if (ids.isEmpty()) {
             return List.of();
         }
-        return enterpriseMapper.selectBatchIds(ids).stream()
+        return enterpriseAccess.selectBatchIds(ids).stream()
                 .map(AdminEnterpriseService::toRow)
                 .toList();
     }

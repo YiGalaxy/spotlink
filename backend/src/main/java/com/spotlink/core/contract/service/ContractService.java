@@ -1,6 +1,5 @@
 package com.spotlink.contract.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.contract.entity.Contract;
 import com.spotlink.contract.mapper.ContractMapper;
 import com.spotlink.trading.event.TaskChangedEvent;
@@ -10,8 +9,8 @@ import com.spotlink.shared.web.ResultCode;
 import com.spotlink.trading.entity.Order;
 import com.spotlink.trading.entity.OrderStatus;
 import com.spotlink.trading.entity.OrderStatusLog;
-import com.spotlink.trading.mapper.OrderMapper;
-import com.spotlink.trading.mapper.OrderStatusLogMapper;
+import com.spotlink.trading.service.access.OrderAccess;
+import com.spotlink.trading.service.access.OrderStatusLogAccess;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,8 +45,8 @@ public class ContractService {
     private static final String DEFAULT_WEIGHT_TOLERANCE = "3.00";
 
     private final ContractMapper contractMapper;
-    private final OrderMapper orderMapper;
-    private final OrderStatusLogMapper statusLogMapper;
+    private final OrderAccess orderAccess;
+    private final OrderStatusLogAccess statusLogAccess;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -67,8 +66,7 @@ public class ContractService {
                             .formatted(OrderStatus.text(order.getStatus())));
         }
 
-        Contract existing = contractMapper.selectOne(Wrappers.<Contract>lambdaQuery()
-                .eq(Contract::getOrderId, orderId));
+        Contract existing = contractMapper.findByOrderId(orderId);
         if (existing != null) {
             return existing;
         }
@@ -95,7 +93,7 @@ public class ContractService {
         contractMapper.insert(contract);
 
         order.setContractId(contract.getId());
-        orderMapper.updateById(order);
+        orderAccess.updateById(order);
 
         log.info("Contract {} drafted for order {}", contract.getContractNo(), order.getOrderNo());
         // 双方都要通知：一方现在有合同要签，另一方有合同要看。
@@ -158,8 +156,7 @@ public class ContractService {
     }
 
     public Contract getByOrder(Long orderId, Long enterpriseId) {
-        Contract contract = contractMapper.selectOne(Wrappers.<Contract>lambdaQuery()
-                .eq(Contract::getOrderId, orderId));
+        Contract contract = contractMapper.findByOrderId(orderId);
         if (contract == null || !contract.involves(enterpriseId)) {
             throw BusinessException.of(ResultCode.CONTRACT_NOT_FOUND);
         }
@@ -167,11 +164,7 @@ public class ContractService {
     }
 
     public List<Contract> listMine(Long enterpriseId) {
-        return contractMapper.selectList(Wrappers.<Contract>lambdaQuery()
-                .and(w -> w.eq(Contract::getBuyerId, enterpriseId)
-                        .or()
-                        .eq(Contract::getSellerId, enterpriseId))
-                .orderByDesc(Contract::getId));
+        return contractMapper.findParticipantContracts(enterpriseId);
     }
 
     // ------------------------------------------------------------------
@@ -183,7 +176,7 @@ public class ContractService {
      * 只有一个定义。
      */
     private void advanceOrder(Contract contract, LoginUser user) {
-        Order order = orderMapper.selectById(contract.getOrderId());
+        Order order = orderAccess.selectById(contract.getOrderId());
         if (order == null) {
             throw BusinessException.of(ResultCode.ORDER_NOT_FOUND);
         }
@@ -195,10 +188,10 @@ public class ContractService {
 
         String from = order.getStatus();
         order.setStatus(OrderStatus.CONTRACTED);
-        if (orderMapper.updateById(order) == 0) {
+        if (orderAccess.updateById(order) == 0) {
             throw BusinessException.of(ResultCode.CONFLICT, "订单正在被其他操作修改，请重试");
         }
-        statusLogMapper.insert(OrderStatusLog.of(
+        statusLogAccess.insert(OrderStatusLog.of(
                 order.getId(), from, OrderStatus.CONTRACTED,
                 user.getUserId(), user.getUsername(), "合同签署生效"));
     }
@@ -251,7 +244,7 @@ public class ContractService {
     }
 
     private Order loadOrder(Long orderId, Long enterpriseId) {
-        Order order = orderMapper.selectById(orderId);
+        Order order = orderAccess.selectById(orderId);
         if (order == null || !order.involves(enterpriseId)) {
             throw BusinessException.of(ResultCode.ORDER_NOT_FOUND);
         }

@@ -1,10 +1,9 @@
 package com.spotlink.trading.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.commodity.entity.CommodityCategory;
-import com.spotlink.commodity.mapper.CommodityCategoryMapper;
+import com.spotlink.commodity.service.access.CommodityCategoryAccess;
 import com.spotlink.inventory.entity.InventoryNote;
-import com.spotlink.inventory.mapper.InventoryNoteMapper;
+import com.spotlink.inventory.service.access.InventoryNoteAccess;
 import com.spotlink.settlement.entity.FreezeRecord;
 import com.spotlink.settlement.service.FreezeService;
 import com.spotlink.shared.exception.BusinessException;
@@ -17,7 +16,7 @@ import com.spotlink.trading.entity.OrderStatus;
 import com.spotlink.trading.mapper.ListingMapper;
 import com.spotlink.trading.mapper.OrderMapper;
 import com.spotlink.warehouse.entity.Warehouse;
-import com.spotlink.warehouse.mapper.WarehouseMapper;
+import com.spotlink.warehouse.service.access.WarehouseAccess;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,9 +47,9 @@ public class ListingService {
 
     private final ListingMapper listingMapper;
     private final OrderMapper orderMapper;
-    private final InventoryNoteMapper inventoryNoteMapper;
-    private final CommodityCategoryMapper categoryMapper;
-    private final WarehouseMapper warehouseMapper;
+    private final InventoryNoteAccess inventoryNoteAccess;
+    private final CommodityCategoryAccess categoryAccess;
+    private final WarehouseAccess warehouseAccess;
     private final FreezeService freezeService;
     private final ObjectMapper objectMapper;
 
@@ -75,7 +74,7 @@ public class ListingService {
         String priceType = normalisePriceType(request);
         String confirmMode = normaliseConfirmMode(request);
 
-        CommodityCategory category = categoryMapper.selectById(request.categoryId());
+        CommodityCategory category = categoryAccess.selectById(request.categoryId());
         if (category == null) {
             throw BusinessException.of(ResultCode.CATEGORY_NOT_FOUND);
         }
@@ -181,10 +180,7 @@ public class ListingService {
      */
     @Transactional
     public int expireOverdue() {
-        List<Listing> overdue = listingMapper.selectList(
-                Wrappers.<Listing>lambdaQuery()
-                        .in(Listing::getStatus, Listing.Status.OPEN, Listing.Status.PARTIALLY_FILLED)
-                        .lt(Listing::getValidUntil, OffsetDateTime.now()));
+        List<Listing> overdue = listingMapper.findExpiredOpen(OffsetDateTime.now());
 
         int expired = 0;
         for (Listing listing : overdue) {
@@ -204,26 +200,11 @@ public class ListingService {
 
     /** 行情大厅：来自所有企业的开放中挂牌，不含调用方自己的。 */
     public List<Listing> browse(Long categoryId, String side, String keyword) {
-        var query = Wrappers.<Listing>lambdaQuery()
-                .in(Listing::getStatus, Listing.Status.OPEN, Listing.Status.PARTIALLY_FILLED)
-                .gt(Listing::getRemainingQuantity, BigDecimal.ZERO)
-                .orderByDesc(Listing::getId);
-        if (categoryId != null) {
-            query.eq(Listing::getCategoryId, categoryId);
-        }
-        if (side != null && !side.isBlank()) {
-            query.eq(Listing::getSide, side);
-        }
-        if (keyword != null && !keyword.isBlank()) {
-            query.like(Listing::getCommodityName, keyword.trim());
-        }
-        return listingMapper.selectList(query);
+        return listingMapper.browseOpen(categoryId, side, keyword);
     }
 
     public List<Listing> listMine(Long enterpriseId) {
-        return listingMapper.selectList(Wrappers.<Listing>lambdaQuery()
-                .eq(Listing::getEnterpriseId, enterpriseId)
-                .orderByDesc(Listing::getId));
+        return listingMapper.findOwned(enterpriseId);
     }
 
     public Listing get(Long id, Long enterpriseId) {
@@ -251,7 +232,7 @@ public class ListingService {
             throw BusinessException.of(ResultCode.BAD_REQUEST, "卖方挂牌必须指定电子库存单");
         }
 
-        InventoryNote note = inventoryNoteMapper.selectById(request.inventoryNoteId());
+        InventoryNote note = inventoryNoteAccess.selectById(request.inventoryNoteId());
         if (note == null || !note.getEnterpriseId().equals(enterpriseId)) {
             throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_FOUND);
         }
@@ -302,9 +283,7 @@ public class ListingService {
      * 一笔永远无人能答复的订单之间的东西。
      */
     private long countAwaitingAcceptance(Long listingId) {
-        return orderMapper.selectCount(Wrappers.<Order>lambdaQuery()
-                .eq(Order::getListingId, listingId)
-                .eq(Order::getStatus, OrderStatus.PENDING_CONFIRM));
+        return orderMapper.countPendingConfirmations(listingId);
     }
 
     /**

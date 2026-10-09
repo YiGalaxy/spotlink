@@ -4,8 +4,8 @@ import com.spotlink.shared.security.SecurityUtils;
 import com.spotlink.trading.entity.Listing;
 import com.spotlink.trading.service.ListingService;
 import com.spotlink.warehouse.entity.Warehouse;
-import com.spotlink.warehouse.mapper.WarehouseMapper;
-import com.spotlink.trading.mapper.ListingMapper;
+import com.spotlink.warehouse.service.access.WarehouseAccess;
+import com.spotlink.trading.service.access.ListingAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -42,8 +42,8 @@ public class ListingAdvisorTools {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final ListingService listingService;
-    private final WarehouseMapper warehouseMapper;
-    private final ListingMapper listingMapper;
+    private final WarehouseAccess warehouseAccess;
+    private final ListingAccess listingAccess;
     private final ProcurementAdvisorTools procurement;
 
     @Tool(name = "list_my_listings",
@@ -120,11 +120,10 @@ public class ListingAdvisorTools {
         }
 
         if (keyword != null && keyword.length() > 80) return "商品名称关键字不能超过80个字符。";
-        var query = ProcurementAdvisorTools.publicQuery();
-        if (wantedSide != null) query.eq(Listing::getSide, wantedSide);
-        if (keyword != null && !keyword.isBlank()) query.like(Listing::getCommodityName, keyword.trim());
-        long total = listingMapper.selectCount(query);
-        List<Listing> listings = listingMapper.selectList(query.orderByDesc(Listing::getId).last("LIMIT " + ToolCallRecorder.rowLimit()));
+        var criteria = new com.spotlink.trading.dto.PublicListingCriteria(keyword, wantedSide,
+                null, null, null, null, null, java.time.OffsetDateTime.now());
+        long total = listingAccess.countPublic(criteria);
+        List<Listing> listings = listingAccess.searchPublic(criteria, "LATEST", ToolCallRecorder.rowLimit());
         if (listings.isEmpty()) {
             return keyword == null || keyword.isBlank()
                     ? "当前市场上没有在挂的挂牌。"
@@ -149,16 +148,14 @@ public class ListingAdvisorTools {
             return "请提供挂牌编号或商品名称，才能查询起运仓。";
         }
         if (listingNoOrKeyword.length() > 80 || (destination != null && destination.length() > 80)) return "挂牌或目的地关键字过长。";
-        List<Listing> candidates = listingMapper.selectList(ProcurementAdvisorTools.publicQuery().eq(Listing::getSide, Listing.Side.SELL)
-                .eq(Listing::getListingNo, listingNoOrKeyword.trim()).last("LIMIT 1"));
-        if (candidates.isEmpty()) candidates = listingMapper.selectList(ProcurementAdvisorTools.publicQuery().eq(Listing::getSide, Listing.Side.SELL)
-                .like(Listing::getCommodityName, listingNoOrKeyword.trim()).orderByDesc(Listing::getId).last("LIMIT 2"));
+        List<Listing> candidates = listingAccess.findPublicByNumber(listingNoOrKeyword.trim(), Listing.Side.SELL, java.time.OffsetDateTime.now());
+        if (candidates.isEmpty()) candidates = listingAccess.findPublicByKeyword(listingNoOrKeyword.trim(), Listing.Side.SELL, java.time.OffsetDateTime.now(), 2);
         if (candidates.size() > 1) return "找到多个挂牌，起运仓或交付方式可能不同。请指定挂牌编号后估算，不能随意选第一条。";
         Listing listing = candidates.isEmpty() ? null : candidates.get(0);
         if (listing == null) {
             return "没有找到匹配的在挂卖方挂牌，无法估算运费。";
         }
-        Warehouse warehouse = listing.getWarehouseId() == null ? null : warehouseMapper.selectById(listing.getWarehouseId());
+        Warehouse warehouse = listing.getWarehouseId() == null ? null : warehouseAccess.selectById(listing.getWarehouseId());
         String origin = warehouse == null ? "—" : warehouseLocation(warehouse);
         String delivery = deliveryText(listing);
         StringBuilder sb = new StringBuilder("挂牌 ").append(listing.getListingNo())

@@ -1,10 +1,8 @@
 package com.spotlink.warehouse.controller;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.shared.web.ApiResponse;
 import com.spotlink.warehouse.dto.WarehouseView;
-import com.spotlink.warehouse.entity.Warehouse;
-import com.spotlink.warehouse.mapper.WarehouseMapper;
+import com.spotlink.warehouse.service.WarehouseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -20,15 +18,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WarehouseController {
 
-    private final WarehouseMapper warehouseMapper;
+    private final WarehouseService warehouseService;
 
     @Operation(summary = "可用仓库列表")
     @GetMapping
     public ApiResponse<List<WarehouseView>> list() {
-        List<Warehouse> warehouses = warehouseMapper.selectList(
-                Wrappers.<Warehouse>lambdaQuery()
-                        .eq(Warehouse::getStatus, 1)
-                        .orderByAsc(Warehouse::getCode));
-        return ApiResponse.success(warehouses.stream().map(WarehouseView::of).toList());
+        return ApiResponse.success(warehouseService.listActive());
     }
 }

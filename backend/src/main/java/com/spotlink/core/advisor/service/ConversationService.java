@@ -1,6 +1,5 @@
 package com.spotlink.advisor.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.advisor.agent.AdvisorAgent;
 import com.spotlink.advisor.agent.AgentResult;
 import com.spotlink.advisor.agent.ConversationTurn;
@@ -57,15 +56,8 @@ public class ConversationService {
     // ------------------------------------------------------------------
 
     public List<ConversationSummary> listMine(Long userId) {
-        var query = Wrappers.<Conversation>lambdaQuery().eq(Conversation::getUserId, userId);
         var current = com.spotlink.shared.security.SecurityUtils.currentUserOrNull();
-        if (current != null) {
-            if (current.getEnterpriseId() == null) query.isNull(Conversation::getEnterpriseId);
-            else query.eq(Conversation::getEnterpriseId, current.getEnterpriseId());
-        }
-        return conversationMapper.selectList(query
-                        .orderByDesc(Conversation::getLastMessageAt)
-                        .orderByDesc(Conversation::getId))
+        return conversationMapper.findOwned(userId, current == null ? null : current.getEnterpriseId(), current != null)
                 .stream()
                 .map(row -> new ConversationSummary(
                         row.getId(), row.getTitle(),
@@ -90,10 +82,7 @@ public class ConversationService {
 
     public ConversationDetail get(Long conversationId, Long userId) {
         Conversation conversation = requireOwned(conversationId, userId);
-        List<MessageView> messages = messageMapper.selectList(
-                        Wrappers.<AdvisorMessage>lambdaQuery()
-                                .eq(AdvisorMessage::getConversationId, conversationId)
-                                .orderByAsc(AdvisorMessage::getId))
+        List<MessageView> messages = messageMapper.findConversationMessages(conversationId)
                 .stream()
                 .map(entity -> MessageView.from(entity, objectMapper))
                 .toList();
@@ -152,11 +141,7 @@ public class ConversationService {
      * 而不是最早的消息。
      */
     public List<ConversationTurn> loadHistory(Long conversationId) {
-        List<AdvisorMessage> recent = messageMapper.selectList(
-                Wrappers.<AdvisorMessage>lambdaQuery()
-                        .eq(AdvisorMessage::getConversationId, conversationId)
-                        .orderByDesc(AdvisorMessage::getId)
-                        .last("limit " + MAX_HISTORY_MESSAGES));
+        List<AdvisorMessage> recent = messageMapper.findRecentMessages(conversationId, MAX_HISTORY_MESSAGES);
         Collections.reverse(recent);
 
         List<ConversationTurn> turns = new ArrayList<>(recent.size());
@@ -237,15 +222,8 @@ public class ConversationService {
         boolean isFirstTurn = conversation.getMessageCount() == null
                 || conversation.getMessageCount() == 0;
 
-        var update = Wrappers.<Conversation>lambdaUpdate()
-                .eq(Conversation::getId, conversation.getId())
-                .setSql("message_count = message_count + 2")
-                .set(Conversation::getLastMessageAt, OffsetDateTime.now());
-
-        if (isFirstTurn) {
-            update.set(Conversation::getTitle, deriveTitle(firstQuestion));
-        }
-        conversationMapper.update(null, update);
+        conversationMapper.recordCompletedTurn(conversation.getId(), OffsetDateTime.now(),
+                isFirstTurn ? deriveTitle(firstQuestion) : null);
     }
 
     private String deriveTitle(String question) {

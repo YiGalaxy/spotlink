@@ -1,7 +1,7 @@
 package com.spotlink.settlement.service;
 
 import com.spotlink.inventory.entity.InventoryNote;
-import com.spotlink.inventory.mapper.InventoryNoteMapper;
+import com.spotlink.inventory.service.access.InventoryNoteAccess;
 import com.spotlink.settlement.entity.FreezeRecord;
 import com.spotlink.settlement.mapper.FreezeRecordMapper;
 import com.spotlink.shared.exception.BusinessException;
@@ -37,7 +37,7 @@ public class FreezeService {
     private static final DateTimeFormatter NO_FORMAT =
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
-    private final InventoryNoteMapper inventoryNoteMapper;
+    private final InventoryNoteAccess inventoryNoteAccess;
     private final FreezeRecordMapper freezeRecordMapper;
 
     /**
@@ -113,7 +113,7 @@ public class FreezeService {
     public void releaseInventory(Long enterpriseId, Long freezeId) {
         FreezeRecord record = loadFrozen(enterpriseId, freezeId);
 
-        InventoryNote note = inventoryNoteMapper.selectById(record.getEntityId());
+        InventoryNote note = inventoryNoteAccess.selectById(record.getEntityId());
         if (note == null) {
             throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_FOUND);
         }
@@ -135,7 +135,7 @@ public class FreezeService {
     public void consumeInventory(Long enterpriseId, Long freezeId) {
         FreezeRecord record = loadFrozen(enterpriseId, freezeId);
 
-        InventoryNote note = inventoryNoteMapper.selectById(record.getEntityId());
+        InventoryNote note = inventoryNoteAccess.selectById(record.getEntityId());
         if (note == null) {
             throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_FOUND);
         }
@@ -147,7 +147,7 @@ public class FreezeService {
         // 一点都不剩的库存单是已交付，而不仅仅是被全部冻结。
         if (note.getTotalQuantity().signum() == 0) {
             note.setStatus(InventoryNote.Status.DELIVERED);
-            if (inventoryNoteMapper.updateById(note) == 0) {
+            if (inventoryNoteAccess.updateById(note) == 0) {
                 throw concurrentModification();
             }
         }
@@ -194,7 +194,7 @@ public class FreezeService {
                             quantity.stripTrailingZeros().toPlainString()));
         }
 
-        InventoryNote note = inventoryNoteMapper.selectById(record.getEntityId());
+        InventoryNote note = inventoryNoteAccess.selectById(record.getEntityId());
         if (note == null) {
             throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_FOUND);
         }
@@ -224,7 +224,7 @@ public class FreezeService {
 
         if (note.getTotalQuantity().signum() == 0) {
             note.setStatus(InventoryNote.Status.DELIVERED);
-            if (inventoryNoteMapper.updateById(note) == 0) {
+            if (inventoryNoteAccess.updateById(note) == 0) {
                 throw concurrentModification();
             }
         }
@@ -270,7 +270,7 @@ public class FreezeService {
         note.setFrozenQuantity(note.getFrozenQuantity().add(frozenDelta));
         note.setStatus(deriveStatus(note));
 
-        if (inventoryNoteMapper.updateById(note) == 0) {
+        if (inventoryNoteAccess.updateById(note) == 0) {
             throw concurrentModification();
         }
     }
@@ -292,7 +292,7 @@ public class FreezeService {
      * 确实存在。
      */
     private InventoryNote loadOwnedNote(Long enterpriseId, Long noteId) {
-        InventoryNote note = inventoryNoteMapper.selectById(noteId);
+        InventoryNote note = inventoryNoteAccess.selectById(noteId);
         if (note == null || !note.getEnterpriseId().equals(enterpriseId)) {
             throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_FOUND);
         }

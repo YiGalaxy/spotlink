@@ -1,6 +1,5 @@
 package com.spotlink.commodity.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.commodity.dto.CategoryNode;
 import com.spotlink.commodity.entity.CommodityCategory;
 import com.spotlink.commodity.mapper.CommodityCategoryMapper;
@@ -28,11 +27,7 @@ public class CategoryService {
      * 因为前端是直接照着渲染的。
      */
     public List<CategoryNode> tree() {
-        List<CommodityCategory> all = categoryMapper.selectList(
-                Wrappers.<CommodityCategory>lambdaQuery()
-                        .eq(CommodityCategory::getStatus, 1)
-                        .orderByAsc(CommodityCategory::getSortOrder)
-                        .orderByAsc(CommodityCategory::getId));
+        List<CommodityCategory> all = categoryMapper.findActiveOrdered();
 
         Map<Long, List<CommodityCategory>> byParent = new LinkedHashMap<>();
         for (CommodityCategory category : all) {

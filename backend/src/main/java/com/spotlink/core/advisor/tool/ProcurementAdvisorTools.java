@@ -1,15 +1,13 @@
 package com.spotlink.advisor.tool;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spotlink.advisor.dto.AdvisorProductReference;
 import com.spotlink.identity.entity.Enterprise;
-import com.spotlink.identity.mapper.EnterpriseMapper;
+import com.spotlink.identity.service.access.EnterpriseAccess;
 import com.spotlink.trading.entity.Listing;
-import com.spotlink.trading.mapper.ListingMapper;
+import com.spotlink.trading.service.access.ListingAccess;
 import com.spotlink.warehouse.entity.Warehouse;
-import com.spotlink.warehouse.mapper.WarehouseMapper;
+import com.spotlink.warehouse.service.access.WarehouseAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -25,15 +23,15 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class ProcurementAdvisorTools {
-    private final ListingMapper listings;
-    private final WarehouseMapper warehouses;
-    private final EnterpriseMapper enterprises;
+    private final ListingAccess listings;
+    private final WarehouseAccess warehouses;
+    private final EnterpriseAccess enterprises;
     private final ObjectMapper json;
 
     @Tool(name = "get_listing_details", description = "按挂牌编号查询有效公开挂牌详情：规格、品牌产地、单价、余量、卖家、仓库、交付、付款条款、有效期和查看入口。用于对指定挂牌追问，不读取撤牌或过期的私有记录。")
     public String getListingDetails(@ToolParam(description = "挂牌编号，如LS开头的完整编号，不是页面URL里的数字ID") String listingNo) {
         if (listingNo == null || listingNo.isBlank() || listingNo.length() > 80) return "请提供有效的完整挂牌编号。";
-        List<Listing> found = listings.selectList(publicQuery().eq(Listing::getListingNo, listingNo.trim()).last("LIMIT 1"));
+        List<Listing> found = listings.findPublicByNumber(listingNo.trim(), null, OffsetDateTime.now());
         return render(found, found.size(), "指定有效公开挂牌详情");
     }
 
@@ -54,29 +52,15 @@ public class ProcurementAdvisorTools {
         String sort = normal(sortBy);
         if (sort == null) sort = "PRICE_ASC";
         if (!Set.of("PRICE_ASC", "QUANTITY_DESC", "LATEST").contains(sort)) return "排序方式只能为价格升序、余量降序或最新。";
-        LambdaQueryWrapper<Listing> query = publicQuery().eq(Listing::getSide, Listing.Side.SELL);
-        if (keyword != null && !keyword.isBlank()) query.apply("commodity_name LIKE {0} ESCAPE '!'", like(keyword));
+        List<Long> warehouseIds = null;
         if (location != null && !location.isBlank()) {
-            List<Long> ids = warehouses.selectList(Wrappers.<Warehouse>lambdaQuery()
-                    .and(q -> q.apply("province LIKE {0} ESCAPE '!'", like(location))
-                            .or().apply("city LIKE {0} ESCAPE '!'", like(location))
-                            .or().apply("name LIKE {0} ESCAPE '!'", like(location)))
-                    .last("LIMIT 500")).stream().map(Warehouse::getId).toList();
-            if (ids.isEmpty()) return "没有查到该省市或仓库的在售货物。";
-            query.in(Listing::getWarehouseId, ids);
+            warehouseIds = warehouses.findIdsByLocation(location);
+            if (warehouseIds.isEmpty()) return "没有查到该省市或仓库的在售货物。";
         }
-        if (unit != null && !unit.isBlank()) query.eq(Listing::getUnit, unit.trim());
-        if (minQuantity != null) query.ge(Listing::getRemainingQuantity, minQuantity);
-        if (maxPrice != null) query.le(Listing::getPrice, maxPrice);
-        if (delivery != null) query.eq(Listing::getDeliveryMethod, delivery);
-        long total = listings.selectCount(query);
-        // 排序片段来自固定枚举，用户输入绝不拼接 SQL。
-        String order = switch (sort) {
-            case "QUANTITY_DESC" -> "remaining_quantity DESC, id DESC";
-            case "LATEST" -> "id DESC";
-            default -> "(price IS NULL) ASC, price ASC, id DESC";
-        };
-        List<Listing> found = listings.selectList(query.last("ORDER BY " + order + " LIMIT " + ToolCallRecorder.rowLimit()));
+        var criteria = new com.spotlink.trading.dto.PublicListingCriteria(keyword, Listing.Side.SELL,
+                warehouseIds, unit, minQuantity, maxPrice, delivery, OffsetDateTime.now());
+        long total = listings.countPublic(criteria);
+        List<Listing> found = listings.searchPublic(criteria, sort, ToolCallRecorder.rowLimit());
         return render(found, total, "在售公开挂牌；排序=" + sort);
     }
 
@@ -123,12 +107,6 @@ public class ProcurementAdvisorTools {
         } catch (Exception e) { throw new IllegalStateException("挂牌结果编码失败"); }
     }
 
-    public static LambdaQueryWrapper<Listing> publicQuery() {
-        return Wrappers.<Listing>lambdaQuery().in(Listing::getStatus, Listing.Status.OPEN, Listing.Status.PARTIALLY_FILLED)
-                .gt(Listing::getRemainingQuantity, BigDecimal.ZERO).gt(Listing::getValidUntil, OffsetDateTime.now());
-    }
-
-    private static String like(String value) { return "%" + value.trim().replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"; }
     private static boolean validText(String value) { return value == null || value.length() <= 80; }
     private static boolean validNumber(BigDecimal value) { return value == null || (value.signum() >= 0 && value.compareTo(new BigDecimal("1000000000")) <= 0 && value.scale() <= 6); }
     private static String normal(String value) { return value == null || value.isBlank() ? null : value.trim().toUpperCase(Locale.ROOT); }

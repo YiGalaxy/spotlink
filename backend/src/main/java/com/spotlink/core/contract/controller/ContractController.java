@@ -3,11 +3,9 @@ package com.spotlink.contract.controller;
 import com.spotlink.contract.dto.ContractView;
 import com.spotlink.contract.entity.Contract;
 import com.spotlink.contract.service.ContractService;
-import com.spotlink.identity.entity.Enterprise;
-import com.spotlink.identity.mapper.EnterpriseMapper;
+import com.spotlink.contract.service.ContractViewAssembler;
 import com.spotlink.shared.security.SecurityUtils;
 import com.spotlink.shared.web.ApiResponse;
-import com.spotlink.trading.service.TradingViewAssembler;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -26,8 +24,7 @@ import java.util.List;
 public class ContractController {
 
     private final ContractService contractService;
-    private final EnterpriseMapper enterpriseMapper;
-    private final TradingViewAssembler viewAssembler;
+    private final ContractViewAssembler viewAssembler;
 
     @Operation(summary = "我的合同")
     @GetMapping("/contracts")
@@ -65,14 +62,6 @@ public class ContractController {
     }
 
     private ContractView toView(Contract contract, Long enterpriseId) {
-        String buyerName = enterpriseName(contract.getBuyerId());
-        String sellerName = enterpriseName(contract.getSellerId());
-        return ContractView.of(contract, enterpriseId, buyerName, sellerName,
-                contract.getTitle(), viewAssembler.readSpec(contract.getTerms()));
-    }
-
-    private String enterpriseName(Long id) {
-        Enterprise enterprise = enterpriseMapper.selectById(id);
-        return enterprise == null ? "—" : enterprise.getName();
+        return viewAssembler.toView(contract, enterpriseId);
     }
 }

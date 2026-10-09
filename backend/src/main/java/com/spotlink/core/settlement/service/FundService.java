@@ -1,6 +1,5 @@
 package com.spotlink.settlement.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.settlement.entity.FundAccount;
 import com.spotlink.settlement.entity.FundFlow;
 import com.spotlink.settlement.mapper.FundAccountMapper;
@@ -56,8 +55,7 @@ public class FundService {
      * 都不该用它——那些地方要的是 {@link #requireAccount} 和它的拒绝。
      */
     public FundAccount findAccount(Long enterpriseId) {
-        return accountMapper.selectOne(Wrappers.<FundAccount>lambdaQuery()
-                .eq(FundAccount::getEnterpriseId, enterpriseId));
+        return accountMapper.findByEnterpriseId(enterpriseId);
     }
 
     /**
@@ -90,10 +88,7 @@ public class FundService {
 
     public List<FundFlow> flows(Long enterpriseId, int limit) {
         FundAccount account = requireAccount(enterpriseId);
-        return flowMapper.selectList(Wrappers.<FundFlow>lambdaQuery()
-                .eq(FundFlow::getAccountId, account.getId())
-                .orderByDesc(FundFlow::getId)
-                .last("limit " + Math.min(Math.max(limit, 1), 200)));
+        return flowMapper.findRecentByAccountId(account.getId(), Math.min(Math.max(limit, 1), 200));
     }
 
     /** 增加资金。在本版本中，钱是凭空来的，而这正是要点所在。 */

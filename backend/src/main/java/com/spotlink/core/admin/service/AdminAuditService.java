@@ -1,9 +1,7 @@
 package com.spotlink.admin.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.admin.dto.AdminViews;
-import com.spotlink.shared.audit.AuditLog;
-import com.spotlink.shared.audit.mapper.AuditLogMapper;
+import com.spotlink.shared.audit.service.access.AuditLogAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -26,23 +24,8 @@ public class AdminAuditService {
 
     public List<AdminViews.AuditRow> search(String module, String action,
                                             String username, Boolean success, int limit) {
-        var query = Wrappers.<AuditLog>lambdaQuery()
-                .orderByDesc(AuditLog::getId)
-                .last("limit " + Math.min(Math.max(limit, 1), MAX_ROWS));
-        if (module != null && !module.isBlank()) {
-            query.eq(AuditLog::getModule, module.trim());
-        }
-        if (action != null && !action.isBlank()) {
-            query.eq(AuditLog::getAction, action.trim());
-        }
-        if (username != null && !username.isBlank()) {
-            query.like(AuditLog::getUsername, username.trim());
-        }
-        if (success != null) {
-            query.eq(AuditLog::getSuccess, success);
-        }
-
-        return auditLogMapper.selectList(query).stream()
+        return auditLogAccess.searchRecent(normalize(module), normalize(action), normalize(username),
+                success, Math.min(Math.max(limit, 1), MAX_ROWS)).stream()
                 .map(row -> new AdminViews.AuditRow(
                         row.getId(), row.getUsername(), row.getModule(), row.getAction(),
                         row.getTargetType(), row.getTargetId(),
@@ -51,5 +34,9 @@ public class AdminAuditService {
                 .toList();
     }
 
-    private final AuditLogMapper auditLogMapper;
+    private final AuditLogAccess auditLogAccess;
+
+    private static String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
 }

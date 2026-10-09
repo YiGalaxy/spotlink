@@ -1,6 +1,5 @@
 package com.spotlink.admin.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.admin.dto.AdminViews;
 import com.spotlink.identity.entity.Enterprise;
 import com.spotlink.identity.entity.Permission;
@@ -8,12 +7,12 @@ import com.spotlink.identity.entity.Role;
 import com.spotlink.identity.entity.RolePermission;
 import com.spotlink.identity.entity.User;
 import com.spotlink.identity.entity.UserRole;
-import com.spotlink.identity.mapper.EnterpriseMapper;
-import com.spotlink.identity.mapper.PermissionMapper;
-import com.spotlink.identity.mapper.RoleMapper;
-import com.spotlink.identity.mapper.RolePermissionMapper;
-import com.spotlink.identity.mapper.UserMapper;
-import com.spotlink.identity.mapper.UserRoleMapper;
+import com.spotlink.identity.service.access.EnterpriseAccess;
+import com.spotlink.identity.service.access.PermissionAccess;
+import com.spotlink.identity.service.access.RoleAccess;
+import com.spotlink.identity.service.access.RolePermissionAccess;
+import com.spotlink.identity.service.access.UserAccess;
+import com.spotlink.identity.service.access.UserRoleAccess;
 import com.spotlink.shared.audit.AuditService;
 import com.spotlink.shared.exception.BusinessException;
 import com.spotlink.shared.security.SecurityUtils;
@@ -52,26 +51,17 @@ public class AdminUserService {
     /** 持有该权限的人可以把它授予他人。 */
     private static final String PERMISSION_ASSIGN_ROLE = "admin:user:role";
 
-    private final UserMapper userMapper;
-    private final EnterpriseMapper enterpriseMapper;
-    private final RoleMapper roleMapper;
-    private final RolePermissionMapper rolePermissionMapper;
-    private final PermissionMapper permissionMapper;
-    private final UserRoleMapper userRoleMapper;
+    private final UserAccess userAccess;
+    private final EnterpriseAccess enterpriseAccess;
+    private final RoleAccess roleAccess;
+    private final RolePermissionAccess rolePermissionAccess;
+    private final PermissionAccess permissionAccess;
+    private final UserRoleAccess userRoleAccess;
     private final UserAuthorityProvider authorityProvider;
     private final AuditService audit;
 
     public List<AdminViews.UserRow> search(String keyword, Integer status) {
-        var query = Wrappers.<User>lambdaQuery().orderByDesc(User::getId).last("limit 200");
-        if (status != null) {
-            query.eq(User::getStatus, status);
-        }
-        if (keyword != null && !keyword.isBlank()) {
-            query.and(w -> w.like(User::getUsername, keyword.trim())
-                    .or().like(User::getRealName, keyword.trim()));
-        }
-
-        List<User> users = userMapper.selectList(query);
+        List<User> users = userAccess.searchAccounts(keyword, status);
         if (users.isEmpty()) {
             return List.of();
         }
@@ -81,7 +71,7 @@ public class AdminUserService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<Long, String> enterprises = enterpriseIds.isEmpty() ? Map.of()
-                : enterpriseMapper.selectBatchIds(enterpriseIds).stream()
+                : enterpriseAccess.selectBatchIds(enterpriseIds).stream()
                         .collect(Collectors.toMap(Enterprise::getId, Enterprise::getName));
 
         return users.stream()
@@ -108,7 +98,7 @@ public class AdminUserService {
 
         String before = "status=" + user.getStatus();
         user.setStatus(status);
-        if (userMapper.updateById(user) == 0) {
+        if (userAccess.updateById(user) == 0) {
             throw BusinessException.of(ResultCode.CONFLICT, "该账号正在被其他操作修改，请重试");
         }
         // 不做这一步，改动就得等缓存 TTL 到期——那意味着一个已被禁用的账号还能
@@ -143,15 +133,15 @@ public class AdminUserService {
 
         List<String> rolesBefore = List.copyOf(authorityProvider.rolesOf(userId));
 
-        userRoleMapper.delete(Wrappers.<UserRole>lambdaQuery().eq(UserRole::getUserId, userId));
+        userRoleAccess.deleteByUserId(userId);
         for (Long roleId : wanted) {
-            if (roleMapper.selectById(roleId) == null) {
+            if (roleAccess.selectById(roleId) == null) {
                 throw BusinessException.of(ResultCode.ADMIN_ROLE_NOT_FOUND);
             }
             UserRole grant = new UserRole();
             grant.setUserId(userId);
             grant.setRoleId(roleId);
-            userRoleMapper.insert(grant);
+            userRoleAccess.insert(grant);
         }
 
         authorityProvider.evict(userId);
@@ -163,8 +153,7 @@ public class AdminUserService {
 
     /** 全部平台角色，以及每个角色携带的权限。 */
     public List<AdminViews.RoleRow> roles() {
-        List<Role> roles = roleMapper.selectList(Wrappers.<Role>lambdaQuery()
-                .isNull(Role::getEnterpriseId).orderByAsc(Role::getId));
+        List<Role> roles = roleAccess.findPlatformRoles();
         if (roles.isEmpty()) {
             return List.of();
         }
@@ -181,8 +170,7 @@ public class AdminUserService {
 
     /** 所有可授予的权限，供勾选列表使用。 */
     public List<AdminViews.PermissionRow> permissions() {
-        return permissionMapper.selectList(Wrappers.<Permission>lambdaQuery()
-                        .orderByAsc(Permission::getSortOrder).orderByAsc(Permission::getId)).stream()
+        return permissionAccess.findAllOrdered().stream()
                 .map(p -> new AdminViews.PermissionRow(
                         p.getId(), p.getCode(), p.getName(), p.getPermType(),
                         p.getPath(), p.getSortOrder()))
@@ -198,8 +186,7 @@ public class AdminUserService {
      * 出来的。
      */
     private boolean isLastRoleHolder(Long exceptUserId) {
-        List<User> candidates = userMapper.selectList(Wrappers.<User>lambdaQuery()
-                .eq(User::getStatus, User.Status.ACTIVE));
+        List<User> candidates = userAccess.findActiveAccounts();
         for (User candidate : candidates) {
             if (candidate.getId().equals(exceptUserId)) {
                 continue;
@@ -220,12 +207,11 @@ public class AdminUserService {
     }
 
     private Map<Long, List<String>> permissionCodesByRole(Set<Long> roleIds) {
-        List<RolePermission> grants = rolePermissionMapper.selectList(
-                Wrappers.<RolePermission>lambdaQuery().in(RolePermission::getRoleId, roleIds));
+        List<RolePermission> grants = rolePermissionAccess.findByRoleIds(roleIds);
         if (grants.isEmpty()) {
             return Map.of();
         }
-        Map<Long, String> codeById = permissionMapper
+        Map<Long, String> codeById = permissionAccess
                 .selectBatchIds(grants.stream().map(RolePermission::getPermissionId)
                         .collect(Collectors.toSet()))
                 .stream()
@@ -243,7 +229,7 @@ public class AdminUserService {
     }
 
     private User require(Long id) {
-        User user = userMapper.selectById(id);
+        User user = userAccess.selectById(id);
         if (user == null) {
             throw BusinessException.of(ResultCode.ADMIN_USER_NOT_FOUND);
         }
@@ -254,7 +240,7 @@ public class AdminUserService {
         if (id == null) {
             return null;
         }
-        Enterprise enterprise = enterpriseMapper.selectById(id);
+        Enterprise enterprise = enterpriseAccess.selectById(id);
         return enterprise == null ? null : enterprise.getName();
     }
 

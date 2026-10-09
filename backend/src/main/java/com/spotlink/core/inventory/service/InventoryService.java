@@ -1,8 +1,7 @@
 package com.spotlink.inventory.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.commodity.entity.CommodityCategory;
-import com.spotlink.commodity.mapper.CommodityCategoryMapper;
+import com.spotlink.commodity.service.access.CommodityCategoryAccess;
 import com.spotlink.inventory.dto.InventoryRegisterRequest;
 import com.spotlink.inventory.dto.InventoryUpdateRequest;
 import com.spotlink.inventory.entity.InventoryNote;
@@ -10,7 +9,7 @@ import com.spotlink.inventory.mapper.InventoryNoteMapper;
 import com.spotlink.shared.exception.BusinessException;
 import com.spotlink.shared.web.ResultCode;
 import com.spotlink.warehouse.entity.Warehouse;
-import com.spotlink.warehouse.mapper.WarehouseMapper;
+import com.spotlink.warehouse.service.access.WarehouseAccess;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +32,8 @@ public class InventoryService {
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private final InventoryNoteMapper inventoryNoteMapper;
-    private final CommodityCategoryMapper categoryMapper;
-    private final WarehouseMapper warehouseMapper;
+    private final CommodityCategoryAccess categoryAccess;
+    private final WarehouseAccess warehouseAccess;
     private final ObjectMapper objectMapper;
     private final InventoryRules rules;
 
@@ -56,7 +55,7 @@ public class InventoryService {
             throw BusinessException.of(ResultCode.BAD_REQUEST, "单位必须与品类一致：" + category.getUnit());
         }
 
-        Warehouse warehouse = warehouseMapper.selectById(request.warehouseId());
+        Warehouse warehouse = warehouseAccess.selectById(request.warehouseId());
         if (warehouse == null || !Integer.valueOf(1).equals(warehouse.getStatus())) {
             throw BusinessException.of(ResultCode.NOT_FOUND, "交收仓库不存在或已停用");
         }
@@ -90,13 +89,7 @@ public class InventoryService {
     }
 
     public List<InventoryNote> listMine(Long enterpriseId, Integer status) {
-        var query = Wrappers.<InventoryNote>lambdaQuery()
-                .eq(InventoryNote::getEnterpriseId, enterpriseId)
-                .orderByDesc(InventoryNote::getId);
-        if (status != null) {
-            query.eq(InventoryNote::getStatus, status);
-        }
-        return inventoryNoteMapper.selectList(query);
+        return inventoryNoteMapper.findOwned(enterpriseId, status);
     }
 
     public InventoryNote get(Long id, Long enterpriseId) {
@@ -188,12 +181,11 @@ public class InventoryService {
     }
 
     private CommodityCategory loadActiveLeaf(Long id) {
-        CommodityCategory category = categoryMapper.selectById(id);
+        CommodityCategory category = categoryAccess.selectById(id);
         if (category == null || !Integer.valueOf(1).equals(category.getStatus())) {
             throw BusinessException.of(ResultCode.CATEGORY_NOT_FOUND);
         }
-        if (categoryMapper.selectCount(Wrappers.<CommodityCategory>lambdaQuery()
-                .eq(CommodityCategory::getParentId, id)) > 0) {
+        if (categoryAccess.hasChildren(id)) {
             throw BusinessException.of(ResultCode.BAD_REQUEST, "请选择具体的叶子品类");
         }
         return category;

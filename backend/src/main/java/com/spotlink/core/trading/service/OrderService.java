@@ -1,8 +1,7 @@
 package com.spotlink.trading.service;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.spotlink.inventory.entity.InventoryNote;
-import com.spotlink.inventory.mapper.InventoryNoteMapper;
+import com.spotlink.inventory.service.access.InventoryNoteAccess;
 import com.spotlink.settlement.service.FreezeService;
 import com.spotlink.shared.exception.BusinessException;
 import com.spotlink.shared.security.LoginUser;
@@ -56,7 +55,7 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final OrderStatusLogMapper statusLogMapper;
     private final ListingMapper listingMapper;
-    private final InventoryNoteMapper inventoryNoteMapper;
+    private final InventoryNoteAccess inventoryNoteAccess;
     private final FreezeService freezeService;
     private final ApplicationEventPublisher eventPublisher;
     private final TradingProperties properties;
@@ -277,10 +276,7 @@ public class OrderService {
      */
     @Transactional
     public int expireOverdueConfirmations() {
-        List<Order> lapsed = orderMapper.selectList(Wrappers.<Order>lambdaQuery()
-                .eq(Order::getStatus, OrderStatus.PENDING_CONFIRM)
-                .isNotNull(Order::getConfirmDeadline)
-                .lt(Order::getConfirmDeadline, OffsetDateTime.now()));
+        List<Order> lapsed = orderMapper.findOverdueConfirmations(OffsetDateTime.now());
 
         for (Order order : lapsed) {
             restoreGoods(order);
@@ -358,15 +354,7 @@ public class OrderService {
 
     /** 调用方为当事方之一的所有订单。 */
     public List<Order> listMine(Long enterpriseId, String status) {
-        var query = Wrappers.<Order>lambdaQuery()
-                .and(w -> w.eq(Order::getBuyerId, enterpriseId)
-                        .or()
-                        .eq(Order::getSellerId, enterpriseId))
-                .orderByDesc(Order::getId);
-        if (status != null && !status.isBlank()) {
-            query.eq(Order::getStatus, status);
-        }
-        return orderMapper.selectList(query);
+        return orderMapper.findParticipantOrders(enterpriseId, status);
     }
 
     public Order get(Long orderId, Long enterpriseId) {
@@ -375,9 +363,7 @@ public class OrderService {
 
     public List<OrderStatusLog> history(Long orderId, Long enterpriseId) {
         loadParticipant(orderId, enterpriseId);
-        return statusLogMapper.selectList(Wrappers.<OrderStatusLog>lambdaQuery()
-                .eq(OrderStatusLog::getOrderId, orderId)
-                .orderByAsc(OrderStatusLog::getId));
+        return statusLogMapper.findByOrderId(orderId);
     }
 
     // ------------------------------------------------------------------
@@ -418,13 +404,13 @@ public class OrderService {
                         "卖方可用库存不足");
             }
             sellerNoteId = source.getId();
-            InventoryNote note = inventoryNoteMapper.selectById(source.getId());
+            InventoryNote note = inventoryNoteAccess.selectById(source.getId());
             note.setTotalQuantity(note.getTotalQuantity().subtract(quantity));
             note.setAvailableQuantity(note.getAvailableQuantity().subtract(quantity));
             if (note.getTotalQuantity().signum() == 0) {
                 note.setStatus(InventoryNote.Status.DELIVERED);
             }
-            if (inventoryNoteMapper.updateById(note) == 0) {
+            if (inventoryNoteAccess.updateById(note) == 0) {
                 throw BusinessException.of(ResultCode.CONFLICT, "库存正在被其他操作修改，请重试");
             }
         }
@@ -435,7 +421,7 @@ public class OrderService {
 
     /** 给买方一张属于自己的、对应其刚买下货物的库存单。 */
     private void createBuyerNote(Listing listing, Long sourceNoteId, Long buyerId, BigDecimal quantity) {
-        InventoryNote source = sourceNoteId == null ? null : inventoryNoteMapper.selectById(sourceNoteId);
+        InventoryNote source = sourceNoteId == null ? null : inventoryNoteAccess.selectById(sourceNoteId);
 
         InventoryNote note = new InventoryNote();
         note.setNoteNo(nextNo("IN"));
@@ -455,20 +441,11 @@ public class OrderService {
         note.setRemark(source == null
                 ? "摘牌成交自动生成"
                 : "摘牌成交自动生成，来源库存单 " + source.getNoteNo());
-        inventoryNoteMapper.insert(note);
+        inventoryNoteAccess.insert(note);
     }
 
     private InventoryNote findSellableNote(Long enterpriseId, Long categoryId, BigDecimal quantity) {
-        return inventoryNoteMapper.selectList(Wrappers.<InventoryNote>lambdaQuery()
-                        .eq(InventoryNote::getEnterpriseId, enterpriseId)
-                        .eq(InventoryNote::getCategoryId, categoryId)
-                        .in(InventoryNote::getStatus,
-                                InventoryNote.Status.IN_STOCK,
-                                InventoryNote.Status.PARTIALLY_FROZEN)
-                        .ge(InventoryNote::getAvailableQuantity, quantity)
-                        .orderByAsc(InventoryNote::getId)
-                        .last("limit 1"))
-                .stream().findFirst().orElse(null);
+        return inventoryNoteAccess.findSellable(enterpriseId, categoryId, quantity);
     }
 
     private void reduceListing(Listing listing, BigDecimal quantity) {
@@ -567,7 +544,7 @@ public class OrderService {
         note.setStatus(InventoryNote.Status.IN_STOCK);
         note.setVersion(0);
         note.setRemark("订单 " + order.getOrderNo() + " 取消，货物退回");
-        inventoryNoteMapper.insert(note);
+        inventoryNoteAccess.insert(note);
     }
 
     private Long sellerNoteIdOf(Listing listing) {
