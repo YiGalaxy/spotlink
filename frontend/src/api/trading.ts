@@ -2,6 +2,7 @@ import { api } from './client'
 import type {
   ContractView,
   EntityId,
+  InventoryNoteView,
   ListingView,
   OrderStatusLogEntry,
   OrderView,
@@ -48,8 +49,12 @@ export function closeListing(id: EntityId) {
 }
 
 /** 摘牌：接受对方的挂牌，即作出承诺。 */
-export function acceptListing(id: EntityId, quantity: number, remark?: string) {
-  return api.post<OrderView>(`/listings/${id}/accept`, { quantity, remark })
+export function acceptListing(id: EntityId, quantity: number | string, remark?: string, inventoryNoteId?: EntityId) {
+  return api.post<OrderView>(`/listings/${id}/accept`, { quantity, remark, inventoryNoteId })
+}
+
+export function fetchMatchingInventory(id: EntityId, quantity: string) {
+  return api.get<InventoryNoteView[]>(`/listings/${id}/matching-inventory`, { quantity })
 }
 
 // ---- 订单 ----

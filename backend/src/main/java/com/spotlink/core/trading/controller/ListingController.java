@@ -10,6 +10,7 @@ import com.spotlink.trading.dto.OrderView;
 import com.spotlink.trading.entity.Listing;
 import com.spotlink.trading.entity.Order;
 import com.spotlink.trading.service.ListingService;
+import com.spotlink.trading.service.InventoryMatchService;
 import com.spotlink.trading.service.OrderService;
 import com.spotlink.trading.service.TradingViewAssembler;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,6 +41,16 @@ public class ListingController {
     private final ListingService listingService;
     private final OrderService orderService;
     private final TradingViewAssembler viewAssembler;
+    private final InventoryMatchService inventoryMatchService;
+    private final InventoryViewAssembler inventoryViewAssembler;
+
+    @Operation(summary = "可交付的匹配库存", description = "仅返回摘牌企业自有库存，按数量、品类、单位、规格和指定仓库匹配")
+    @GetMapping("/listings/{id}/matching-inventory")
+    public ApiResponse<List<com.spotlink.inventory.dto.InventoryNoteView>> matching(
+            @PathVariable Long id, @RequestParam java.math.BigDecimal quantity) {
+        return ApiResponse.success(inventoryViewAssembler.toViews(
+                inventoryMatchService.candidates(id, quantity, SecurityUtils.currentEnterpriseId())));
+    }
 
     @Operation(summary = "挂单大厅",
             description = "各企业当前有效的挂牌。挂牌是公开信息，任何已认证企业都能浏览。")

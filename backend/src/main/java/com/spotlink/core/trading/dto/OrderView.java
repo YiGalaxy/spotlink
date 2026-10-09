@@ -49,6 +49,7 @@ public record OrderView(
         @JsonSerialize(using = ToStringSerializer.class) Long categoryId,
         String categoryName,
         String commodityName,
+        java.util.Map<String, Object> spec,
 
         BigDecimal quantity,
         String unit,
@@ -56,6 +57,7 @@ public record OrderView(
         BigDecimal amount,
         String amountText,
 
+        @JsonSerialize(using = ToStringSerializer.class) Long warehouseId,
         String warehouseName,
         String deliveryMethodText,
 
@@ -94,7 +96,8 @@ public record OrderView(
                                String buyerName,
                                String sellerName,
                                String categoryName,
-                               String warehouseName) {
+                               String warehouseName,
+                               java.util.Map<String, Object> spec) {
         String role = order.roleOf(viewerEnterpriseId);
         return new OrderView(
                 order.getId(),
@@ -109,11 +112,13 @@ public record OrderView(
                 order.getCategoryId(),
                 categoryName,
                 order.getCommodityName(),
+                spec,
                 order.getQuantity(),
                 order.getUnit(),
                 order.getPrice(),
                 order.getAmount(),
                 order.getAmount() == null ? "—" : order.getAmount().stripTrailingZeros().toPlainString(),
+                order.getWarehouseId(),
                 warehouseName,
                 "DELIVERED".equals(order.getDeliveryMethod()) ? "送到" : "自提",
                 order.getStatus(),

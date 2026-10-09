@@ -1,4 +1,4 @@
-﻿param([switch]$Mall, [switch]$Inventory, [switch]$Admin, [switch]$Trading)
+﻿param([switch]$Mall, [switch]$Inventory, [switch]$Admin, [switch]$Trading, [switch]$BuyTrading)
 . "$PSScriptRoot/../lib/compose.ps1"
 # Windows PowerShell 的原生程序管道默认 ASCII；SQL 输入必须保留中文。
 $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
@@ -56,6 +56,10 @@ SET l.commodity_name=n.commodity_name WHERE n.note_no LIKE 'MALL-QA-%' AND l.bra
     if ($Trading) {
         & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps browser-tools sh /workspace/scripts/tests/listing-browser.sh
         if ($LASTEXITCODE -ne 0) { throw '可信库存挂牌浏览器回归失败。' }
+    }
+    if ($BuyTrading) {
+        & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps browser-tools sh /workspace/scripts/tests/buy-listing-browser.sh
+        if ($LASTEXITCODE -ne 0) { throw 'BUY 定价和源库存匹配浏览器回归失败。' }
     }
     Write-Host '认证容器浏览器回归通过。'
     exit 0

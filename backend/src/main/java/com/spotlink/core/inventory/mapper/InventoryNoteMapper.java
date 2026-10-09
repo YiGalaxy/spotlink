@@ -28,6 +28,15 @@ public interface InventoryNoteMapper extends BaseMapper<InventoryNote> {
         return selectList(Wrappers.<InventoryNote>lambdaQuery().eq(InventoryNote::getEnterpriseId, enterpriseId).eq(InventoryNote::getCategoryId, categoryId).in(InventoryNote::getStatus, InventoryNote.Status.IN_STOCK, InventoryNote.Status.PARTIALLY_FROZEN).ge(InventoryNote::getAvailableQuantity, quantity).orderByAsc(InventoryNote::getId).last("LIMIT 1")).stream().findFirst().orElse(null);
     }
 
+    default List<InventoryNote> matchingCandidates(Long enterpriseId, Long categoryId, String unit,
+                                                  Long warehouseId, BigDecimal quantity) {
+        return selectList(Wrappers.<InventoryNote>lambdaQuery()
+                .eq(InventoryNote::getEnterpriseId, enterpriseId).eq(InventoryNote::getCategoryId, categoryId)
+                .eq(InventoryNote::getUnit, unit).eq(warehouseId != null, InventoryNote::getWarehouseId, warehouseId)
+                .in(InventoryNote::getStatus, InventoryNote.Status.IN_STOCK, InventoryNote.Status.PARTIALLY_FROZEN)
+                .ge(InventoryNote::getAvailableQuantity, quantity).orderByDesc(InventoryNote::getId));
+    }
+
     default List<InventoryNote> findMarketInventory(Long categoryId) {
         return selectList(Wrappers.<InventoryNote>lambdaQuery().eq(categoryId != null, InventoryNote::getCategoryId, categoryId).ne(InventoryNote::getStatus, InventoryNote.Status.CANCELLED));
     }

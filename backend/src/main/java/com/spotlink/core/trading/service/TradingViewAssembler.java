@@ -105,7 +105,8 @@ public class TradingViewAssembler {
                         lookup(enterprises, order.getBuyerId(), "—"),
                         lookup(enterprises, order.getSellerId(), "—"),
                         lookup(categories, order.getCategoryId(), "—"),
-                        lookup(warehouses, order.getWarehouseId(), "—")))
+                        lookup(warehouses, order.getWarehouseId(), "—"),
+                        readSpec(order.getSpec())))
                 .toList();
     }
 

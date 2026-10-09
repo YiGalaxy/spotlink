@@ -9,9 +9,7 @@ import java.math.BigDecimal;
 /**
  * 摘牌。
  *
- * <p>数量是唯一真正的输入：其余一切——价格、货物、仓库、交收条款——都来自
- * 被摘的那份挂牌。允许买方重述条款，就意味着他不再是在接受一份要约，而是在
- * 提出另一份要约。
+ * <p>SELL 指定数量，BUY 还必须明确选择符合采购要求的自有库存，物理属性由源库存提供。
  */
 public record OrderAcceptRequest(
 
@@ -20,6 +18,9 @@ public record OrderAcceptRequest(
         BigDecimal quantity,
 
         @Size(max = 512, message = "备注过长")
-        String remark
+        String remark,
+
+        Long inventoryNoteId
 ) {
+    public OrderAcceptRequest(BigDecimal quantity, String remark) { this(quantity, remark, null); }
 }

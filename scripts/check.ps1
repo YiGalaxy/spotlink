@@ -88,6 +88,18 @@ try {
                     & "$PSScriptRoot/tests/auth-runtime.tests.ps1" -Trading
                     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
+                'buy-listing' {
+                    try {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=BuyListingBoundaryTest,ListingBoundaryTest,PartialFillTest' test
+                        if ($LASTEXITCODE -ne 0) { throw 'BUY schema、单位、源库存匹配与真实交付属性检查失败。' }
+                    } finally {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
+                    }
+                }
+                'buy-listing-browser' {
+                    & "$PSScriptRoot/tests/auth-runtime.tests.ps1" -BuyTrading
+                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                }
                 'admin-authority' {
                     try {
                         & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=AdminAuthorityIntegrationTest,AuthenticationBoundaryTest,AdminEndpointCoverageTest,EnterpriseIdParameterIsolationTest' test

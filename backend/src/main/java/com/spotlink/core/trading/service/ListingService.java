@@ -53,6 +53,7 @@ public class ListingService {
     private final WarehouseAccess warehouseAccess;
     private final FreezeService freezeService;
     private final ObjectMapper objectMapper;
+    private final InventoryRules inventoryRules;
 
     /**
      * 发布一份要约。
@@ -87,6 +88,12 @@ public class ListingService {
         }
         if (source == null && (request.commodityName() == null || request.commodityName().isBlank())) {
             throw BusinessException.of(ResultCode.BAD_REQUEST, "请填写商品名称");
+        }
+        if (source == null) {
+            inventoryRules.spec(category, request.spec());
+            if (request.unit() != null && !request.unit().isBlank() && !category.getUnit().equals(request.unit())) {
+                throw BusinessException.of(ResultCode.BAD_REQUEST, "采购单位必须与品类一致：" + category.getUnit());
+            }
         }
         Long warehouseId = source == null ? request.warehouseId() : source.getWarehouseId();
         if (source != null || warehouseId != null) {

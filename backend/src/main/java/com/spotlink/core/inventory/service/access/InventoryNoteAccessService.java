@@ -25,6 +25,10 @@ public class InventoryNoteAccessService implements InventoryNoteAccess {
         return mapper.findSellable(enterpriseId, categoryId, quantity);
     }
 
+    @Override public List<InventoryNote> matchingCandidates(Long enterpriseId, Long categoryId, String unit, Long warehouseId, BigDecimal quantity) {
+        return mapper.matchingCandidates(enterpriseId, categoryId, unit, warehouseId, quantity);
+    }
+
     @Override public int insert(InventoryNote entity) {
         return mapper.insert(entity);
     }

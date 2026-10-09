@@ -59,6 +59,7 @@ public class OrderService {
     private final FreezeService freezeService;
     private final ApplicationEventPublisher eventPublisher;
     private final TradingProperties properties;
+    private final InventoryMatchService inventoryMatchService;
 
     // ------------------------------------------------------------------
     // 摘牌
@@ -94,6 +95,7 @@ public class OrderService {
         }
 
         BigDecimal quantity = request.quantity();
+        com.spotlink.inventory.service.InventoryRules.quantity(quantity);
         if (quantity.compareTo(listing.getRemainingQuantity()) > 0) {
             throw BusinessException.of(ResultCode.LISTING_QUANTITY_EXCEEDED,
                     "挂牌剩余 %s %s，少于摘牌数量 %s".formatted(
@@ -116,9 +118,11 @@ public class OrderService {
         // 两种惯例唯一分道扬镳的地方，只在此处判定一次。此后的每一步对两者
         // 完全相同。
         boolean awaitsLister = listing.awaitsListerConfirm();
+        InventoryNote selected = Listing.Side.BUY.equals(listing.getSide())
+                ? inventoryMatchService.requireSource(listing, request.inventoryNoteId(), quantity, sellerId) : null;
         Long goodsFreezeId = awaitsLister
                 ? null
-                : transferGoods(listing, quantity, buyerId, sellerId);
+                : transferGoods(listing, quantity, buyerId, sellerId, selected);
 
         Order order = new Order();
         order.setOrderNo(nextNo("OR"));
@@ -126,14 +130,14 @@ public class OrderService {
         order.setBuyerId(buyerId);
         order.setSellerId(sellerId);
         order.setCategoryId(listing.getCategoryId());
-        order.setCommodityName(listing.getCommodityName());
-        order.setSpec(listing.getSpec());
+        order.setCommodityName(selected == null ? listing.getCommodityName() : selected.getCommodityName());
+        order.setSpec(selected == null ? listing.getSpec() : selected.getSpec());
         order.setQuantity(quantity);
         order.setUnit(listing.getUnit());
         order.setPrice(price);
         // 存储而非推导：这是双方约定下来的那个数额。
         order.setAmount(price.multiply(quantity));
-        order.setWarehouseId(listing.getWarehouseId());
+        order.setWarehouseId(selected == null ? listing.getWarehouseId() : selected.getWarehouseId());
         order.setDeliveryMethod(listing.getDeliveryMethod());
         order.setPaymentTerms(listing.getPaymentTerms());
         order.setGoodsFreezeId(goodsFreezeId);
@@ -143,6 +147,7 @@ public class OrderService {
         order.setVersion(0);
         order.setRemark(request.remark());
         orderMapper.insert(order);
+        if (selected != null) freezeService.attributeTo(goodsFreezeId, order.getId());
 
         statusLogMapper.insert(OrderStatusLog.of(
                 order.getId(), null, order.getStatus(),
@@ -190,7 +195,7 @@ public class OrderService {
 
         // 摘牌预留了货物；答复它才是移动货物的动作。
         order.setGoodsFreezeId(transferGoods(
-                listing, order.getQuantity(), order.getBuyerId(), order.getSellerId()));
+                listing, order.getQuantity(), order.getBuyerId(), order.getSellerId(), null));
         // 在这里写入，而不是留给调用方：挂牌所指向的那笔预留可能刚刚转移到
         // 了新的一行，而与摘牌路径不同，这里没有后续步骤会把它持久化。
         persistListingReservation(listing);
@@ -379,7 +384,7 @@ public class OrderService {
      *
      * @return 被消耗掉的卖方冻结记录，供审计轨迹使用
      */
-    private Long transferGoods(Listing listing, BigDecimal quantity, Long buyerId, Long sellerId) {
+    private Long transferGoods(Listing listing, BigDecimal quantity, Long buyerId, Long sellerId, InventoryNote selected) {
         Long goodsFreezeId = listing.getFreezeId();
         Long sellerNoteId = null;
 
@@ -396,23 +401,16 @@ public class OrderService {
             Long remainderId = freezeService.consumeInventoryPartial(sellerId, goodsFreezeId, quantity);
             listing.setFreezeId(remainderId);
         } else {
-            // BUY 挂牌：货物来自摘牌方（此处即卖方）的自有库存，因此找一张
-            // 足以覆盖的库存单。
-            InventoryNote source = findSellableNote(sellerId, listing.getCategoryId(), quantity);
+            // BUY 挂牌：只使用摘牌方明确选择且已按采购条件核验的自有库存。
+            InventoryNote source = selected;
             if (source == null) {
                 throw BusinessException.of(ResultCode.INVENTORY_QUANTITY_INSUFFICIENT,
                         "卖方可用库存不足");
             }
             sellerNoteId = source.getId();
-            InventoryNote note = inventoryNoteAccess.selectById(source.getId());
-            note.setTotalQuantity(note.getTotalQuantity().subtract(quantity));
-            note.setAvailableQuantity(note.getAvailableQuantity().subtract(quantity));
-            if (note.getTotalQuantity().signum() == 0) {
-                note.setStatus(InventoryNote.Status.DELIVERED);
-            }
-            if (inventoryNoteAccess.updateById(note) == 0) {
-                throw BusinessException.of(ResultCode.CONFLICT, "库存正在被其他操作修改，请重试");
-            }
+            goodsFreezeId = freezeService.freezeInventory(sellerId, sellerNoteId, quantity,
+                    com.spotlink.settlement.entity.FreezeRecord.BizType.ORDER, null, "采购挂牌摘牌", source.getVersion()).getId();
+            freezeService.consumeInventory(sellerId, goodsFreezeId);
         }
 
         createBuyerNote(listing, sellerNoteId, buyerId, quantity);
@@ -426,26 +424,23 @@ public class OrderService {
         InventoryNote note = new InventoryNote();
         note.setNoteNo(nextNo("IN"));
         note.setEnterpriseId(buyerId);
-        note.setCategoryId(listing.getCategoryId());
-        note.setWarehouseId(listing.getWarehouseId() == null ? 2001L : listing.getWarehouseId());
-        note.setCommodityName(listing.getCommodityName());
-        note.setBrand(listing.getBrand());
-        note.setOrigin(listing.getOrigin());
-        note.setSpec(listing.getSpec());
+        if (source == null) throw BusinessException.of(ResultCode.INVENTORY_NOTE_NOT_FOUND);
+        note.setCategoryId(source.getCategoryId());
+        note.setWarehouseId(source.getWarehouseId());
+        note.setCommodityName(source.getCommodityName());
+        note.setBrand(source.getBrand());
+        note.setOrigin(source.getOrigin());
+        note.setSpec(source.getSpec());
         note.setTotalQuantity(quantity);
         note.setAvailableQuantity(quantity);
         note.setFrozenQuantity(BigDecimal.ZERO);
-        note.setUnit(listing.getUnit());
+        note.setUnit(source.getUnit());
         note.setStatus(InventoryNote.Status.IN_STOCK);
         note.setVersion(0);
         note.setRemark(source == null
                 ? "摘牌成交自动生成"
                 : "摘牌成交自动生成，来源库存单 " + source.getNoteNo());
         inventoryNoteAccess.insert(note);
-    }
-
-    private InventoryNote findSellableNote(Long enterpriseId, Long categoryId, BigDecimal quantity) {
-        return inventoryNoteAccess.findSellable(enterpriseId, categoryId, quantity);
     }
 
     private void reduceListing(Listing listing, BigDecimal quantity) {

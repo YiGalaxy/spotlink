@@ -217,11 +217,13 @@ export interface OrderView {
   categoryId: EntityId
   categoryName: string
   commodityName: string
+  spec: Record<string, unknown>
   quantity: number
   unit: string
   price: number
   amount: number
   amountText: string
+  warehouseId: EntityId | null
   warehouseName: string
   deliveryMethodText: string
   status: string

@@ -29,9 +29,8 @@ import java.time.OffsetDateTime;
  * 惯例；把二者混为一谈，正是让平台规则无法解释清楚的原因。
  *
  * <p>SELL 挂牌在其存续期间冻结卖方的货物——货物仍归卖方所有，但已被
- * 预留。BUY 挂牌则是镜像：它改为预留买方的保证金，这就是为什么
- * {@code freezeId} 对其中一方为 null 而对另一方有值。这一不对称同样是
- * MANUAL 仅限 SELL 的原因：只有被冻结的货物才能安全地等待一个答复。
+ * 预留。BUY 发布时不冻结货物或模拟资金；卖方摘牌时明确选择自己的交付库存。
+ * {@code freezeId} 只关联 SELL 货物预留。MANUAL 仅限 SELL，因为等待答复须有预留货物。
  */
 @Getter
 @Setter

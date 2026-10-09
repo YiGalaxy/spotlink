@@ -41,6 +41,7 @@ import {
   draftContract,
   fetchMarket,
   fetchMyListings,
+  fetchMatchingInventory,
   fetchMyOrders,
   fetchOrderContract,
   fetchOrderHistory,
@@ -52,14 +53,14 @@ import {
 } from '@/api/trading'
 import { fetchCategoryTree, fetchWarehouses, listInventoryNotes } from '@/api/inventory'
 import { LIST_PAGINATION, byNumberNullsLast, byTime } from '@/utils/table'
-import { positiveDecimalRule } from '@/utils/decimal'
+import { positiveDecimalRule, decimalUnits } from '@/utils/decimal'
 import type { CategoryNode, EntityId, ListingView, OrderView } from '@/types/api'
 
-function flattenLeaves(nodes: CategoryNode[], depth = 0): { id: EntityId; label: string }[] {
-  const options: { id: EntityId; label: string }[] = []
+function flattenLeaves(nodes: CategoryNode[], depth = 0): (CategoryNode & { label: string })[] {
+  const options: (CategoryNode & { label: string })[] = []
   for (const node of nodes) {
     if (node.children.length === 0) {
-      options.push({ id: node.id, label: `${'　'.repeat(depth)}${node.name}` })
+      options.push({ ...node, label: `${'　'.repeat(depth)}${node.name}` })
     } else {
       options.push(...flattenLeaves(node.children, depth + 1))
     }
@@ -130,6 +131,18 @@ export default function TradingPage() {
   const publishSide = Form.useWatch('side', publishForm)
   const publishPriceType = Form.useWatch('priceType', publishForm)
   const publishNoteId = Form.useWatch('inventoryNoteId', publishForm)
+  const publishCategoryId = Form.useWatch('categoryId', publishForm)
+  const acceptQuantity = Form.useWatch('quantity', acceptForm)
+  const acceptUnits = decimalUnits(acceptQuantity, 3)
+  const remainingUnits = decimalUnits(acceptTarget?.remainingQuantity, 3)
+  const canFindStock = acceptTarget?.side === 'BUY' && isMember && acceptUnits !== null && acceptUnits > 0n
+    && remainingUnits !== null && acceptUnits <= remainingUnits
+  const { data: matchingNotes = [], isFetching: findingStock, isError: stockError, refetch: reloadStock } = useQuery({
+    queryKey: identityKey('matching-inventory', acceptTarget?.id, String(acceptQuantity)),
+    queryFn: () => fetchMatchingInventory(acceptTarget!.id, String(acceptQuantity)),
+    enabled: canFindStock,
+  })
+  useEffect(() => { acceptForm.setFieldValue('inventoryNoteId', undefined) }, [acceptTarget?.id, acceptQuantity, acceptForm])
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: identityKey('market') })
@@ -236,6 +249,7 @@ export default function TradingPage() {
   )
 
   const categoryOptions = useMemo(() => flattenLeaves(categories), [categories])
+  const buyCategory = categoryOptions.find(category => category.id === publishCategoryId)
   /** 只有还有空闲数量的库存单，才能给卖方挂牌做背书。 */
   const sellableNotes = useMemo(
     () => notes.filter((n) => Number(n.availableQuantity) > 0 && [2, 3, 4].includes(n.status)),
@@ -246,8 +260,8 @@ export default function TradingPage() {
   // ---- 写操作 ----
 
   const { mutateAsync: doAccept, isPending: accepting } = useMutation({
-    mutationFn: (vars: { id: EntityId; quantity: number; remark?: string }) =>
-      acceptListing(vars.id, vars.quantity, vars.remark),
+    mutationFn: (vars: { id: EntityId; quantity: string; remark?: string; inventoryNoteId?: EntityId }) =>
+      acceptListing(vars.id, vars.quantity, vars.remark, vars.inventoryNoteId),
     onSuccess: (order) => {
       void message.success(order.status === 'PENDING_CONFIRM'
         ? `已摘牌，订单 ${order.orderNo} 等待挂牌方确认`
@@ -300,6 +314,10 @@ export default function TradingPage() {
       inventoryNoteId: selling ? values.inventoryNoteId as EntityId : undefined,
       categoryId: selling ? undefined : values.categoryId as EntityId,
       commodityName: selling ? undefined : values.commodityName as string,
+      brand: selling ? undefined : values.brand as string | undefined,
+      origin: selling ? undefined : values.origin as string | undefined,
+      spec: selling ? undefined : values.spec as Record<string, unknown>,
+      unit: selling ? undefined : buyCategory?.unit,
       quantity: String(values.quantity),
       price: values.priceType === 'FIXED' ? String(values.price) : undefined,
       priceType: values.priceType as 'FIXED' | 'NEGOTIABLE',
@@ -740,6 +758,8 @@ export default function TradingPage() {
       {/* ---------- accept ---------- */}
       <Modal
         title={acceptTarget ? `摘牌：${acceptTarget.commodityName}` : ''}
+        centered
+        styles={{ body: { maxHeight: 'calc(100dvh - 180px)', overflowY: 'auto' } }}
         open={acceptTarget !== null}
         onCancel={() => setAcceptTarget(null)}
         onOk={() => acceptForm.submit()}
@@ -758,11 +778,13 @@ export default function TradingPage() {
             ) : (
               <Alert type="info" showIcon style={{ marginBottom: 16 }}
                 message="摘牌即承诺"
-                description="接受对方的挂牌就是作出承诺，货权当场转移：卖方库存减少，你会获得等量的电子库存单。价格与交收条款按挂牌内容执行。" />
+                description={acceptTarget.side === 'BUY'
+                  ? '你是交付货物的卖方，请选择符合采购要求的自有库存。成交后你的库存减少，采购方获得等量库存。'
+                  : '接受卖方挂牌后，你获得等量电子库存，卖方库存减少。价格与交收条款按挂牌内容执行。'} />
             )}
             <Descriptions column={1} size="small" bordered style={{ marginBottom: 16 }}>
               <Descriptions.Item label="挂牌方">{acceptTarget.enterpriseName}</Descriptions.Item>
-              <Descriptions.Item label="单价">{acceptTarget.price} 元/{acceptTarget.unit}</Descriptions.Item>
+              <Descriptions.Item label="单价">{acceptTarget.price == null ? '面议：需先协商' : `${acceptTarget.price} 元/${acceptTarget.unit}`}</Descriptions.Item>
               <Descriptions.Item label="可摘数量">
                 {acceptTarget.remainingQuantity} {acceptTarget.unit}
               </Descriptions.Item>
@@ -777,12 +799,22 @@ export default function TradingPage() {
             </Descriptions>
             <Form form={acceptForm} layout="vertical"
               onFinish={(v) => acceptTarget && void doAccept({
-                id: acceptTarget.id, quantity: v.quantity as number, remark: v.remark as string })}>
+                id: acceptTarget.id, quantity: String(v.quantity), remark: v.remark as string,
+                inventoryNoteId: acceptTarget.side === 'BUY' ? v.inventoryNoteId as EntityId : undefined })}>
               <Form.Item name="quantity" label="摘牌数量"
-                rules={[{ required: true, message: '请填写数量' }]}>
-                <InputNumber min={0.001} max={Number(acceptTarget.remainingQuantity)} step={1}
+                rules={[{ required: true, message: '请填写数量' }, positiveDecimalRule(3, '999999999999999.999', '数量')]}>
+                <InputNumber stringMode min="0.001" max={acceptTarget.remainingQuantity} step="1"
                   style={{ width: '100%' }} addonAfter={acceptTarget.unit} />
               </Form.Item>
+              {acceptTarget.side === 'BUY' && <>
+                {stockError && <Alert type="error" showIcon message="匹配库存读取失败" action={<Button onClick={() => void reloadStock()}>重新加载</Button>} />}
+                <Form.Item name="inventoryNoteId" label="用于交付的源库存单" extra="仅显示本企业符合单位、规格、仓库和当前数量的库存；提交时服务端会再次校验。"
+                  rules={[{ required: true, message: '请选择用于交付的库存单' }]}>
+                  <Select showSearch optionFilterProp="label" loading={findingStock} placeholder="明确选择交付库存"
+                    options={matchingNotes.map(note => ({ value: note.id, label: `${note.commodityName} · ${note.availableQuantity} ${note.unit} · ${note.warehouseName}` }))}
+                    notFoundContent={canFindStock && !findingStock ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合采购要求的可用库存" /> : '请先填写合法数量'} />
+                </Form.Item>
+              </>}
               <Form.Item name="remark" label="备注">
                 <Input.TextArea rows={2} maxLength={512} />
               </Form.Item>
@@ -838,7 +870,7 @@ export default function TradingPage() {
             <Col span={12}>
               <Form.Item name="categoryId" label="品类"
                 rules={[{ required: publishSide === 'BUY', message: '请选择品类' }]}>
-                <Select placeholder="选择品类" showSearch optionFilterProp="label"
+                <Select placeholder="选择品类" showSearch optionFilterProp="label" onChange={() => publishForm.setFieldValue('spec', {})}
                   options={categoryOptions.map((o) => ({ value: o.id, label: o.label }))} />
               </Form.Item>
             </Col>
@@ -849,6 +881,15 @@ export default function TradingPage() {
               </Form.Item>
             </Col>
           </Row>}
+          {publishSide === 'BUY' && <>
+            <Typography.Paragraph type="secondary">采购单位：{buyCategory?.unit ?? '选择品类后确定'}。指定规格按值匹配，未填写的可选项不限制；数字规格 99.7 与 99.700 等价。</Typography.Paragraph>
+            {(buyCategory?.specSchema ?? []).map(field => <Form.Item key={field.key} name={['spec', field.key]}
+              label={`${field.label}${field.unit ? ` (${field.unit})` : ''}`} rules={[{ required: field.required, message: `请填写${field.label}` }]}>
+              {field.type === 'number' ? <InputNumber min={field.unit === '%' ? 0 : undefined} max={field.unit === '%' ? 100 : undefined} style={{ width: '100%' }} /> : <Input maxLength={256} />}
+            </Form.Item>)}
+            <Row gutter={12}><Col xs={24} sm={12}><Form.Item name="brand" label="指定品牌（可选）"><Input maxLength={64} /></Form.Item></Col>
+              <Col xs={24} sm={12}><Form.Item name="origin" label="指定产地（可选）"><Input maxLength={64} /></Form.Item></Col></Row>
+          </>}
 
           <Row gutter={12}>
             <Col xs={24} sm={8}>
