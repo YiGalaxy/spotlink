@@ -9,6 +9,8 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.spotlink.trading.entity.Listing;
 
 public interface ListingMapper extends BaseMapper<Listing> {
+    @org.apache.ibatis.annotations.Select("SELECT * FROM t_listing WHERE id=#{id} AND deleted=0 FOR UPDATE")
+    Listing lockById(@org.apache.ibatis.annotations.Param("id") Long id);
     default List<Listing> findPublicByNumber(String number, String side, OffsetDateTime now) {
         return selectList(publicQuery(now).eq(Listing::getListingNo, number)
                 .eq(side != null, Listing::getSide, side).last("LIMIT 1"));

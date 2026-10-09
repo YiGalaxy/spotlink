@@ -78,7 +78,7 @@ public class OrderService {
     public Order accept(Long listingId, OrderAcceptRequest request, LoginUser user) {
         Long enterpriseId = requireEnterprise(user);
 
-        Listing listing = listingMapper.selectById(listingId);
+        Listing listing = listingMapper.lockById(listingId);
         if (listing == null) {
             throw BusinessException.of(ResultCode.LISTING_NOT_FOUND);
         }
@@ -123,6 +123,12 @@ public class OrderService {
         TransferResult transfer = awaitsLister
                 ? null
                 : transferGoods(listing, quantity, buyerId, sellerId, selected);
+        Long reservationId = null;
+        if (awaitsLister) {
+            var reservation = freezeService.reserveForOrder(sellerId, listing.getFreezeId(), quantity, listing.getId());
+            reservationId = reservation.orderFreezeId();
+            listing.setFreezeId(reservation.listingFreezeId());
+        }
 
         Order order = new Order();
         order.setOrderNo(nextNo("OR"));
@@ -140,13 +146,14 @@ public class OrderService {
         order.setWarehouseId(selected == null ? listing.getWarehouseId() : selected.getWarehouseId());
         order.setDeliveryMethod(listing.getDeliveryMethod());
         order.setPaymentTerms(listing.getPaymentTerms());
-        order.setGoodsFreezeId(transfer == null ? null : transfer.sourceFreezeId());
+        order.setGoodsFreezeId(transfer == null ? reservationId : transfer.sourceFreezeId());
         order.setStatus(awaitsLister ? OrderStatus.PENDING_CONFIRM : OrderStatus.CONFIRMED);
         order.setConfirmedAt(awaitsLister ? null : OffsetDateTime.now());
         order.setConfirmDeadline(awaitsLister ? answerDeadlineFor(listing) : null);
         order.setVersion(0);
         order.setRemark(request.remark());
         orderMapper.insert(order);
+        if (reservationId != null) freezeService.attributeTo(reservationId, order.getId());
         if (transfer != null) {
             persistTransfer(order, transfer);
             if (selected != null) freezeService.attributeTo(transfer.sourceFreezeId(), order.getId());
@@ -191,18 +198,30 @@ public class OrderService {
      */
     @Transactional
     public Order confirm(Long orderId, LoginUser user) {
-        Order order = loadParticipant(orderId, user.getEnterpriseId());
+        Order order = lockParticipant(orderId, user.getEnterpriseId());
         Listing listing = requireLister(order, user, "只有挂牌方可以确认这笔成交");
+
+        if (order.getConfirmDeadline() == null || !order.getConfirmDeadline().isAfter(OffsetDateTime.now())) {
+            throw BusinessException.of(ResultCode.ORDER_STATUS_INVALID, "确认期限已过，不能再确认成交");
+        }
 
         transition(order, OrderStatus.CONFIRMED, user, "挂牌方确认成交");
 
         // 摘牌预留了货物；答复它才是移动货物的动作。
-        TransferResult transfer = transferGoods(listing, order.getQuantity(), order.getBuyerId(), order.getSellerId(), null);
+        // 使用本订单独立预留；不消耗挂牌尚未摘走的余量，也不依赖挂牌是否已撤回。
+        var reserved = freezeService.findFrozen(order.getSellerId(), order.getGoodsFreezeId());
+        if (!java.util.Objects.equals(reserved.getBizId(), order.getId())
+                || !com.spotlink.settlement.entity.FreezeRecord.BizType.ORDER.equals(reserved.getBizType())
+                || reserved.getQuantity().compareTo(order.getQuantity()) != 0) {
+            throw BusinessException.of(ResultCode.CONFLICT, "订单预留不一致，不能确认成交");
+        }
+        Listing reservation = new Listing();
+        reservation.setFreezeId(reserved.getId());
+        TransferResult transfer = transferGoods(reservation, order.getQuantity(), order.getBuyerId(), order.getSellerId(), null);
         order.setGoodsFreezeId(transfer.sourceFreezeId());
         persistTransfer(order, transfer);
         // 在这里写入，而不是留给调用方：挂牌所指向的那笔预留可能刚刚转移到
         // 了新的一行，而与摘牌路径不同，这里没有后续步骤会把它持久化。
-        persistListingReservation(listing);
         order.setConfirmedAt(OffsetDateTime.now());
         order.setConfirmDeadline(null);
         persistOrder(order);
@@ -224,7 +243,7 @@ public class OrderService {
      */
     @Transactional
     public Order reject(Long orderId, String reason, LoginUser user) {
-        Order order = loadParticipant(orderId, user.getEnterpriseId());
+        Order order = lockParticipant(orderId, user.getEnterpriseId());
         requireLister(order, user, "只有挂牌方可以拒绝这笔成交");
 
         if (!OrderStatus.PENDING_CONFIRM.equals(order.getStatus())) {
@@ -253,7 +272,7 @@ public class OrderService {
      */
     @Transactional
     public Order cancel(Long orderId, String reason, LoginUser user) {
-        Order order = loadParticipant(orderId, user.getEnterpriseId());
+        Order order = lockParticipant(orderId, user.getEnterpriseId());
 
         if (!OrderStatus.PENDING_CONFIRM.equals(order.getStatus())) {
             throw BusinessException.of(ResultCode.ORDER_STATUS_INVALID, "已成交订单须经双方协商取消");
@@ -291,7 +310,12 @@ public class OrderService {
     public int expireOverdueConfirmations() {
         List<Order> lapsed = orderMapper.findOverdueConfirmations(OffsetDateTime.now());
 
-        for (Order order : lapsed) {
+        int expired = 0;
+        for (Order candidate : lapsed) {
+            if (candidate.getListingId() != null) listingMapper.lockById(candidate.getListingId());
+            Order order = orderMapper.lockById(candidate.getId());
+            if (order == null || !OrderStatus.PENDING_CONFIRM.equals(order.getStatus())
+                    || order.getConfirmDeadline() == null || order.getConfirmDeadline().isAfter(OffsetDateTime.now())) continue;
             restoreGoods(order);
             transition(order, OrderStatus.CANCELLED, null, "system",
                     "挂牌方未在期限内确认，摘牌自动失效");
@@ -300,11 +324,12 @@ public class OrderService {
             order.setConfirmDeadline(null);
             persistOrder(order);
             publishTaskChange("摘牌已逾期失效", order);
+            expired++;
         }
         if (!lapsed.isEmpty()) {
             log.info("Lapsed {} unanswered acceptance(s)", lapsed.size());
         }
-        return lapsed.size();
+        return expired;
     }
 
     /**
@@ -320,7 +345,7 @@ public class OrderService {
      */
     @Transactional
     public Order startDelivery(Long orderId, LoginUser user) {
-        Order order = loadParticipant(orderId, user.getEnterpriseId());
+        Order order = lockParticipant(orderId, user.getEnterpriseId());
         requireSeller(order, user, "只有卖方可以发起交收");
         transition(order, OrderStatus.DELIVERING, user,
                 "DELIVERED".equals(order.getDeliveryMethod()) ? "卖方发货" : "卖方放货");
@@ -338,7 +363,7 @@ public class OrderService {
      */
     @Transactional
     public Order complete(Long orderId, LoginUser user) {
-        Order order = loadParticipant(orderId, user.getEnterpriseId());
+        Order order = lockParticipant(orderId, user.getEnterpriseId());
         requireBuyer(order, user, "只有买方可以确认收货");
         transition(order, OrderStatus.COMPLETED, user,
                 "DELIVERED".equals(order.getDeliveryMethod()) ? "买方收货" : "买方提货");
@@ -508,6 +533,23 @@ public class OrderService {
     private void restoreGoods(Order order) {
         Listing listing = order.getListingId() == null
                 ? null : listingMapper.selectById(order.getListingId());
+
+        if (OrderStatus.PENDING_CONFIRM.equals(order.getStatus()) && order.getGoodsFreezeId() != null) {
+            var reserved = freezeService.findFrozen(order.getSellerId(), order.getGoodsFreezeId());
+            if (!java.util.Objects.equals(reserved.getBizId(), order.getId())
+                    || reserved.getQuantity().compareTo(order.getQuantity()) != 0) {
+                throw BusinessException.of(ResultCode.CONFLICT, "订单预留不一致，不能释放");
+            }
+            freezeService.releaseInventory(order.getSellerId(), reserved.getId());
+            if (canReopen(listing) && !listing.isExpired(OffsetDateTime.now())) {
+                if (listing.getFreezeId() != null) freezeService.releaseInventory(order.getSellerId(), listing.getFreezeId());
+                listing.setFreezeId(freezeService.freezeInventory(order.getSellerId(), reserved.getEntityId(),
+                        listing.getRemainingQuantity().add(order.getQuantity()),
+                        com.spotlink.settlement.entity.FreezeRecord.BizType.LISTING, listing.getId(), "未成交数量归还挂牌").getId());
+                returnQuantityToListing(listing, order.getQuantity());
+            }
+            return;
+        }
 
         if (order.getGoodsFreezeId() == null) {
             // 一笔未获确认的摘牌：从来没有什么移动过，因此没有什么需要解冻，
@@ -703,6 +745,15 @@ public class OrderService {
         if (orderMapper.updateById(order) == 0) {
             throw BusinessException.of(ResultCode.CONFLICT, "订单正在被其他操作修改，请刷新后重试");
         }
+    }
+
+    /** 写操作固定按挂牌、订单顺序加锁，避免确认/撤销与摘牌互相覆盖。 */
+    private Order lockParticipant(Long orderId, Long enterpriseId) {
+        Order visible = loadParticipant(orderId, enterpriseId);
+        if (visible.getListingId() != null) listingMapper.lockById(visible.getListingId());
+        Order locked = orderMapper.lockById(orderId);
+        if (locked == null || !locked.involves(enterpriseId)) throw BusinessException.of(ResultCode.ORDER_NOT_FOUND);
+        return locked;
     }
 
     private Long requireEnterprise(LoginUser user) {

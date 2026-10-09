@@ -73,6 +73,7 @@ public class Listing {
     private String paymentTerms;
 
     /** 支撑 SELL 挂牌的货物冻结；挂牌关闭时释放。 */
+    @TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.ALWAYS)
     private Long freezeId;
 
     private OffsetDateTime validUntil;

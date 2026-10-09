@@ -361,7 +361,7 @@ public class ListingService {
     }
 
     private Listing loadOwned(Long id, Long enterpriseId) {
-        Listing listing = listingMapper.selectById(id);
+        Listing listing = listingMapper.lockById(id);
         if (listing == null) {
             throw BusinessException.of(ResultCode.LISTING_NOT_FOUND);
         }

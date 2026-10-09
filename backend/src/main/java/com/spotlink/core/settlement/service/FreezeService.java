@@ -262,6 +262,27 @@ public class FreezeService {
         freezeRecordMapper.updateById(record);
     }
 
+    /** 将挂牌预留拆成独立订单预留和挂牌余量；原冻结释放记录保留完整审计轨迹。 */
+    @Transactional
+    public ReservationSplit reserveForOrder(Long enterpriseId, Long freezeId, BigDecimal quantity, Long listingId) {
+        var original = loadFrozen(enterpriseId, freezeId);
+        com.spotlink.inventory.service.InventoryRules.quantity(quantity);
+        if (!FreezeRecord.BizType.LISTING.equals(original.getBizType())
+                || !java.util.Objects.equals(listingId, original.getBizId())
+                || quantity.compareTo(original.getQuantity()) > 0) {
+            throw BusinessException.of(ResultCode.CONFLICT, "挂牌预留与摘牌数量不一致，请刷新后重试");
+        }
+        BigDecimal remainder = original.getQuantity().subtract(quantity);
+        releaseInventory(enterpriseId, freezeId);
+        var reserved = freezeInventory(enterpriseId, original.getEntityId(), quantity,
+                FreezeRecord.BizType.ORDER, null, "摘牌待确认，独立订单预留");
+        Long remainingId = remainder.signum() == 0 ? null : freezeInventory(enterpriseId, original.getEntityId(), remainder,
+                FreezeRecord.BizType.LISTING, listingId, "摘牌后挂牌余量").getId();
+        return new ReservationSplit(reserved.getId(), remainingId);
+    }
+
+    public record ReservationSplit(Long orderFreezeId, Long listingFreezeId) { }
+
     // ------------------------------------------------------------------
     // 内部实现
     // ------------------------------------------------------------------

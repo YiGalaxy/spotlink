@@ -1146,14 +1146,14 @@ function OrderDetailModal({
                 </Button>
               )}
               {order.allowedActions.includes('CANCELLED') && (
-                <Popconfirm title="取消这笔订单？" description="交收开始前可取消，货物会退回卖方。"
+                <Popconfirm title="撤回这笔摘牌？" description="撤回尚未确认的摘牌，释放本订单的预留。"
                   okText="取消订单" cancelText="再想想" okButtonProps={{ danger: true }}
                   onConfirm={() => void onAction('cancel', order)}>
                   <Button danger>取消订单</Button>
                 </Popconfirm>
               )}
               {order.allowedActions.length === 0 && (
-                <Typography.Text type="secondary">订单已终结，没有可执行的操作</Typography.Text>
+                <Typography.Text type="secondary">当前暂无可执行操作，请查看状态轨迹。</Typography.Text>
               )}
             </Space>
           </Card>

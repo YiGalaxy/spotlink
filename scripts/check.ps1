@@ -108,6 +108,18 @@ try {
                         & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
                     }
                 }
+                'manual-reservation' {
+                    try {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=ManualReservationIntegrationTest,GoodsTransferIntegrationTest,PartialFillTest' test
+                        if ($LASTEXITCODE -ne 0) { throw 'MANUAL 独立冻结、确认期限和单笔撤销检查失败。' }
+                    } finally {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
+                    }
+                }
+                'manual-reservation-browser' {
+                    & "$PSScriptRoot/tests/auth-runtime.tests.ps1" -ManualTrading
+                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                }
                 'admin-authority' {
                     try {
                         & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=AdminAuthorityIntegrationTest,AuthenticationBoundaryTest,AdminEndpointCoverageTest,EnterpriseIdParameterIsolationTest' test

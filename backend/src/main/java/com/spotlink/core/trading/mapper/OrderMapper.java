@@ -9,6 +9,8 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.spotlink.trading.entity.Order;
 
 public interface OrderMapper extends BaseMapper<Order> {
+    @org.apache.ibatis.annotations.Select("SELECT * FROM t_order WHERE id=#{id} AND deleted=0 FOR UPDATE")
+    Order lockById(@org.apache.ibatis.annotations.Param("id") Long id);
 
     default long countPendingConfirmations(Long listingId) {
         return selectCount(Wrappers.<Order>lambdaQuery().eq(Order::getListingId, listingId).eq(Order::getStatus, com.spotlink.trading.entity.OrderStatus.PENDING_CONFIRM));
