@@ -1,4 +1,5 @@
 async (page) => {
+  const engine = '__SPOTLINK_BROWSER_ENGINE__'
   const assert = (value, message) => { if (!value) throw new Error(message) }
   await page.goto('http://localhost:58080/login')
   await page.getByLabel('用户名', { exact: true }).fill('min_seller01')
@@ -7,6 +8,11 @@ async (page) => {
   await page.waitForURL('http://localhost:58080/')
   await page.goto('http://localhost:58080/advisor')
   await page.getByText('已启用', { exact: true }).waitFor()
+  if (engine === 'langchain') {
+    await page.getByRole('combobox', { name: '顾问引擎' }).press('ArrowDown')
+    await page.getByTitle('LangChain', { exact: true }).click()
+    await page.getByText('已启用', { exact: true }).waitFor()
+  }
   const ask = async question => {
     await page.getByLabel('向交易顾问提问').fill(question)
     await page.getByRole('button', { name: /发\s*送/, exact: true }).click()
@@ -19,6 +25,7 @@ async (page) => {
   await page.getByText('查看数据依据（1 项查询）', { exact: true }).click()
   await ask('电子库存单可以质押吗？')
   await page.locator('.markdown-body').last().getByText(/不可质押/).waitFor()
+  assert((await page.locator('.advisor-answer-meta').last().textContent()).includes(engine === 'langchain' ? 'LangChain' : 'Spring AI'), '页面显示了错误引擎')
   assert((await page.locator('.markdown-body').last().textContent()).includes('SL-MIN-KNOW-INVENTORY'), '回复缺少真实原文来源')
   await page.reload()
   await page.locator('.conv-item').first().click()

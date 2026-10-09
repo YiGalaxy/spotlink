@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 public record CreateConversationRequest(
 
         @Size(max = 128, message = "标题过长")
-        String title
+        String title,
+        @jakarta.validation.constraints.Pattern(regexp = "spring-ai|langchain", message = "未知顾问引擎") String engine
 ) {
 }

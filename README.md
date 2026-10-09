@@ -21,7 +21,7 @@
 
 大宗采购需要同时看商品、库存、行情和交易规则。SpotLink 把这些业务放在一个具体场景中：用户先逛商城，再问顾问“我还有多少可用库存？”或“这笔订单下一步要做什么？”，模型通过有权限的业务工具查数，回答可以展开查看调用依据。
 
-这也是一个 AI 工程学习项目：用业务约束学习 Spring AI、工具调用、会话记忆和 RAG，后续加入独立 LangChain 引擎与效果评测。项目处于持续建设阶段，完整路线见[实施计划](docs/SpotLink实施计划-2026-10-08.md)。
+这也是一个 AI 工程学习项目：用业务约束学习 Spring AI 与独立 Python LangChain 引擎、工具调用、会话记忆和 RAG。两套顾问共享服务端模型配置与只读业务工具，在顾问页面选择引擎。项目处于持续建设阶段，完整路线见[实施计划](docs/SpotLink实施计划-2026-10-08.md)。
 
 ## 目前能体验什么
 
@@ -33,7 +33,7 @@
 | AI 顾问 | 查货比价、余量/仓库/交付、运费参数估算、商品卡片跳转、可编辑采购需求与隔离会话 |
 | 平台模型管理 | 管理员调整 API 地址、模型、密钥、输出上限和超时；保存对下一轮立即生效 |
 
-交易、合同、行情和知识库已有接口与页面代码，完整业务验收仍按计划推进。**独立 LangChain 引擎、用户个人模型配置、完整双引擎评测尚待实现。** 模型接入成功也不代表所有业务节点已验收。
+交易、合同、行情和知识库已有接口与页面代码，完整业务验收仍按计划推进。**用户个人模型配置、完整双引擎质量评测尚待实现。** LangChain 使用自己的模型消息、工具循环和 RAG 上下文；接入方式及边界见[双引擎顾问](docs/LangChain双引擎顾问.md)。模型接入成功也不代表所有业务节点已验收。
 
 ## 快速启动
 
@@ -157,6 +157,10 @@ flowchart LR
     API --> DB[(MySQL)]
     API --> Cache[(Redis)]
     API --> Advisor[Spring AI 顾问]
+    API --> LangChain[Python / LangChain 顾问]
+    LangChain --> ModelProxy[Java 受限模型代理]
+    ModelProxy --> LLM
+    LangChain --> Tools
     Advisor --> LLM[OpenAI 兼容服务 / 本地模型 / 云端 API]
     Advisor --> Tools[受权限约束的业务工具]
     Tools --> DB
@@ -165,12 +169,15 @@ flowchart LR
 | 层 | 技术 |
 | --- | --- |
 | 后端 | Java 21、Spring Boot 3.5.3、Spring AI 1.0.0、MyBatis-Plus、Flyway |
+| 独立顾问 | Python 3.12、FastAPI、LangChain 1.0.8；uv.lock 固定依赖 |
 | 前端 | React 19、TypeScript、Vite、Ant Design、TanStack Query、ECharts |
 | 数据与部署 | MySQL 8.4.7、Redis 7.4.2、Nginx、Docker Compose |
 | 可选本地推理 | Ollama；聊天模型与知识库向量模型分别配置 |
 
 ```text
 backend/    业务模块、顾问工具、模型配置、数据库迁移
+advisor-langchain/ 独立模型编排、工具循环、记忆与 RAG
+contracts/ 双引擎人工 OpenAPI 契约
 frontend/   商城、企业页面、AI 顾问、管理员模型设置
 ops/        应用、测试与工具容器
 scripts/    启停、验证、数据生成和本地模型安装入口

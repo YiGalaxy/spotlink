@@ -24,17 +24,19 @@ public record MessageView(
         List<ToolCallView> toolCalls,
         Integer iterations,
         TokenUsage usage,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        String engine,
+        String runId
 ) {
 
     public record ToolCallView(String name, String input, String output) {
     }
 
     public record TokenUsage(
-            long inputTokens,
-            long outputTokens,
-            long cacheReadTokens,
-            long cacheCreationTokens
+            Long inputTokens,
+            Long outputTokens,
+            Long cacheReadTokens,
+            Long cacheCreationTokens
     ) {
     }
 
@@ -48,11 +50,8 @@ public record MessageView(
                 parseToolCalls(entity.getToolCalls(), objectMapper),
                 entity.getIterations(),
                 entity.getInputTokens() == null ? null : new TokenUsage(
-                        nullSafe(entity.getInputTokens()),
-                        nullSafe(entity.getOutputTokens()),
-                        nullSafe(entity.getCacheReadTokens()),
-                        nullSafe(entity.getCacheCreationTokens())),
-                entity.getCreatedAt());
+                        entity.getInputTokens(), entity.getOutputTokens(), entity.getCacheReadTokens(), entity.getCacheCreationTokens()),
+                entity.getCreatedAt(), entity.getEngine(), entity.getRunId());
     }
 
     /** 一个尚未落库的回合。 */
@@ -61,7 +60,7 @@ public record MessageView(
                                           int iterations,
                                           TokenUsage usage) {
         return new MessageView(null, AdvisorMessage.Role.ASSISTANT, content, List.of(), List.of(),
-                toolCalls, iterations, usage, OffsetDateTime.now());
+                toolCalls, iterations, usage, OffsetDateTime.now(), "spring-ai", null);
     }
 
     private static List<AdvisorProductReference> parseProducts(String json, ObjectMapper mapper) {
@@ -92,7 +91,4 @@ public record MessageView(
         }
     }
 
-    private static long nullSafe(Long value) {
-        return value == null ? 0L : value;
-    }
 }

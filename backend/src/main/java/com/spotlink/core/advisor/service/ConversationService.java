@@ -50,6 +50,7 @@ public class ConversationService {
     private final ObjectMapper objectMapper;
     private final AdvisorRequestGuard guard;
     private final PlatformTransactionManager transactionManager;
+    private final com.spotlink.advisor.langchain.LangChainGateway langChain;
 
     // ------------------------------------------------------------------
     // 会话管理
@@ -62,12 +63,19 @@ public class ConversationService {
                 .map(row -> new ConversationSummary(
                         row.getId(), row.getTitle(),
                         row.getMessageCount() == null ? 0 : row.getMessageCount(),
-                        row.getLastMessageAt(), row.getCreatedAt()))
+                        row.getLastMessageAt(), row.getCreatedAt(), engine(row)))
                 .toList();
     }
 
     public ConversationDetail create(Long userId, Long enterpriseId, String title) {
+        return create(userId, enterpriseId, title, "spring-ai");
+    }
+
+    public ConversationDetail create(Long userId, Long enterpriseId, String title, String engine) {
+        if (engine == null) engine = "spring-ai";
+        if (!java.util.Set.of("spring-ai", "langchain").contains(engine)) throw BusinessException.of(ResultCode.BAD_REQUEST, "未知顾问引擎");
         Conversation conversation = new Conversation();
+        conversation.setEngine(engine);
         conversation.setUserId(userId);
         conversation.setEnterpriseId(enterpriseId);
         conversation.setTitle(title == null || title.isBlank() ? "新对话" : title.trim());
@@ -77,7 +85,7 @@ public class ConversationService {
         conversation.setLastMessageAt(OffsetDateTime.now());
         conversationMapper.insert(conversation);
 
-        return new ConversationDetail(conversation.getId(), conversation.getTitle(), conversation.getContextNote(), List.of());
+        return new ConversationDetail(conversation.getId(), conversation.getTitle(), conversation.getContextNote(), List.of(), engine(conversation));
     }
 
     public ConversationDetail get(Long conversationId, Long userId) {
@@ -87,7 +95,7 @@ public class ConversationService {
                 .map(entity -> MessageView.from(entity, objectMapper))
                 .toList();
 
-        return new ConversationDetail(conversation.getId(), conversation.getTitle(), conversation.getContextNote(), messages);
+        return new ConversationDetail(conversation.getId(), conversation.getTitle(), conversation.getContextNote(), messages, engine(conversation));
     }
 
     public void updateContext(Long conversationId, Long userId, String note) {
@@ -99,6 +107,7 @@ public class ConversationService {
 
     public void delete(Long conversationId, Long userId) {
         requireOwned(conversationId, userId);
+        langChain.cancel(conversationId, userId);
         // 对会话做软删除；它的消息作为历史保留下来。
         conversationMapper.deleteById(conversationId);
         log.info("Conversation {} deleted by user {}", conversationId, userId);
@@ -122,7 +131,9 @@ public class ConversationService {
         if (!Objects.equals(conversation.getEnterpriseId(), user.getEnterpriseId())) throw BusinessException.of(ResultCode.CONVERSATION_NOT_FOUND);
         try (var lease = guard.acquire(user.getUserId())) {
             List<ConversationTurn> history = loadHistory(conversationId);
-            AgentResult result = advisorAgent.run(content, history, user, conversation.getContextNote());
+            AgentResult result = "langchain".equals(engine(conversation))
+                    ? langChain.run(conversationId, content, history, user, conversation.getContextNote())
+                    : advisorAgent.run(content, history, user, conversation.getContextNote());
             // 模型调用不占用数据库事务；问答与计数在同一短事务中提交。
             return new TransactionTemplate(transactionManager).execute(status -> {
                 requireOwned(conversationId, user.getUserId());
@@ -198,11 +209,12 @@ public class ConversationService {
         message.setToolCalls(serialiseToolCalls(result));
         message.setInputTokens(toLong(result.inputTokens()));
         message.setOutputTokens(toLong(result.outputTokens()));
-        // Spring AI 既不报告缓存 token 数，也不报告循环轮数，所以这几项保持为 null，
-        // 而不是填一个会误导人的 0。
+        // 缓存统计尚未采集，保持未知；LangChain 可报告真实模型循环轮数。
         message.setCacheReadTokens(null);
         message.setCacheCreationTokens(null);
-        message.setIterations(null);
+        message.setIterations(result.iterations());
+        message.setRunId(result.runId());
+        message.setModel(result.model());
         messageMapper.insert(message);
         return message;
     }
@@ -212,6 +224,7 @@ public class ConversationService {
         message.setConversationId(conversation.getId());
         message.setEnterpriseId(user.getEnterpriseId());
         message.setUserId(user.getUserId());
+        message.setEngine(engine(conversation));
         return message;
     }
 
@@ -253,5 +266,14 @@ public class ConversationService {
 
     private Long toLong(Integer value) {
         return value == null ? null : value.longValue();
+    }
+
+    public void cancel(Long conversationId, Long userId) {
+        requireOwned(conversationId, userId);
+        langChain.cancel(conversationId, userId);
+    }
+
+    private static String engine(Conversation conversation) {
+        return conversation.getEngine() == null ? "spring-ai" : conversation.getEngine();
     }
 }

@@ -32,6 +32,7 @@ class ConversationPersistenceTest {
     @Autowired ConversationMapper conversations;
     @Autowired AdvisorMessageMapper messages;
     @MockitoBean AdvisorAgent agent;
+    @MockitoBean com.spotlink.advisor.langchain.LangChainGateway langChain;
     private final List<Long> ids = new ArrayList<>();
     private LoginUser user;
 
@@ -123,6 +124,22 @@ class ConversationPersistenceTest {
             return AgentResult.of("最新回答", List.of(), null, null);
         });
         service.sendMessage(id, "当前问题", user);
+    }
+
+    @Test void engineIsBoundAtCreationAndLangChainResultPersistsMetadata() {
+        var detail = service.create(user.getUserId(), user.getEnterpriseId(), "第二引擎", "langchain");
+        ids.add(detail.id());
+        when(langChain.run(eq(detail.id()), anyString(), anyList(), eq(user), nullable(String.class)))
+                .thenReturn(new AgentResult("LangChain 已查询。", List.of(), 12, 6, List.of(), List.of(), 2, "run-123", "model-1"));
+        var answer = service.sendMessage(detail.id(), "查我的订单", user);
+        assertThat(service.get(detail.id(), user.getUserId()).engine()).isEqualTo("langchain");
+        assertThat(answer.engine()).isEqualTo("langchain");
+        assertThat(answer.runId()).isEqualTo("run-123");
+        assertThat(answer.iterations()).isEqualTo(2);
+        assertThat(answer.usage().cacheReadTokens()).isNull();
+        verifyNoInteractions(agent);
+        assertThatThrownBy(() -> service.create(user.getUserId(), user.getEnterpriseId(), null, "unknown"))
+                .isInstanceOf(BusinessException.class);
     }
 
     private long create() {

@@ -9,6 +9,10 @@ public record ConversationDetail(
         @JsonSerialize(using = ToStringSerializer.class) Long id,
         String title,
         String contextNote,
-        List<MessageView> messages
+        List<MessageView> messages,
+        String engine
 ) {
+    public ConversationDetail(Long id, String title, String contextNote, List<MessageView> messages) {
+        this(id, title, contextNote, messages, "spring-ai");
+    }
 }

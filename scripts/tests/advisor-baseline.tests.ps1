@@ -1,4 +1,4 @@
-﻿param([switch]$Browser)
+﻿param([switch]$Browser, [ValidateSet('spring-ai', 'langchain')] [string]$Engine = 'spring-ai')
 . "$PSScriptRoot/../lib/data.ps1"
 $projectName = 'spotlink-next-eval-early'
 $envFile = '.local/config/eval-early.env'
@@ -17,18 +17,18 @@ $arguments = $context.Arguments + @('-f', "$script:ProjectRoot/ops/compose.eval.
 $code = 0
 try {
     Assert-DockerReady
-    & docker @arguments build backend
+    & docker @arguments build backend advisor-langchain
     if ($LASTEXITCODE -ne 0) { throw '离线顾问镜像构建失败。' }
     Invoke-DataStep -Step all -ProjectName $projectName -EnvFile $envFile
-    & docker @arguments up -d --wait --wait-timeout 240 backend eval-model
+    & docker @arguments up -d --wait --wait-timeout 240 backend eval-model advisor-langchain
     if ($LASTEXITCODE -ne 0) { throw '离线顾问服务未就绪。' }
-    & docker @arguments run --rm --no-deps eval-runner
+    & docker @arguments run --rm --no-deps -e "SPOTLINK_EVAL_ENGINE=$Engine" eval-runner
     if ($LASTEXITCODE -ne 0) { throw '早期离线基线未通过，查看 .local/evals 中的断言分类。' }
     if ($Browser) {
         & docker @arguments up -d --wait --wait-timeout 180 frontend
         if ($LASTEXITCODE -ne 0) { throw '早期顾问页面未就绪。' }
         [IO.Directory]::CreateDirectory("$script:ProjectRoot/.local/browser") | Out-Null
-        & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps browser-tools sh /workspace/scripts/tests/advisor-early-browser.sh
+        & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps -e "SPOTLINK_BROWSER_ENGINE=$Engine" browser-tools sh /workspace/scripts/tests/advisor-early-browser.sh
         if ($LASTEXITCODE -ne 0) { throw '导入数据到顾问页面的浏览器验收失败。' }
     }
 } catch { Write-Error $_.Exception.Message -ErrorAction Continue; $code = 4 }

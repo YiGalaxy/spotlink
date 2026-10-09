@@ -27,5 +27,6 @@ services:
     environment:
       SPOTLINK_EVAL_BASE_URL: http://backend:8081
       SPOTLINK_EVAL_MOCK_URL: http://eval-model:8080
+      SPOTLINK_EVAL_ENGINE: ${SPOTLINK_EVAL_ENGINE:-spring-ai}
     volumes: ["./evals:/workspace/evals:ro", "./.local:/workspace/.local"]
     networks: [spotlink-next]

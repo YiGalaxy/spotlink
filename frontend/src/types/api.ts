@@ -63,13 +63,15 @@ export interface ToolCallView {
 }
 
 export interface TokenUsage {
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheCreationTokens: number
+  inputTokens: number | null
+  outputTokens: number | null
+  cacheReadTokens: number | null
+  cacheCreationTokens: number | null
 }
 
 export interface MessageView {
+  engine?: AdvisorEngine
+  runId?: string | null
   id: EntityId | null
   role: 'user' | 'assistant'
   content: string
@@ -103,6 +105,7 @@ export interface AdvisorKnowledgeReference {
 }
 
 export interface ConversationSummary {
+  engine?: AdvisorEngine
   id: EntityId
   title: string
   messageCount: number
@@ -111,6 +114,7 @@ export interface ConversationSummary {
 }
 
 export interface ConversationDetail {
+  engine?: AdvisorEngine
   id: EntityId
   title: string
   contextNote: string | null
@@ -364,7 +368,10 @@ export interface SeriesData {
   points: SeriesPoint[]
 }
 
+export type AdvisorEngine = 'spring-ai' | 'langchain'
+
 export interface AdvisorStatus {
+  engines?: { engine: AdvisorEngine; ready: boolean; available: boolean }[]
   available: boolean
   enabled: boolean
   configured: boolean

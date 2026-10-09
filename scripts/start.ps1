@@ -7,7 +7,7 @@ try {
     Invoke-ProjectCompose $context @('config', '--quiet')
     if ($Build) {
         Write-Host '正在从源码构建容器镜像，首次使用需要下载依赖。'
-        Invoke-ProjectCompose $context @('build', 'backend', 'frontend')
+        Invoke-ProjectCompose $context @('build', 'backend', 'frontend', 'advisor-langchain')
     }
     # 首次演示与日常启动委托同一受控流程；已提交数据只核验，不重置。
     # 后端镜像缺失时仍由项目 Dockerfile 构建，不要求宿主 Java。

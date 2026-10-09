@@ -9,6 +9,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Select,
   Space,
   Spin,
   Tag,
@@ -20,6 +21,7 @@ import { Link } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
   createConversation,
+  cancelAdvisorRun,
   deleteConversation,
   fetchAdvisorStatus,
   getConversation,
@@ -28,7 +30,7 @@ import {
   updateConversationContext,
 } from '@/api/advisor'
 import MarkdownText from '@/components/MarkdownText'
-import type { AdvisorKnowledgeReference, EntityId, MessageView } from '@/types/api'
+import type { AdvisorEngine, AdvisorKnowledgeReference, EntityId, MessageView } from '@/types/api'
 
 const SAMPLE_QUESTIONS = [
   '找电解铜，对比挂牌单价、剩余数量和交收仓库，给我查看挂牌入口。',
@@ -68,6 +70,7 @@ function localTurn(role: 'user' | 'assistant', content: string): MessageView {
 }
 
 export default function AdvisorPage() {
+  const [engine, setEngine] = useState<AdvisorEngine>('spring-ai')
   const [activeId, setActiveId] = useState<EntityId | null>(null)
   const [messages, setMessages] = useState<MessageView[]>([])
   const [input, setInput] = useState('')
@@ -93,6 +96,8 @@ export default function AdvisorPage() {
 
   /** 镜像 activeId，供那些活得比发起它们的那次渲染更久的回调使用。 */
   const activeIdRef = useRef<EntityId | null>(null)
+  const engineRef = useRef<AdvisorEngine>('spring-ai')
+  const pendingIdRef = useRef<EntityId | null>(null)
 
   const { data: conversations = [] } = useQuery({
     queryKey: identityKey('conversations'),
@@ -122,6 +127,8 @@ export default function AdvisorPage() {
     try {
       const detail = await getConversation(id)
       if (activeIdRef.current === id) {
+        setEngine(detail.engine ?? 'spring-ai')
+        engineRef.current = detail.engine ?? 'spring-ai'
         setMessages(detail.messages)
         setContextNote(detail.contextNote ?? '')
       }
@@ -156,6 +163,15 @@ export default function AdvisorPage() {
     }
   }
 
+  const changeEngine = (next: AdvisorEngine) => {
+    engineRef.current = next
+    setEngine(next)
+    handleNewConversation()
+  }
+  const engineStatus = status?.engines?.find(item => item.engine === engine)
+  const engineAvailable = engineStatus?.available ?? (engine === 'spring-ai' && status?.available)
+  const engineLabel = engine === 'langchain' ? 'LangChain' : 'Spring AI'
+
   const send = async (text?: string) => {
     // 那道同步守卫，在任何其他事情发生之前先检查。
     if (sendingRef.current) return
@@ -171,7 +187,7 @@ export default function AdvisorPage() {
     try {
       // 会话是在第一个问题时才懒创建的，所以点「新建对话」不会往列表里塞一堆空会话。
       if (conversationId === null) {
-        const detail = await createConversation()
+        const detail = await createConversation(undefined, engineRef.current)
         conversationId = detail.id
         setActiveId(conversationId)
         activeIdRef.current = conversationId
@@ -180,6 +196,7 @@ export default function AdvisorPage() {
 
       setInput('')
       setMessages((prev) => [...prev, localTurn('user', content)])
+      pendingIdRef.current = conversationId
 
       await sendMessage(conversationId, content)
       await refreshList()
@@ -202,6 +219,7 @@ export default function AdvisorPage() {
       }
     } finally {
       sendingRef.current = false
+      pendingIdRef.current = null
       setSending(false)
     }
   }
@@ -221,7 +239,7 @@ export default function AdvisorPage() {
       {historyOpen && <button className="advisor-history-backdrop" aria-label="关闭会话列表" onClick={() => setHistoryOpen(false)} />}
       <div className={`conv-sidebar${historyOpen ? ' is-open' : ''}`}>
         <div style={{ padding: 12 }}>
-          <Button type="primary" block icon={<PlusOutlined />} onClick={handleNewConversation}>
+          <Button type="primary" block disabled={sending} icon={<PlusOutlined />} onClick={handleNewConversation}>
             新建对话
           </Button>
         </div>
@@ -237,10 +255,10 @@ export default function AdvisorPage() {
                 key={conversation.id}
                 className={`conv-item${conversation.id === activeId ? ' active' : ''}`}
               >
-                <button className="conv-item-body conv-open" type="button" aria-label={`打开会话：${conversation.title}`} aria-current={conversation.id === activeId ? 'true' : undefined} onClick={() => void openConversation(conversation.id)}>
+                <button className="conv-item-body conv-open" type="button" disabled={sending} aria-label={`打开会话：${conversation.title}`} aria-current={conversation.id === activeId ? 'true' : undefined} onClick={() => void openConversation(conversation.id)}>
                   <div className="conv-item-title">{conversation.title}</div>
                   <div className="conv-item-meta">
-                    {conversation.messageCount} 条 ·{' '}
+                    {conversation.engine === 'langchain' ? 'LangChain' : 'Spring AI'} · {conversation.messageCount} 条 ·{' '}
                     {conversation.lastMessageAt
                       ? dayjs(conversation.lastMessageAt).format('MM-DD HH:mm')
                       : '—'}
@@ -269,7 +287,9 @@ export default function AdvisorPage() {
         <div className="chat-header">
           <Button className="advisor-history-button" size="small" onClick={() => setHistoryOpen(true)}>会话记录</Button>
           <Typography.Text strong>AI 交易顾问</Typography.Text>
-          {status?.available ? (
+          <Select aria-label="顾问引擎" value={engine} disabled={sending || loadingHistory} onChange={changeEngine}
+            options={[{ value: 'spring-ai', label: 'Spring AI' }, { value: 'langchain', label: 'LangChain' }]} style={{ width: 130 }} />
+          {engineAvailable ? (
             <>
               <Tag color="green">已启用</Tag>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -277,7 +297,7 @@ export default function AdvisorPage() {
               </Typography.Text>
             </>
           ) : status ? (
-            <Tag color="orange">{status.enabled ? '平台模型待配置' : '顾问已停用'}</Tag>
+            <Tag color="orange">{engineStatus && !engineStatus.ready ? '引擎暂不可用' : status.enabled ? '平台模型待配置' : '顾问已停用'}</Tag>
           ) : (
             <Spin size="small" />
           )}
@@ -320,7 +340,7 @@ export default function AdvisorPage() {
                       <div className="chat-bubble user">{message.content}</div>
                     ) : (
                       <>
-                        <div className="advisor-answer-meta">现货通顾问 · {dayjs(message.createdAt).format('HH:mm')}</div>
+                        <div className="advisor-answer-meta">现货通顾问 · {engineLabel} · {dayjs(message.createdAt).format('HH:mm')}</div>
                         <div className="chat-bubble assistant">
                           <MarkdownText content={message.content} allowedLinks={(message.products ?? []).map(product => `/trading?listing=${product.id}`)} />
                         </div>
@@ -424,15 +444,18 @@ export default function AdvisorPage() {
               >
                 发送
               </Button>
+              {sending && engine === 'langchain' && <Button onClick={() => { if (pendingIdRef.current) void cancelAdvisorRun(pendingIdRef.current) }}>
+                停止本轮
+              </Button>}
             </Space.Compact>
-            <div className="advisor-composer-hint">同一会话保留最近对话；长期条件可存入“采购需求”。报价与余量以挂牌详情为准。</div>
+            <div className="advisor-composer-hint">会话固定使用创建时的引擎，切换引擎会开始新对话。长期条件可存入“采购需求”。报价与余量以挂牌详情为准。</div>
 
-            {status && !status.available && (
+            {status && !engineAvailable && (
               <Alert
                 type="warning"
                 showIcon
                 style={{ marginTop: 10 }}
-                message={status.enabled ? '平台模型待配置' : 'AI 顾问已停用'}
+                message={engineStatus && !engineStatus.ready ? `${engineLabel} 引擎暂不可用` : status.enabled ? '平台模型待配置' : 'AI 顾问已停用'}
                 description="请联系平台管理员在管理后台配置模型服务。本地推理服务和 OpenAI 兼容云端 API 均可使用。"
               />
             )}

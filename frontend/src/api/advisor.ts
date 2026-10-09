@@ -1,6 +1,7 @@
 import { api } from './client'
 import type {
   AdvisorStatus,
+  AdvisorEngine,
   ConversationDetail,
   ConversationSummary,
   EntityId,
@@ -15,8 +16,12 @@ export function listConversations() {
   return api.get<ConversationSummary[]>('/advisor/conversations')
 }
 
-export function createConversation(title?: string) {
-  return api.post<ConversationDetail>('/advisor/conversations', { title })
+export function createConversation(title?: string, engine: AdvisorEngine = 'spring-ai') {
+  return api.post<ConversationDetail>('/advisor/conversations', { title, engine })
+}
+
+export function cancelAdvisorRun(id: EntityId) {
+  return api.post<void>(`/advisor/conversations/${id}/cancel`)
 }
 
 // ID 全程保持字符串，避免精度丢失。

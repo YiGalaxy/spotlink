@@ -9,6 +9,8 @@ assert.equal(base, 'http://backend:8081');
 assert.equal(mock, 'http://eval-model:8080');
 const cases = JSON.parse(readFileSync('evals/cases/early-baseline.json', 'utf8'));
 const batch = process.env.SPOTLINK_EVAL_BATCH ?? 'minimal-v1-20261009';
+const engine = process.env.SPOTLINK_EVAL_ENGINE ?? 'spring-ai';
+assert.ok(['spring-ai', 'langchain'].includes(engine));
 assert.match(batch, /^[a-z0-9][a-z0-9-]{0,63}$/);
 const packPath = resolve('.local/data/v1', batch);
 const records = JSON.parse(readFileSync(resolve(packPath, 'records.json'), 'utf8'));
@@ -16,7 +18,7 @@ const manifest = JSON.parse(readFileSync(resolve(packPath, 'manifest.json'), 'ut
 assert.equal(manifest.dataset, cases.dataset);
 const users = new Map();
 const created = [];
-const report = { mode: 'offline', engine: 'spring-ai', suite: cases.version,
+const report = { mode: 'offline', engine, suite: cases.version,
   dataset: manifest.dataset, batch, sourceHash: manifest.sourceHash, recordsHash: manifest.files['records.json'].sha256,
   startedAt: new Date().toISOString(), results: [], note: '模型与用量为固定替身；不是实际模型质量或成本评测。' };
 
@@ -43,7 +45,8 @@ async function login(username) {
   return users.get(username);
 }
 async function create(user) {
-  const conversation = await ok('/advisor/conversations', user, 'POST', {});
+  const conversation = await ok('/advisor/conversations', user, 'POST', { engine });
+  assert.equal(conversation.engine, engine);
   created.push([user, conversation.id]);
   return conversation.id;
 }
@@ -115,7 +118,7 @@ async function evaluate(test) {
     assert.equal(answer.toolCalls.length, 0);
     assert.equal(await stats(), before, '攻击输入被送到模型');
     assert.ok(answer.usage == null);
-  } else assert.ok((await stats()) > before, '未经过真实 Spring AI 替身协议');
+  } else assert.ok((await stats()) > before, `未经过真实 ${engine} 替身协议`);
   const saved = await ok(`/advisor/conversations/${id}`, user);
   assert.equal(saved.messages.length % 2, 0);
   assert.deepEqual(saved.messages.filter(row => row.role === 'assistant').at(-1).toolCalls,
@@ -150,7 +153,7 @@ try {
   }
   report.completedAt = new Date().toISOString();
   report.passed = report.results.length === cases.cases.length && report.results.every(row => row.passed) && !report.cleanupFailed;
-  const output = resolve('.local/evals', `early-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+  const output = resolve('.local/evals', `${engine}-early-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
   mkdirSync(resolve('.local/evals'), { recursive: true });
   writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
   console.log(`[离线基线] ${report.results.filter(r => r.passed).length}/${cases.cases.length}；报告仅保存 .local/evals。`);

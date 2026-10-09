@@ -73,7 +73,7 @@ public class AdvisorModelSettingsService {
         return after;
     }
 
-    static String validateUrl(String value) {
+    public static String validateUrl(String value) {
         try {
             URI uri = URI.create(value.trim());
             if (!java.util.Set.of("http", "https").contains(uri.getScheme()) || uri.getHost() == null

@@ -20,8 +20,17 @@ public record AgentResult(
         Integer inputTokens,
         Integer outputTokens,
         List<com.spotlink.advisor.dto.AdvisorProductReference> products,
-        List<com.spotlink.advisor.dto.AdvisorKnowledgeReference> knowledge
+        List<com.spotlink.advisor.dto.AdvisorKnowledgeReference> knowledge,
+        Integer iterations,
+        String runId,
+        String model
 ) {
+
+    public AgentResult(String answer, List<ToolCallRecorder.Invocation> calls, Integer input, Integer output,
+                       List<com.spotlink.advisor.dto.AdvisorProductReference> products,
+                       List<com.spotlink.advisor.dto.AdvisorKnowledgeReference> knowledge) {
+        this(answer, calls, input, output, products, knowledge, null, null, null);
+    }
 
     public static AgentResult of(String answer,
                                  List<ToolCallRecorder.Invocation> toolInvocations,

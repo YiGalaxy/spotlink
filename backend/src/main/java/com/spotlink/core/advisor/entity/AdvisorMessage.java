@@ -41,6 +41,8 @@ public class AdvisorMessage {
     private Long cacheReadTokens;
     private Long cacheCreationTokens;
     private String model;
+    private String engine;
+    private String runId;
 
     @TableField(fill = FieldFill.INSERT)
     private OffsetDateTime createdAt;

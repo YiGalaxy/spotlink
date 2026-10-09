@@ -193,13 +193,13 @@ try {
                     }
                 }
                 'early-advisor' {
-                    if ($Engine -eq 'langchain') {
-                        Write-Error '该早期节点只实现了 Spring AI，LangChain 验收须等待独立引擎节点。' -ErrorAction Continue
-                        exit 2
+                    $selectedEngines = if ($Engine -eq 'both') { @('spring-ai', 'langchain') } else { @($Engine) }
+                    foreach ($selectedEngine in $selectedEngines) {
+                        if ($selectedEngine -ne $selectedEngines[0]) { Start-Sleep -Seconds 60 }
+                        Write-Host "最小闭环实际引擎：$selectedEngine；固定替身验证链路，不代表真实模型质量。"
+                        & "$PSScriptRoot/tests/advisor-baseline.tests.ps1" -Engine $selectedEngine -Browser
+                        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                     }
-                    Write-Host '早期最小闭环实际引擎：Spring AI；固定模型替身，不是双引擎或真实模型效果验收。'
-                    & "$PSScriptRoot/tests/advisor-baseline.tests.ps1" -Browser
-                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
                 'image-browser' {
                     & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps data-tools node scripts/assets/verify-images.mjs

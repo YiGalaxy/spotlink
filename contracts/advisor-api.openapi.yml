@@ -1,0 +1,160 @@
+openapi: 3.0.3
+info:
+  title: SpotLink advisor engines
+  version: 0.1.0
+  description: Java owns authentication, conversations and trusted evidence. LangChain independently orchestrates models and read-only tools.
+servers:
+  - url: http://127.0.0.1:18081
+security:
+  - loginToken: []
+paths:
+  /api/advisor/conversations:
+    post:
+      summary: Create an engine-bound conversation
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: {type: string, maxLength: 128}
+                engine: {$ref: '#/components/schemas/Engine'}
+      responses:
+        '200': {description: ApiResponse containing ConversationDetail; omitted engine defaults to spring-ai}
+    get:
+      summary: List current user's conversations across engines
+      responses:
+        '200': {description: ApiResponse containing summaries with immutable engine}
+  /api/advisor/conversations/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/ConversationId'}
+    get:
+      summary: Read an owned conversation including engine and persisted messages
+      responses:
+        '200': {description: ApiResponse containing ConversationDetail}
+    delete:
+      summary: Soft-delete an owned conversation and revoke its active delegation
+      responses:
+        '200': {description: ApiResponse; late results cannot be persisted}
+  /api/advisor/conversations/{id}/messages:
+    parameters:
+      - {$ref: '#/components/parameters/ConversationId'}
+    post:
+      summary: Send using the conversation's fixed engine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: {type: string, minLength: 1, maxLength: 4000}
+      responses:
+        '200':
+          description: ApiResponse; code 0 with Message, otherwise sanitized business failure. Failure saves no partial turn.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: {type: integer}
+                  message: {type: string}
+                  data: {$ref: '#/components/schemas/Message'}
+  /api/advisor/conversations/{id}/cancel:
+    parameters:
+      - {$ref: '#/components/parameters/ConversationId'}
+    post:
+      summary: Cancel an owned active LangChain run; revoke Java callbacks before notifying Python
+      responses:
+        '200': {description: ApiResponse; idempotent, does not promise upstream billing cancellation}
+  /api/advisor/status:
+    get:
+      summary: Report model configuration and each engine's service readiness without calling the model
+      responses:
+        '200': {description: 'ApiResponse: enabled, configured, available, model, registeredTools, engines [{engine,ready,available}]'}
+  /internal/advisor/langchain/key:
+    get:
+      security: []
+      summary: Instance public RS256 verification key; no private signing key
+      responses:
+        '200':
+          description: Public key, changed on backend restart
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [algorithm, key]
+                properties:
+                  algorithm: {type: string, enum: [RS256]}
+                  key: {type: string, description: Base64 DER public key}
+  /internal/advisor/langchain/tools:
+    post:
+      security: [{runDelegation: []}]
+      summary: Invoke an allowlisted tool under the current run's revalidated user and enterprise
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, arguments]
+              properties:
+                name: {type: string}
+                arguments: {type: object, description: Schema supplied from Java ToolDefinition; cannot choose enterprise identity}
+      responses:
+        '200': {description: 'Raw JSON {output,knowledge}; products and trail are retained by Java, not accepted from Python'}
+        '403': {description: Invalid delegation rejected before parsing JSON}
+        '413': {description: Request exceeds 64 KiB}
+  /internal/advisor/langchain/v1/chat/completions:
+    post:
+      security: [{runDelegation: []}]
+      summary: Non-streaming OpenAI-compatible proxy; model, endpoint, key, tool schema and output cap fixed by Java
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, description: OpenAI-compatible messages and optional registered tools; maximum 48 messages and 64 KiB}
+      responses:
+        '200': {description: OpenAI-compatible completion; unknown usage remains unknown}
+        '403': {description: Invalid delegation rejected before parsing JSON}
+        '413': {description: Request exceeds 64 KiB}
+components:
+  securitySchemes:
+    loginToken: {type: http, scheme: bearer, bearerFormat: JWT}
+    runDelegation:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'RS256, issuer spotlink-advisor, audience advisor-tools-model, purpose advisor-run. Binds runId, conversationId, userId, enterpriseId and 10-minute expiry. Ordinary login tokens rejected.'
+  parameters:
+    ConversationId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string}
+  schemas:
+    Engine: {type: string, enum: [spring-ai, langchain], default: spring-ai}
+    Message:
+      type: object
+      required: [id, role, content, engine, products, knowledge, toolCalls]
+      properties:
+        id: {type: string}
+        role: {type: string, enum: [user, assistant]}
+        content: {type: string}
+        engine: {$ref: '#/components/schemas/Engine'}
+        runId: {type: string, nullable: true, description: LangChain run UUID; legacy and Spring AI messages may be null}
+        products: {type: array, items: {type: object}, description: Java-generated trusted listing cards}
+        knowledge: {type: array, items: {type: object}, description: Java-generated source snapshots with chunkId, docCode, title, version, source, chunkIndex and content}
+        toolCalls: {type: array, items: {type: object}}
+        iterations: {type: integer, nullable: true}
+        usage:
+          type: object
+          nullable: true
+          properties:
+            inputTokens: {type: integer, nullable: true}
+            outputTokens: {type: integer, nullable: true}
+            cacheReadTokens: {type: integer, nullable: true}
+            cacheCreationTokens: {type: integer, nullable: true}
+        createdAt: {type: string, format: date-time}

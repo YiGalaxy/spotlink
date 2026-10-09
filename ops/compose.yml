@@ -52,6 +52,7 @@ services:
       SPOTLINK_ADVISOR_TIMEOUT_SECONDS: ${SPOTLINK_ADVISOR_TIMEOUT_SECONDS:-120}
       SPOTLINK_ADVISOR_TOKEN_PARAMETER: ${SPOTLINK_ADVISOR_TOKEN_PARAMETER:-max_tokens}
       SPOTLINK_ADVISOR_CONFIG_SECRET: ${SPOTLINK_ADVISOR_CONFIG_SECRET:-}
+      BULK_LANGCHAIN_URL: http://advisor-langchain:8090
       SPOTLINK_EMBEDDING_ENABLED: ${SPOTLINK_EMBEDDING_ENABLED:-false}
       SPOTLINK_EMBEDDING_URL: ${SPOTLINK_EMBEDDING_URL:-http://ollama:11434}
       SPOTLINK_EMBEDDING_MODEL: ${SPOTLINK_EMBEDDING_MODEL:-bge-m3}
@@ -67,6 +68,24 @@ services:
     networks: [spotlink-next]
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8081/actuator/health | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  advisor-langchain:
+    image: spotlink-next-langchain:local
+    build:
+      context: .
+      dockerfile: ops/docker/langchain/Dockerfile
+    environment:
+      SPOTLINK_BACKEND_URL: http://backend:8081
+    networks: [spotlink-next]
+    mem_limit: 512m
+    cpus: 2
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "/opt/venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health',timeout=2)"]
       interval: 10s
       timeout: 5s
       retries: 20

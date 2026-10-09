@@ -31,7 +31,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-@Tag(name = "AI 顾问", description = "基于 Spring AI 的工具调用型交易顾问")
+@Tag(name = "AI 顾问", description = "Spring AI / LangChain 独立工具调用型交易顾问")
 @RestController
 @RequestMapping("/api/advisor")
 @RequiredArgsConstructor
@@ -40,6 +40,7 @@ public class AdvisorController {
     private final ConversationService conversationService;
     private final AdvisorAgent advisorAgent;
     private final AdvisorModelSettingsService modelSettings;
+    private final com.spotlink.advisor.langchain.LangChainGateway langChain;
 
     // ------------------------------------------------------------------
     // 会话
@@ -58,7 +59,7 @@ public class AdvisorController {
         LoginUser user = SecurityUtils.currentUser();
         String title = request == null ? null : request.title();
         return ApiResponse.success(
-                conversationService.create(user.getUserId(), user.getEnterpriseId(), title));
+                conversationService.create(user.getUserId(), user.getEnterpriseId(), title, request == null ? null : request.engine()));
     }
 
     @Operation(summary = "会话详情", description = "包含全部消息与各自的工具调用链")
@@ -107,6 +108,7 @@ public class AdvisorController {
     @GetMapping("/status")
     public ApiResponse<Map<String, Object>> status() {
         var config = modelSettings.view();
+        boolean ready = langChain.ready();
         return ApiResponse.success(Map.of(
                 "available", config.available(),
                 "enabled", config.enabled(),
@@ -114,7 +116,15 @@ public class AdvisorController {
                 "model", config.model(),
                 "provider", "OpenAI-compatible",
                 "framework", "Spring AI",
-                "registeredTools", registeredToolNames()));
+                "registeredTools", registeredToolNames(),
+                "engines", List.of(Map.of("engine", "spring-ai", "ready", true, "available", config.available()),
+                        Map.of("engine", "langchain", "ready", ready, "available", ready && config.available()))));
+    }
+
+    @PostMapping("/conversations/{id}/cancel")
+    public ApiResponse<Void> cancel(@PathVariable Long id) {
+        conversationService.cancel(id, SecurityUtils.currentUserId());
+        return ApiResponse.success();
     }
 
     /**

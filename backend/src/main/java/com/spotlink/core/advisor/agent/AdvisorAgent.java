@@ -90,7 +90,7 @@ public class AdvisorAgent {
      * 只要它显得有用就会去调用，而显得有用正是这里要挡在决策环路之外的判断。规则本身是什么、
      * 以及为什么粗糙的规则才是它应有的形态，见 {@link ContractReviewTrigger}。
      */
-    List<Object> toolsFor(String userMessage) {
+    public List<Object> toolsFor(String userMessage) {
         if (userMessage.matches("(?s).*(采购|查货|找货|比价|对比|最便宜|运费|物流|交收仓|卖家|起运|目的地).*" )
                 && !userMessage.matches("(?s).*(合同|订单|库存|待办|账号|企业资料).*")) {
             return List.of(listingAdvisorTools, procurementAdvisorTools, marketAdvisorTools, knowledgeAdvisorTools);

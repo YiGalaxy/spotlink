@@ -22,6 +22,14 @@ services:
     working_dir: /workspace
     volumes: [".:/workspace:ro", "./.local:/workspace/.local"]
     command: ["node", "data/generators/generate.mjs"]
+  langchain-tools:
+    image: python:3.12.12-slim-bookworm
+    working_dir: /workspace/advisor-langchain
+    volumes: [".:/workspace", "spotlink_next_uv:/root/.cache/uv", "spotlink_next_python:/opt/venv"]
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      UV_LINK_MODE: copy
+    entrypoint: ["sh", "-c", "pip install --quiet uv==0.8.22 && exec uv \"$$@\"", "--"]
   backend-tools:
     image: maven:3.9.11-eclipse-temurin-21
     working_dir: /workspace/backend
@@ -34,3 +42,5 @@ volumes:
   spotlink_next_maven:
   spotlink_next_npm:
   spotlink_next_node_modules:
+  spotlink_next_uv:
+  spotlink_next_python:

@@ -15,6 +15,7 @@ public record ConversationSummary(
         String title,
         int messageCount,
         OffsetDateTime lastMessageAt,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        String engine
 ) {
 }
