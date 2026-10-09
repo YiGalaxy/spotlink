@@ -17,7 +17,7 @@ class SchemaSmokeTest {
     void allMigrationsSucceedOnTheSpecifiedMysqlVersion() {
         assertThat(jdbc.queryForObject("SELECT VERSION()", String.class)).startsWith("8.4.7");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success=0", Integer.class)).isZero();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success=1", Integer.class)).isEqualTo(16);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success=1", Integer.class)).isEqualTo(17);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND constraint_type='FOREIGN KEY'", Integer.class)).isPositive();
     }
 }

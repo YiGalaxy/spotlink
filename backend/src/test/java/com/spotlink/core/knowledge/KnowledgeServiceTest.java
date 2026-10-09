@@ -26,13 +26,15 @@ class KnowledgeServiceTest {
     void setUp() {
         chunkMapper = mock(KnowledgeChunkMapper.class);
         embeddingService = mock(EmbeddingService.class);
+        when(embeddingService.fingerprint()).thenReturn("test-fingerprint");
+        when(embeddingService.dimensions()).thenReturn(2);
         knowledgeService = new KnowledgeService(chunkMapper, embeddingService);
     }
 
     @Test
     void fusesVectorAndKeywordRanksWithoutComparingTheirRawScores() {
         when(embeddingService.embed("保证金如何退还")).thenReturn(new float[]{1f, 0f});
-        when(chunkMapper.loadEmbedded()).thenReturn(List.of(
+        when(chunkMapper.loadEmbedded("test-fingerprint", 2)).thenReturn(List.of(
                 vectorRow(1L, "向量首位", new float[]{1f, 0f}),
                 vectorRow(2L, "共同命中", new float[]{0.8f, 0.6f})));
         when(chunkMapper.searchByKeyword("保证金如何退还", 15)).thenReturn(List.of(
@@ -59,7 +61,7 @@ class KnowledgeServiceTest {
                 .containsExactly(11L, 12L);
         assertThat(results).extracting(KnowledgeService.Passage::content)
                 .containsExactly("第一段", "第二段");
-        verify(chunkMapper, never()).loadEmbedded();
+        verify(chunkMapper, never()).loadEmbedded("test-fingerprint", 2);
     }
 
     @Test
@@ -68,7 +70,7 @@ class KnowledgeServiceTest {
 
         verify(embeddingService, never()).embed("  \n");
         verify(chunkMapper, never()).searchByKeyword("  \n", 15);
-        verify(chunkMapper, never()).loadEmbedded();
+        verify(chunkMapper, never()).loadEmbedded("test-fingerprint", 2);
     }
 
     private Map<String, Object> vectorRow(Long id, String content, float[] embedding) {

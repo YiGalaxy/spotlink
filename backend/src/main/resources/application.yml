@@ -120,6 +120,10 @@ bulk:
       enabled: ${SPOTLINK_EMBEDDING_ENABLED:true}
       base-url: ${SPOTLINK_EMBEDDING_URL:http://localhost:11434}
       model: ${SPOTLINK_EMBEDDING_MODEL:bge-m3}
+      dimensions: ${SPOTLINK_EMBEDDING_DIMENSIONS:1024}
+      api-key: ${SPOTLINK_EMBEDDING_API_KEY:ollama}
+      revision: ${SPOTLINK_EMBEDDING_REVISION:1}
+      timeout-seconds: ${SPOTLINK_EMBEDDING_TIMEOUT_SECONDS:45}
 
   advisor:
     enabled: ${SPOTLINK_ADVISOR_ENABLED:true}

@@ -26,5 +26,7 @@ $script:CheckRegistry = [ordered]@{
     C23 = @{ Required = @('static', 'unit', 'integration', 'e2e', 'dataset', 'visual'); Checks = @{ static = 'static'; unit = 'auth-unit'; integration = 'buy-listing'; e2e = 'buy-listing-browser'; dataset = 'buy-listing'; visual = 'buy-listing-browser' } }
     C24 = @{ Required = @('static', 'unit', 'integration', 'e2e', 'dataset', 'visual'); Checks = @{ static = 'static'; unit = 'auth-unit'; integration = 'goods-transfer'; e2e = 'buy-listing-browser'; dataset = 'goods-transfer'; visual = 'buy-listing-browser' } }
     C25 = @{ Required = @('static', 'unit', 'integration', 'e2e'); Checks = @{ static = 'static'; unit = 'auth-unit'; integration = 'manual-reservation'; e2e = 'manual-reservation-browser' } }
+    C40 = @{ Required = @('static', 'unit', 'integration'); Checks = @{ static = 'static'; unit = 'embedding-unit'; integration = 'knowledge-index' } }
+    C41 = @{ Required = @('static', 'unit', 'integration'); Checks = @{ static = 'static'; unit = 'embedding-unit'; integration = 'knowledge-index' } }
 }
 $script:ValidCheckModes = @('task', 'full', 'static', 'unit', 'integration', 'dataset', 'ai-offline', 'rag', 'e2e', 'visual', 'ops', 'ai-live')

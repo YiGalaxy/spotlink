@@ -51,7 +51,8 @@ public class KnowledgeService {
         if (question == null || question.isBlank()) {
             return List.of();
         }
-        int limit = topK <= 0 ? DEFAULT_TOP_K : topK;
+        int limit = topK <= 0 ? DEFAULT_TOP_K : Math.min(topK, 8);
+        if (question.length() > 2000) return List.of();
 
         List<Map<String, Object>> vectorHits = vectorSearch(question);
         List<Map<String, Object>> keywordHits = chunkMapper.searchByKeyword(
@@ -79,9 +80,8 @@ public class KnowledgeService {
     }
 
     /** 为嵌入服务还不可用时就已入库的分块补算向量。 */
-    @Transactional
     public int embedPending(int limit) {
-        List<KnowledgeChunk> pending = chunkMapper.findUnembedded(limit);
+        List<KnowledgeChunk> pending = chunkMapper.findUnembedded(Math.clamp(limit, 1, 200), embeddingService.fingerprint());
         int done = 0;
         for (KnowledgeChunk chunk : pending) {
             float[] vector = embeddingService.embed(chunk.getContent());
@@ -90,8 +90,9 @@ public class KnowledgeService {
                 log.warn("Embedding unavailable, stopping after {} chunk(s)", done);
                 break;
             }
-            chunkMapper.updateEmbedding(chunk.getId(), EmbeddingService.toBytes(vector));
-            done++;
+            // 每块独立提交；HTTP 不占数据库事务，已成功分块在中断后仍可复用。
+            done += chunkMapper.updateEmbedding(chunk.getId(), EmbeddingService.toBytes(vector),
+                    embeddingService.fingerprint(), embeddingService.dimensions(), EmbeddingService.sha256(chunk.getContent()));
         }
         if (done > 0) {
             log.info("Embedded {} chunk(s) with {}", done, embeddingService.modelName());
@@ -101,13 +102,14 @@ public class KnowledgeService {
 
     public Map<String, Object> stats() {
         int all = chunkMapper.countAll();
-        int pending = chunkMapper.countUnembedded();
+        int pending = chunkMapper.countUnembedded(embeddingService.fingerprint());
         return Map.of(
                 "chunks", all,
                 "embedded", all - pending,
                 "pending", pending,
                 "model", embeddingService.modelName(),
-                "embeddingEnabled", embeddingService.isEnabled());
+                "embeddingEnabled", embeddingService.isEnabled(),
+                "dimensions", embeddingService.dimensions(), "indexFingerprint", embeddingService.fingerprint());
     }
 
     // ------------------------------------------------------------------
@@ -122,7 +124,7 @@ public class KnowledgeService {
         record Scored(Map<String, Object> row, double score) {
         }
 
-        return chunkMapper.loadEmbedded().stream()
+        return chunkMapper.loadEmbedded(embeddingService.fingerprint(), embeddingService.dimensions()).stream()
                 .map(row -> new Scored(row,
                         EmbeddingService.cosineSimilarity(
                                 query, EmbeddingService.fromBytes((byte[]) row.get("embedding")))))

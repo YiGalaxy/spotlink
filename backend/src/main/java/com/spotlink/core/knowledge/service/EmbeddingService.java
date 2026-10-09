@@ -2,128 +2,108 @@ package com.spotlink.knowledge.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
+import org.springframework.ai.openai.OpenAiEmbeddingOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.document.MetadataMode;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
-
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.List;
-import java.util.Map;
+import java.time.Duration;
 
-/** 通过 Ollama BGE-M3 为检索生成嵌入向量。 */
+/** Spring AI 向量适配；本地 Ollama 与兼容 /v1/embeddings 的服务使用同一契约。 */
 @Slf4j
 @Service
 public class EmbeddingService {
-
-    /** BGE-M3 的输出维度。数据库列固定为这个值以与之匹配。 */
     public static final int DIMENSIONS = 1024;
-
-    private final RestClient restClient;
+    private final EmbeddingModel embeddingModel;
     private final String model;
     private final boolean enabled;
+    private final int dimensions;
+    private final String fingerprint;
 
     public EmbeddingService(
-            @Value("${bulk.rag.embedding.base-url:http://localhost:11434}") String baseUrl,
+            @Value("${bulk.rag.embedding.base-url:http://ollama:11434}") String baseUrl,
             @Value("${bulk.rag.embedding.model:bge-m3}") String model,
-            @Value("${bulk.rag.embedding.enabled:true}") boolean enabled) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+            @Value("${bulk.rag.embedding.enabled:false}") boolean enabled,
+            @Value("${bulk.rag.embedding.dimensions:1024}") int dimensions,
+            @Value("${bulk.rag.embedding.api-key:ollama}") String key,
+            @Value("${bulk.rag.embedding.revision:1}") String revision,
+            @Value("${bulk.rag.embedding.timeout-seconds:45}") int timeout) {
+        String endpoint = baseUrl.replaceAll("/+$", "");
+        var http = new JdkClientHttpRequestFactory(java.net.http.HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5)).followRedirects(java.net.http.HttpClient.Redirect.NEVER).build());
+        http.setReadTimeout(Duration.ofSeconds(Math.clamp(timeout, 1, 120)));
+        var api = OpenAiApi.builder().baseUrl(endpoint).apiKey(key.isBlank() ? "local" : key)
+                .embeddingsPath(endpoint.endsWith("/v1") ? "/embeddings" : "/v1/embeddings")
+                .restClientBuilder(RestClient.builder().requestFactory(http))
+                .responseErrorHandler(new org.springframework.web.client.DefaultResponseErrorHandler() {
+                    @Override public boolean hasError(org.springframework.http.client.ClientHttpResponse response) throws java.io.IOException {
+                        return response.getStatusCode().value() >= 300;
+                    }
+                    @Override public void handleError(java.net.URI uri, org.springframework.http.HttpMethod method,
+                            org.springframework.http.client.ClientHttpResponse response) throws java.io.IOException {
+                        throw new org.springframework.web.client.RestClientException("向量服务 HTTP " + response.getStatusCode().value());
+                    }
+                }).build();
+        embeddingModel = new OpenAiEmbeddingModel(api, MetadataMode.EMBED,
+                OpenAiEmbeddingOptions.builder().model(model).build(), RetryTemplate.builder().maxAttempts(1).build());
         this.model = model;
         this.enabled = enabled;
+        this.dimensions = Math.clamp(dimensions, 1, 4096);
+        fingerprint = sha256(endpoint + "\n" + model + "\n" + this.dimensions + "\n" + revision);
     }
 
-    public boolean isEnabled() {
-        return enabled;
+    public boolean isEnabled() { return enabled; }
+    public int dimensions() { return dimensions; }
+    public String fingerprint() { return fingerprint; }
+    public String modelName() { return model; }
+    public static String sha256(String text) {
+        try { return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8))); }
+        catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
     }
-
-    /** 生成向量；服务不可用时返回 null，由调用方降级为关键词检索。 */
+    /** 超时、服务故障、错维度或非法数值不生成假向量，由调用方降级检索。 */
     public float[] embed(String text) {
-        if (!enabled || text == null || text.isBlank()) {
-            return null;
-        }
+        if (!enabled || text == null || text.isBlank() || text.length() > 8000) return null;
         try {
-            EmbeddingResponse response = restClient.post()
-                    .uri("/api/embeddings")
-                    .body(Map.of("model", model, "prompt", text))
-                    .retrieve()
-                    .body(EmbeddingResponse.class);
-
-            if (response == null || response.embedding() == null
-                    || response.embedding().isEmpty()) {
-                log.warn("Embedding service returned nothing for a {} character passage", text.length());
+            float[] vector = embeddingModel.embed(text);
+            if (vector == null || vector.length != dimensions || cosineSimilarity(vector, vector) == 0) {
+                log.warn("Embedding response failed dimension/numeric validation");
                 return null;
             }
-            if (response.embedding().size() != DIMENSIONS) {
-                // 提前拦截维度不匹配，避免写入后才失败。
-                log.error("Embedding model {} returned {} dimensions, expected {}",
-                        model, response.embedding().size(), DIMENSIONS);
-                return null;
-            }
-            return response.toArray();
+            return vector;
         } catch (Exception e) {
-            // 单个分块失败不应阻断知识库入库。
-            log.warn("Embedding failed ({}): {}", model, e.getMessage());
+            log.warn("Embedding unavailable ({})", e.getClass().getSimpleName());
             return null;
         }
     }
-
-    /** 将 float 向量按小端序编码为 BLOB。 */
     public static byte[] toBytes(float[] vector) {
-        if (vector == null || vector.length == 0) {
-            return null;
-        }
+        if (vector == null || vector.length == 0) return null;
         ByteBuffer buffer = ByteBuffer.allocate(vector.length * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-        for (float value : vector) {
-            buffer.putFloat(value);
-        }
+        for (float value : vector) buffer.putFloat(value);
         return buffer.array();
     }
-
-    /** {@link #toBytes} 的逆运算；传入 null 或格式非法的值时返回空数组。 */
     public static float[] fromBytes(byte[] bytes) {
-        if (bytes == null || bytes.length < Float.BYTES) {
-            return new float[0];
-        }
+        if (bytes == null || bytes.length < Float.BYTES || bytes.length % Float.BYTES != 0) return new float[0];
         ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
         float[] vector = new float[bytes.length / Float.BYTES];
-        for (int i = 0; i < vector.length; i++) {
-            vector[i] = buffer.getFloat();
-        }
+        for (int i = 0; i < vector.length; i++) vector[i] = buffer.getFloat();
         return vector;
     }
-
-    /** 计算余弦相似度；长度不匹配或零向量返回 0。 */
     public static double cosineSimilarity(float[] a, float[] b) {
-        if (a.length == 0 || a.length != b.length) {
-            return 0;
-        }
-        double dot = 0;
-        double normA = 0;
-        double normB = 0;
+        if (a.length == 0 || a.length != b.length) return 0;
+        double dot = 0, normA = 0, normB = 0;
         for (int i = 0; i < a.length; i++) {
+            if (!Float.isFinite(a[i]) || !Float.isFinite(b[i])) return 0;
             dot += (double) a[i] * b[i];
             normA += (double) a[i] * a[i];
             normB += (double) b[i] * b[i];
         }
-        if (normA == 0 || normB == 0) {
-            return 0;
-        }
-        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-    }
-
-    public String modelName() {
-        return model;
-    }
-
-    private record EmbeddingResponse(List<Float> embedding) {
-
-        /** Jackson 反序列化得到的是装箱类型的列表；而其余代码要的是基本类型。 */
-        float[] toArray() {
-            float[] values = new float[embedding.size()];
-            for (int i = 0; i < values.length; i++) {
-                Float value = embedding.get(i);
-                values[i] = value == null ? 0f : value;
-            }
-            return values;
-        }
+        return normA == 0 || normB == 0 ? 0 : dot / (Math.sqrt(normA) * Math.sqrt(normB));
     }
 }

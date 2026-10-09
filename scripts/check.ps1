@@ -168,6 +168,18 @@ try {
                     & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps backend-tools mvn -B -ntp -Punit-tests '-Dtest=AdvisorModelClientFactoryTest,AdvisorSecretCipherTest' test
                     if ($LASTEXITCODE -ne 0) { throw '顾问离线请求、工具或加密测试失败。' }
                 }
+                'embedding-unit' {
+                    & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps backend-tools mvn -B -ntp -Punit-tests '-Dtest=EmbeddingServiceTest,KnowledgeServiceTest,PersistenceLayerArchitectureTest' test
+                    if ($LASTEXITCODE -ne 0) { throw 'Spring AI 向量接口、数值及索引身份检查失败。' }
+                }
+                'knowledge-index' {
+                    try {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=KnowledgeIndexIntegrationTest,SchemaSmokeTest' test
+                        if ($LASTEXITCODE -ne 0) { throw '知识原文/版本、停用及向量写入检查失败。' }
+                    } finally {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
+                    }
+                }
                 'advisor-browser' {
                     & "$PSScriptRoot/tests/advisor-runtime.tests.ps1"
                     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
