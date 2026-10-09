@@ -192,9 +192,10 @@ public class AdvisorAgent {
             }
 
             var products = ToolCallRecorder.products();
+            var knowledge = ToolCallRecorder.knowledge();
             var invocations = ToolCallRecorder.drain();
             return new AgentResult(answer.length() > 12000 ? answer.substring(0, 12000) + "\n\n内容较多，请缩小范围继续查询。" : answer,
-                    invocations, promptTokens(response), completionTokens(response), products);
+                    invocations, promptTokens(response), completionTokens(response), products, knowledge);
 
         } catch (BusinessException e) {
             ToolCallRecorder.drain();

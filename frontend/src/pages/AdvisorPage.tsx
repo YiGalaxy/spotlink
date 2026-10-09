@@ -28,7 +28,7 @@ import {
   updateConversationContext,
 } from '@/api/advisor'
 import MarkdownText from '@/components/MarkdownText'
-import type { EntityId, MessageView } from '@/types/api'
+import type { AdvisorKnowledgeReference, EntityId, MessageView } from '@/types/api'
 
 const SAMPLE_QUESTIONS = [
   '找电解铜，对比挂牌单价、剩余数量和交收仓库，给我查看挂牌入口。',
@@ -59,6 +59,7 @@ function localTurn(role: 'user' | 'assistant', content: string): MessageView {
     role,
     content,
     products: [],
+    knowledge: [],
     toolCalls: [],
     iterations: null,
     usage: null,
@@ -77,6 +78,7 @@ export default function AdvisorPage() {
   const [contextOpen, setContextOpen] = useState(false)
   const [savingContext, setSavingContext] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [knowledgeSource, setKnowledgeSource] = useState<AdvisorKnowledgeReference | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
@@ -333,6 +335,13 @@ export default function AdvisorPage() {
                           </article>)}
                         </div>}
 
+                        {(message.knowledge ?? []).length > 0 && <div className="advisor-knowledge" aria-label="检索原文依据">
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>本轮检索依据 · 点击核对原文</Typography.Text>
+                          <Space wrap size={[6, 6]}>
+                            {message.knowledge.map(reference => <Button key={reference.chunkId} size="small"
+                              onClick={() => setKnowledgeSource(reference)}>{reference.title} · 第 {reference.chunkIndex + 1} 段</Button>)}
+                          </Space>
+                        </div>}
                         {message.toolCalls.length > 0 && (
                           <Collapse
                             size="small"
@@ -433,6 +442,17 @@ export default function AdvisorPage() {
       <Modal title="本会话采购需求" open={contextOpen} onCancel={() => setContextOpen(false)} onOk={() => void saveContext()} confirmLoading={savingContext} okText="保存需求">
         <p>填写商品、规格、数量、预算和目的地，顾问会在本会话中参考这些条件。新问题中的条件优先。留空保存可清除。</p>
         <Input.TextArea aria-label="采购需求内容" value={contextDraft} onChange={event => setContextDraft(event.target.value)} maxLength={2000} showCount rows={6} placeholder="例如：电解铜20吨，交收到上海，优先送到；请比较单价和总费用。" />
+      </Modal>
+      <Modal title={knowledgeSource?.title ?? '检索原文'} open={knowledgeSource !== null}
+        onCancel={() => setKnowledgeSource(null)} footer={<Button onClick={() => setKnowledgeSource(null)}>关闭</Button>}>
+        {knowledgeSource && <>
+          <Typography.Paragraph type="secondary">
+            {knowledgeSource.docCode} · {knowledgeSource.version} · 第 {knowledgeSource.chunkIndex + 1} 段
+            <br />来源：{knowledgeSource.source}
+          </Typography.Paragraph>
+          <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{knowledgeSource.content}</Typography.Paragraph>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>这是本次回答检索时保存的原文快照。</Typography.Text>
+        </>}
       </Modal>
     </div>
   )

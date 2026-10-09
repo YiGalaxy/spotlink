@@ -28,6 +28,7 @@ public final class ToolCallRecorder {
 
     private static final ThreadLocal<List<Invocation>> CURRENT = new ThreadLocal<>();
     private static final ThreadLocal<Map<Long, AdvisorProductReference>> PRODUCTS = new ThreadLocal<>();
+    private static final ThreadLocal<Map<Long, com.spotlink.advisor.dto.AdvisorKnowledgeReference>> KNOWLEDGE = new ThreadLocal<>();
     private static final ThreadLocal<Integer> CALLS = new ThreadLocal<>();
     private static final ThreadLocal<Boolean> COMPACT = new ThreadLocal<>();
     private static final ThreadLocal<String> REQUEST = new ThreadLocal<>();
@@ -42,6 +43,7 @@ public final class ToolCallRecorder {
     public static void begin(boolean compact) {
         CURRENT.set(new ArrayList<>());
         PRODUCTS.set(new LinkedHashMap<>());
+        KNOWLEDGE.set(new LinkedHashMap<>());
         CALLS.set(0);
         COMPACT.set(compact);
     }
@@ -77,6 +79,15 @@ public final class ToolCallRecorder {
         return products == null ? List.of() : List.copyOf(products.values());
     }
 
+    public static void knowledge(com.spotlink.advisor.dto.AdvisorKnowledgeReference reference) {
+        var references = KNOWLEDGE.get();
+        if (references != null && references.size() < 8) references.put(reference.chunkId(), reference);
+    }
+    public static List<com.spotlink.advisor.dto.AdvisorKnowledgeReference> knowledge() {
+        var references = KNOWLEDGE.get();
+        return references == null ? List.of() : List.copyOf(references.values());
+    }
+
     /** 补答使用同轮已取得的依据，绝不能在拿走工具后让模型凭空重新回答。 */
     public static String evidence() {
         List<Invocation> rows = CURRENT.get();
@@ -100,6 +111,7 @@ public final class ToolCallRecorder {
         List<Invocation> invocations = CURRENT.get();
         CURRENT.remove();
         PRODUCTS.remove();
+        KNOWLEDGE.remove();
         CALLS.remove();
         COMPACT.remove();
         REQUEST.remove();

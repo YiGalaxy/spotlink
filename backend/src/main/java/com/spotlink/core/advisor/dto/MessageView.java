@@ -20,6 +20,7 @@ public record MessageView(
         String role,
         String content,
         List<AdvisorProductReference> products,
+        List<AdvisorKnowledgeReference> knowledge,
         List<ToolCallView> toolCalls,
         Integer iterations,
         TokenUsage usage,
@@ -43,6 +44,7 @@ public record MessageView(
                 entity.getRole(),
                 entity.getContent(),
                 parseProducts(entity.getProductsJson(), objectMapper),
+                parseKnowledge(entity.getKnowledgeJson(), objectMapper),
                 parseToolCalls(entity.getToolCalls(), objectMapper),
                 entity.getIterations(),
                 entity.getInputTokens() == null ? null : new TokenUsage(
@@ -58,13 +60,18 @@ public record MessageView(
                                           List<ToolCallView> toolCalls,
                                           int iterations,
                                           TokenUsage usage) {
-        return new MessageView(null, AdvisorMessage.Role.ASSISTANT, content, List.of(),
+        return new MessageView(null, AdvisorMessage.Role.ASSISTANT, content, List.of(), List.of(),
                 toolCalls, iterations, usage, OffsetDateTime.now());
     }
 
     private static List<AdvisorProductReference> parseProducts(String json, ObjectMapper mapper) {
         if (json == null || json.isBlank()) return List.of();
         try { return mapper.readValue(json, new TypeReference<List<AdvisorProductReference>>() {}); }
+        catch (Exception e) { return List.of(); }
+    }
+    private static List<AdvisorKnowledgeReference> parseKnowledge(String json, ObjectMapper mapper) {
+        if (json == null || json.isBlank()) return List.of();
+        try { return mapper.readValue(json, new TypeReference<List<AdvisorKnowledgeReference>>() {}); }
         catch (Exception e) { return List.of(); }
     }
 

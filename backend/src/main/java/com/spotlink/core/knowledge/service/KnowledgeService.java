@@ -43,7 +43,8 @@ public class KnowledgeService {
      * @param content 段落本身
      * @param score   融合后的分数，用于排序，也用于解释它为什么会被返回
      */
-    public record Passage(Long chunkId, String docCode, String title, String content, double score) {
+    public record Passage(Long chunkId, String docCode, String title, String content, double score,
+                          String version, String source, int chunkIndex) {
     }
 
     /** 检索相关段落；嵌入不可用时降级为关键词检索。 */
@@ -74,7 +75,9 @@ public class KnowledgeService {
                             String.valueOf(row.get("docCode")),
                             String.valueOf(row.get("docTitle")),
                             String.valueOf(row.get("content")),
-                            entry.getValue());
+                            entry.getValue(), row.get("version") == null ? "v1" : row.get("version").toString(),
+                            row.get("source") == null ? "平台知识库" : row.get("source").toString(),
+                            row.get("chunkIndex") == null ? 0 : ((Number) row.get("chunkIndex")).intValue());
                 })
                 .toList();
     }

@@ -40,6 +40,7 @@ public interface KnowledgeChunkMapper extends BaseMapper<KnowledgeChunk> {
                    c.doc_id AS `docId`,
                    d.title AS `docTitle`,
                    d.doc_code AS `docCode`
+                   , d.version AS `version`, d.source AS `source`, c.chunk_index AS `chunkIndex`
             FROM t_knowledge_chunk c
             JOIN t_knowledge_doc d ON d.id = c.doc_id AND d.deleted = 0 AND d.status=1
             WHERE c.embedding IS NOT NULL AND c.embedding_fingerprint=#{fingerprint}
@@ -54,6 +55,7 @@ public interface KnowledgeChunkMapper extends BaseMapper<KnowledgeChunk> {
                    c.doc_id AS `docId`,
                    d.title AS `docTitle`,
                    d.doc_code AS `docCode`,
+                   d.version AS `version`, d.source AS `source`, c.chunk_index AS `chunkIndex`,
                    MATCH(c.content) AGAINST(#{query} IN NATURAL LANGUAGE MODE) AS score
             FROM t_knowledge_chunk c
             JOIN t_knowledge_doc d ON d.id = c.doc_id AND d.deleted = 0 AND d.status=1

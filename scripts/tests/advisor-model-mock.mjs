@@ -12,10 +12,15 @@ http.createServer(async (req, res) => {
   const hasResult = request.messages.some(m => m.role === 'tool')
   const tool = request.tools?.find(t => t.function.name === 'platform_connection_probe')
   const procurement = request.tools?.find(t => t.function.name === 'find_purchase_options')
-  const functionName = tool ? 'platform_connection_probe' : procurement ? 'find_purchase_options' : null
-  const args = tool ? '{}' : JSON.stringify({ keyword: '电解铜', location: null, minQuantity: null, maxPrice: null, unit: '吨', deliveryMethod: null, sortBy: 'PRICE_ASC' })
+  const rules = request.tools?.find(t => t.function.name === 'search_platform_rules')
+  const userText = request.messages.filter(m => m.role === 'user').at(-1)?.content ?? ''
+  const ruleQuestion = /库存单.*质押/.test(userText)
+  const functionName = tool ? 'platform_connection_probe' : ruleQuestion && rules ? 'search_platform_rules' : procurement ? 'find_purchase_options' : null
+  const args = tool ? '{}' : ruleQuestion ? JSON.stringify({ question: userText }) : JSON.stringify({ keyword: '电解铜', location: null, minQuantity: null, maxPrice: null, unit: '吨', deliveryMethod: null, sortBy: 'PRICE_ASC' })
   let answer = '离线模型连接正常。'
-  if (hasResult && request.messages.some(m => m.role === 'tool' && m.name !== 'platform_connection_probe')) {
+  if (hasResult && ruleQuestion) {
+    answer = '电子库存单不能用于质押。请核对本轮提供的库存操作说明原文；未知的金融服务需要另行核实。'
+  } else if (hasResult && request.messages.some(m => m.role === 'tool' && m.name !== 'platform_connection_probe')) {
     const output = request.messages.filter(m => m.role === 'tool').at(-1)?.content
     try {
       let data = JSON.parse(output)

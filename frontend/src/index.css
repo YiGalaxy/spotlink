@@ -334,3 +334,6 @@ body {
     max-width: 100%;
   }
 }
+/* 原文依据紧贴回答，详情以普通文本显示，避免知识文本成为可执行 HTML。 */
+.advisor-knowledge { display: grid; gap: 8px; margin-top: 14px; }
+.advisor-knowledge .ant-btn { max-width: 100%; height: auto; white-space: normal; text-align: left; }

@@ -74,6 +74,7 @@ export interface MessageView {
   role: 'user' | 'assistant'
   content: string
   products: AdvisorProductReference[]
+  knowledge: AdvisorKnowledgeReference[]
   toolCalls: ToolCallView[]
   iterations: number | null
   usage: TokenUsage | null
@@ -89,6 +90,16 @@ export interface AdvisorProductReference {
   price: string
   warehouse: string
   delivery: string
+}
+
+export interface AdvisorKnowledgeReference {
+  chunkId: EntityId
+  docCode: string
+  title: string
+  version: string
+  source: string
+  chunkIndex: number
+  content: string
 }
 
 export interface ConversationSummary {

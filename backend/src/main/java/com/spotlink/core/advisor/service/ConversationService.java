@@ -193,6 +193,8 @@ public class ConversationService {
         message.setContent(result.answer());
         try { message.setProductsJson(objectMapper.writeValueAsString(result.products())); }
         catch (Exception e) { throw new IllegalStateException("商品卡片编码失败"); }
+        try { message.setKnowledgeJson(objectMapper.writeValueAsString(result.knowledge())); }
+        catch (Exception e) { throw new IllegalStateException("知识引用编码失败"); }
         message.setToolCalls(serialiseToolCalls(result));
         message.setInputTokens(toLong(result.inputTokens()));
         message.setOutputTokens(toLong(result.outputTokens()));
