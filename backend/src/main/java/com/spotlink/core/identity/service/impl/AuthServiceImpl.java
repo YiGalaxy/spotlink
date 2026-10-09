@@ -110,13 +110,11 @@ public class AuthServiceImpl implements AuthService {
         if (enterprise == null) {
             throw BusinessException.of(ResultCode.ENTERPRISE_NOT_FOUND);
         }
-        if (enterprise.getStatus() != null) {
-            if (enterprise.getStatus() == Enterprise.Status.FROZEN) {
+        if (!Integer.valueOf(Enterprise.Status.APPROVED).equals(enterprise.getStatus())) {
+            if (Integer.valueOf(Enterprise.Status.FROZEN).equals(enterprise.getStatus())) {
                 throw BusinessException.of(ResultCode.ENTERPRISE_FROZEN);
             }
-            if (enterprise.getStatus() != Enterprise.Status.APPROVED) {
-                throw BusinessException.of(ResultCode.ENTERPRISE_NOT_APPROVED);
-            }
+            throw BusinessException.of(ResultCode.ENTERPRISE_NOT_APPROVED);
         }
         return enterprise;
     }

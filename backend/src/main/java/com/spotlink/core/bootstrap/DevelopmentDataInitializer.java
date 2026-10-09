@@ -3,17 +3,14 @@ package com.spotlink.bootstrap;
 import com.spotlink.identity.entity.Enterprise;
 import com.spotlink.identity.entity.User;
 import com.spotlink.identity.service.access.EnterpriseAccess;
-import com.spotlink.identity.entity.Permission;
 import com.spotlink.identity.entity.Role;
-import com.spotlink.identity.entity.RolePermission;
 import com.spotlink.identity.entity.UserRole;
-import com.spotlink.identity.service.access.PermissionAccess;
 import com.spotlink.identity.service.access.RoleAccess;
-import com.spotlink.identity.service.access.RolePermissionAccess;
 import com.spotlink.identity.service.access.UserRoleAccess;
-import java.util.List;
 import com.spotlink.identity.service.access.UserAccess;
 import com.spotlink.settlement.service.FundService;
+import com.spotlink.shared.security.UserAuthorityProvider;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -41,26 +38,30 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
     private final EnterpriseAccess enterpriseAccess;
     private final RoleAccess roleAccess;
     private final UserRoleAccess userRoleAccess;
-    private final RolePermissionAccess rolePermissionAccess;
-    private final PermissionAccess permissionAccess;
     private final PasswordEncoder passwordEncoder;
     private final FundService fundService;
+    private final UserAuthorityProvider authorityProvider;
 
     @Override
+    @Transactional
     public void run(ApplicationArguments args) {
+        authorityProvider.beginMutation();
         OffsetDateTime now = OffsetDateTime.now();
 
         // ---- 平台运营：不隶属任何租户 ----
         //
         // 给两个，各自持有不同角色。只给一个全能的运营账号，能证明「权限」这套东西存在，
         // 却永远展示不出它做了什么——而两者的差别正是重点，所以它应该从登录页就能看见。
+        boolean newAdmin = userAccess.findByUsername("admin") == null;
         User admin = createUserIfAbsent(null, "admin", "平台管理员",
                 User.Type.PLATFORM_OPERATOR, now);
-        grantRole(admin, "PLATFORM_ADMIN");
+        if (newAdmin) grantRole(admin, "PLATFORM_ADMIN");
 
+        boolean newAuditor = userAccess.findByUsername("auditor01") == null;
         User auditor = createUserIfAbsent(null, "auditor01", "审计员",
                 User.Type.PLATFORM_OPERATOR, now);
-        grantRole(auditor, "PLATFORM_AUDITOR");
+        if (newAuditor) grantRole(auditor, "PLATFORM_AUDITOR");
+        if (newAdmin || newAuditor) authorityProvider.evictAll();
 
         // ---- 已通过审核的卖方 ----
         Enterprise seller = createEnterpriseIfAbsent(
@@ -87,15 +88,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
                 User.Type.ENTERPRISE, now);
     }
 
-    /**
-     * 给一个账号授予平台角色，如果它还没有这个角色。
-     *
-     * <p>幂等判据是这条授权的自然键，而不是账号本身，所以在这里新增一个角色，会在已有
-     * 数据库的下一次启动时生效——一台开发机就是这样捡到「首次种下之后才加进来」的角色的。
-     *
-     * <p>同时把系统角色的权限码补全到 {@code admin:*} 的全集。没有这一步，后来某个
-     * 新增权限的迁移，会把所有现存运营账号锁在新页面之外，直到有人手写 SQL 去补。
-     */
+    /** 仅供新建账号初始授权；既有账号的角色由运营管理，新增权限由迁移管理。 */
     private void grantRole(User user, String roleCode) {
         if (user == null) {
             return;
@@ -115,21 +108,6 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
             log.info("Granted role {} to {}", roleCode, user.getUsername());
         }
 
-        if (!"PLATFORM_ADMIN".equals(roleCode)) {
-            return;
-        }
-        // 全部 admin:* 权限码，包括后来的迁移新增的那些。
-        List<Permission> all = permissionAccess.findAdminPermissions();
-        for (Permission permission : all) {
-            boolean granted = rolePermissionAccess.existsGrant(role.getId(), permission.getId());
-            if (!granted) {
-                RolePermission grant = new RolePermission();
-                grant.setRoleId(role.getId());
-                grant.setPermissionId(permission.getId());
-                rolePermissionAccess.insert(grant);
-                log.info("Added newly declared permission {} to {}", permission.getCode(), roleCode);
-            }
-        }
     }
 
     private Enterprise createEnterpriseIfAbsent(String code, String name, String shortName,
@@ -181,12 +159,7 @@ public class DevelopmentDataInitializer implements ApplicationRunner {
         }
     }
 
-    /**
-     * 账号不存在就创建，两种情况都把它返回。
-     *
-     * <p>这里返回已存在的行很要紧：角色由调用方授予，而一次只发生在「创建账号那一跑」
-     * 里的授权，永远到不了一个在角色出现之前就已经种好的数据库。
-     */
+    /** 仅创建缺失账号，不重置密码、状态或已被运营调整的角色。 */
     private User createUserIfAbsent(Long enterpriseId, String username, String realName,
                                     int userType, OffsetDateTime now) {
         User existing = userAccess.findByUsername(username);

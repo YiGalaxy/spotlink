@@ -11,6 +11,7 @@ import MarketPage from '@/pages/MarketPage'
 import TradingPage from '@/pages/TradingPage'
 import KnowledgePage from '@/pages/KnowledgePage'
 import AdminModelPage from '@/pages/AdminModelPage'
+import AdminPage from '@/pages/AdminPage'
 
 /** 路由按公开页面和登录后页面划分；真正的鉴权由服务端执行。 */
 export const router = createBrowserRouter([
@@ -26,7 +27,8 @@ export const router = createBrowserRouter([
       { index: true, element: <LandingPage /> },
       { path: 'market', element: <MarketPage /> },
       { path: 'trading', element: <TradingPage /> },
-      { path: 'admin', element: <Navigate to="/admin/model" replace /> },
+      { path: 'admin', element: <Navigate to="/admin/overview" replace /> },
+      ...['overview', 'enterprises', 'users', 'orders', 'audit'].map(section => ({ path: `admin/${section}`, element: <RequireAuth><AdminPage key={section} /></RequireAuth> })),
       { path: 'admin/model', element: <RequireAuth><AdminModelPage /></RequireAuth> },
 
       {

@@ -88,11 +88,16 @@ public class AdminUserService {
      */
     @Transactional
     public AdminViews.UserRow changeStatus(Long id, Integer status, String reason) {
+        authorityProvider.beginMutation();
+        if (status == null || (status != User.Status.ACTIVE && status != User.Status.DISABLED
+                && status != User.Status.LOCKED)) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "账号状态必须为正常、禁用或锁定");
+        }
         User user = require(id);
         if (id.equals(SecurityUtils.currentUserId())) {
             throw BusinessException.of(ResultCode.ADMIN_SELF_OPERATION, "不能禁用自己的账号");
         }
-        if (status != null && status == User.Status.DISABLED && isLastRoleHolder(id)) {
+        if (status != User.Status.ACTIVE && isLastRoleHolder(id)) {
             throw BusinessException.of(ResultCode.ADMIN_LAST_ADMIN);
         }
 
@@ -101,8 +106,7 @@ public class AdminUserService {
         if (userAccess.updateById(user) == 0) {
             throw BusinessException.of(ResultCode.CONFLICT, "该账号正在被其他操作修改，请重试");
         }
-        // 不做这一步，改动就得等缓存 TTL 到期——那意味着一个已被禁用的账号还能
-        // 继续用上五分钟。
+        // 版本与账号状态一并提交，不依赖 Redis 删除成功。
         authorityProvider.evict(id);
 
         audit.record("user", "change-status", "USER", id, before,
@@ -121,9 +125,21 @@ public class AdminUserService {
      */
     @Transactional
     public AdminViews.UserRow assignRoles(Long userId, List<Long> roleIds) {
+        authorityProvider.beginMutation();
         User user = require(userId);
         List<Long> wanted = roleIds == null ? List.of()
                 : new ArrayList<>(new LinkedHashSet<>(roleIds));
+        for (Long roleId : wanted) {
+            Role role = roleId == null ? null : roleAccess.selectById(roleId);
+            if (role == null) throw BusinessException.of(ResultCode.ADMIN_ROLE_NOT_FOUND);
+            if (role.getEnterpriseId() != null && !Objects.equals(role.getEnterpriseId(), user.getEnterpriseId())) {
+                throw BusinessException.of(ResultCode.FORBIDDEN, "不能授予其他企业的角色");
+            }
+        }
+        if (user.getEnterpriseId() != null && permissionCodesByRole(new HashSet<>(wanted)).values().stream()
+                .flatMap(List::stream).anyMatch(code -> code.startsWith("admin:"))) {
+            throw BusinessException.of(ResultCode.FORBIDDEN, "企业账号不能持有平台运营权限");
+        }
 
         UserAuthority before = authorityProvider.load(userId);
         if (before != null && before.has(PERMISSION_ASSIGN_ROLE)
@@ -189,6 +205,9 @@ public class AdminUserService {
         List<User> candidates = userAccess.findActiveAccounts();
         for (User candidate : candidates) {
             if (candidate.getId().equals(exceptUserId)) {
+                continue;
+            }
+            if (candidate.getEnterpriseId() != null || authorityProvider.currentIdentity(candidate.getId()) == null) {
                 continue;
             }
             UserAuthority authority = authorityProvider.load(candidate.getId());

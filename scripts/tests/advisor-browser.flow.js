@@ -11,6 +11,7 @@ async (page) => {
   }
   await login('admin')
   await page.getByRole('link', { name: '管理后台', exact: true }).click()
+  await page.getByRole('link', { name: '模型配置', exact: true }).click()
   await page.getByRole('heading', { name: '平台模型配置' }).waitFor()
   await page.getByLabel('API 地址', { exact: true }).waitFor()
   const before = await stats()

@@ -68,6 +68,26 @@ try {
                     & docker compose -p spotlink-next-tools --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.tools.yml" run --rm --no-deps backend-tools mvn -B -ntp -Punit-tests test
                     if ($LASTEXITCODE -ne 0) { throw '容器内后端单元测试失败。' }
                 }
+                'inventory-maintenance' {
+                    try {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=InventoryBoundaryTest,FreezeServiceTest' test
+                        if ($LASTEXITCODE -ne 0) { throw '库存编辑、扩展规格、旧版本表单及冻结维护回归失败。' }
+                    } finally {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
+                    }
+                }
+                'admin-authority' {
+                    try {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=AdminAuthorityIntegrationTest,AuthenticationBoundaryTest,AdminEndpointCoverageTest,EnterpriseIdParameterIsolationTest' test
+                        if ($LASTEXITCODE -ne 0) { throw '企业状态、授权版本与运营权限回归失败。' }
+                    } finally {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
+                    }
+                }
+                'admin-browser' {
+                    & "$PSScriptRoot/tests/auth-runtime.tests.ps1" -Admin
+                    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                }
                 'backend-integration' {
                     & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests
                     $testCode = $LASTEXITCODE

@@ -6,6 +6,7 @@ import com.spotlink.identity.service.access.EnterpriseAccess;
 import com.spotlink.shared.audit.AuditService;
 import com.spotlink.shared.exception.BusinessException;
 import com.spotlink.shared.security.SecurityUtils;
+import com.spotlink.shared.security.UserAuthorityProvider;
 import com.spotlink.settlement.service.FundService;
 import com.spotlink.shared.web.ResultCode;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class AdminEnterpriseService {
     private final EnterpriseAccess enterpriseAccess;
     private final AuditService audit;
     private final FundService fundService;
+    private final UserAuthorityProvider authorityProvider;
 
     public List<AdminViews.EnterpriseRow> search(Integer status, String keyword) {
         return enterpriseAccess.searchEnterprises(status, keyword).stream().map(AdminEnterpriseService::toRow).toList();
@@ -46,9 +48,17 @@ public class AdminEnterpriseService {
      */
     @Transactional
     public AdminViews.EnterpriseRow approve(Long id, String traderCode) {
+        authorityProvider.beginMutation();
+        if (traderCode != null && !traderCode.isBlank() && !traderCode.trim().matches("[A-Za-z0-9_-]{1,16}")) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "席位号限 16 位字母、数字、下划线或横线");
+        }
         Enterprise enterprise = require(id);
         if (enterprise.getStatus() != null && enterprise.getStatus() == Enterprise.Status.APPROVED) {
             throw BusinessException.of(ResultCode.ADMIN_ENTERPRISE_ALREADY_REVIEWED);
+        }
+        if (!Integer.valueOf(Enterprise.Status.PENDING).equals(enterprise.getStatus())
+                && !Integer.valueOf(Enterprise.Status.REJECTED).equals(enterprise.getStatus())) {
+            throw BusinessException.of(ResultCode.CONFLICT, "仅待审核或已驳回的申请可通过审核");
         }
         String before = state(enterprise);
 
@@ -76,12 +86,16 @@ public class AdminEnterpriseService {
 
     @Transactional
     public AdminViews.EnterpriseRow reject(Long id, String reason) {
-        if (reason == null || reason.isBlank()) {
+        authorityProvider.beginMutation();
+        if (reason == null || reason.isBlank() || reason.trim().length() > 500) {
             // 这一列存在，但从来没有被写入过。留空的话，就等于给申请方看一条没人
             // 解释得清的驳回。
             throw BusinessException.of(ResultCode.ADMIN_REJECT_REASON_REQUIRED);
         }
         Enterprise enterprise = require(id);
+        if (!Integer.valueOf(Enterprise.Status.PENDING).equals(enterprise.getStatus())) {
+            throw BusinessException.of(ResultCode.CONFLICT, "仅待审核的申请可驳回");
+        }
         String before = state(enterprise);
 
         enterprise.setStatus(Enterprise.Status.REJECTED);
@@ -95,6 +109,10 @@ public class AdminEnterpriseService {
 
     @Transactional
     public AdminViews.EnterpriseRow freeze(Long id, String reason) {
+        authorityProvider.beginMutation();
+        if (reason == null || reason.isBlank() || reason.trim().length() > 500) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "请填写不超过 500 字的冻结原因");
+        }
         Enterprise enterprise = require(id);
         if (enterprise.getStatus() == null || enterprise.getStatus() != Enterprise.Status.APPROVED) {
             throw BusinessException.of(ResultCode.ADMIN_ENTERPRISE_NOT_APPROVED);
@@ -104,13 +122,14 @@ public class AdminEnterpriseService {
         enterprise.setStatus(Enterprise.Status.FROZEN);
         update(enterprise);
 
-        audit.record("enterprise", "freeze", "ENTERPRISE", id, before, state(enterprise));
+        audit.record("enterprise", "freeze", "ENTERPRISE", id, before, state(enterprise) + ", reason=" + reason.trim());
         log.info("Enterprise {} frozen: {}", enterprise.getEnterpriseCode(), reason);
         return toRow(enterprise);
     }
 
     @Transactional
     public AdminViews.EnterpriseRow unfreeze(Long id) {
+        authorityProvider.beginMutation();
         Enterprise enterprise = require(id);
         if (enterprise.getStatus() == null || enterprise.getStatus() != Enterprise.Status.FROZEN) {
             throw BusinessException.of(ResultCode.CONFLICT, "该企业不在冻结状态");
@@ -139,6 +158,7 @@ public class AdminEnterpriseService {
         if (enterpriseAccess.updateById(enterprise) == 0) {
             throw BusinessException.of(ResultCode.CONFLICT, "该企业正在被其他操作修改，请重试");
         }
+        authorityProvider.evictAll();
     }
 
     /** 由 id 确定性地推导，所以重复通过审核不会发第二个席位出去。 */

@@ -11,6 +11,8 @@ import { fetchTasks } from '@/api/tasks'
 import { useTaskStream } from '@/hooks/useTaskStream'
 import { identityKey, useAuthStore } from '@/store/auth'
 import { useEffect, useState } from 'react'
+import { fetchCurrentUser } from '@/api/auth'
+import { adminEntries, can } from '@/utils/permissions'
 
 export default function MainLayout() {
   const navigate = useNavigate()
@@ -18,6 +20,10 @@ export default function MainLayout() {
   const signedIn = Boolean(useAuthStore((state) => state.accessToken))
   const clear = useAuthStore((state) => state.clear)
   const [accountOpen, setAccountOpen] = useState(false)
+  const setUser = useAuthStore(state => state.setUser)
+  const profile = useQuery({ queryKey: identityKey('current-user'), queryFn: fetchCurrentUser, enabled: signedIn, refetchInterval: 15_000, refetchOnWindowFocus: 'always' })
+  useEffect(() => { if (profile.data) setUser(profile.data) }, [profile.data, setUser])
+  const management = adminEntries.filter(entry => can(user, entry.permission))
   useEffect(() => {
     if (!accountOpen) return
     const dismiss = (event: KeyboardEvent) => {
@@ -45,20 +51,7 @@ export default function MainLayout() {
         label: '我的库存',
         onClick: () => navigate('/inventory'),
       },
-      ...(user?.platformOperator
-          ? [
-            {
-              key: 'admin-model',
-              label: '管理后台 · 模型配置',
-              onClick: () => navigate('/admin/model'),
-            },
-            {
-              key: 'knowledge',
-              label: '知识库管理',
-              onClick: () => navigate('/knowledge'),
-            },
-          ]
-        : []),
+      ...management.map(entry => ({ key: entry.path, label: entry.label, onClick: () => navigate(entry.path) })),
       {
         key: 'logout',
         icon: <LogoutOutlined />,
@@ -102,7 +95,7 @@ export default function MainLayout() {
             </Link>
             <Link to="/inventory">我的库存</Link>
             <Link to="/enterprise">企业中心</Link>
-            {user?.platformOperator && <Link to="/admin/model">管理后台</Link>}
+            {management.length > 0 && <Link to={management[0].path}>管理后台</Link>}
           </div>
         </div>
       </div>

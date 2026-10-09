@@ -43,6 +43,8 @@ export interface UserProfile {
   traderCode: string | null
   userType: number
   platformOperator: boolean
+  permissions?: string[]
+  roles?: string[]
 }
 
 export interface LoginResponse {
@@ -145,6 +147,7 @@ export interface WarehouseView {
  * 货是没了，还是仅仅被某个生效中的挂牌占住了。
  */
 export interface InventoryNoteView {
+  version: number
   id: EntityId
   noteNo: string
   categoryId: EntityId

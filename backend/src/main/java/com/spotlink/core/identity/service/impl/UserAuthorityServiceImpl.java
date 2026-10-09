@@ -10,6 +10,7 @@ import com.spotlink.identity.mapper.RoleMapper;
 import com.spotlink.identity.mapper.RolePermissionMapper;
 import com.spotlink.identity.mapper.UserMapper;
 import com.spotlink.identity.mapper.UserRoleMapper;
+import com.spotlink.identity.mapper.AuthorityRevisionMapper;
 import com.spotlink.shared.security.UserAuthority;
 import com.spotlink.shared.security.UserAuthorityProvider;
 import com.spotlink.shared.security.LoginUser;
@@ -20,47 +21,26 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * 解析一个账号能做什么，数据来自数据库，中间隔着一层短缓存。
- *
- * <p><b>Redis 之所以会出现在这个项目里，原因在此。</b>它此前是一个声明了依赖、配置了连接，
- * 却没有一行 Java 代码使用它的东西。JwtTokenProvider 自己的文档就承诺了这次查询 ——
- * 「权限变化的频率远高于 token 过期，所以改为每个请求从缓存中查询」—— 而那个缓存并不存在。
- * 现在它存在了。
- *
- * <p><b>失败时回落到数据库，绝不回落到空。</b>这里可能犯的两个错误都很容易犯，而且都很糟：
- *
- * <ul>
- *   <li>因为 Redis 连不上就缓存一个空权限集 —— 那是把一次传输故障记成了关于该用户的事实，
- *       并把他锁在门外整整一个 TTL；</li>
- *   <li>把缓存未命中当作「没有权限」—— 未命中的意思是缓存不知道，而数据库知道。</li>
- * </ul>
- *
- * <p>所以当缓存答不上来时，{@link #load} 的每一条路径都以数据库为终点。缓存的代价最多是
- * 延迟，绝不会是正确性。
- */
+/** 数据库版本决定缓存键；Redis 故障、事务回滚或旧查询回填均不能恢复被撤销的权限。 */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserAuthorityServiceImpl implements UserAuthorityProvider {
 
-    /**
-     * 一个已解析的结果可以被复用多久。
-     *
-     * <p>之所以短，是因为它就是吊销窗口：被收回的角色如果漏掉了显式清除，最多还能生效
-     * 这么久。控制台的改动会立即清除缓存，所以这只是兜底，而不是主要机制。
-     */
+    /** 只控制旧键回收时间；撤销生效不依赖 TTL。 */
     private static final Duration TTL = Duration.ofMinutes(5);
 
     private static final String KEY_PREFIX = "perm:user:";
 
     private final UserMapper userMapper;
+    private final AuthorityRevisionMapper revisionMapper;
     private final EnterpriseMapper enterpriseMapper;
     private final UserRoleMapper userRoleMapper;
     private final RoleMapper roleMapper;
@@ -92,7 +72,10 @@ public class UserAuthorityServiceImpl implements UserAuthorityProvider {
             return null;
         }
 
-        UserAuthority cached = readCache(userId);
+        long revision = revisionMapper.current();
+        // 不把事务中尚未提交的授权写入共享缓存，也不读取事务前的副本。
+        boolean cacheable = !TransactionSynchronizationManager.isActualTransactionActive();
+        UserAuthority cached = cacheable ? readCache(userId, revision) : null;
         if (cached != null) {
             return cached;
         }
@@ -107,33 +90,30 @@ public class UserAuthorityServiceImpl implements UserAuthorityProvider {
         UserAuthority authority = UserAuthority.of(
                 user.getStatus() == null ? UserAuthority.ACTIVE : user.getStatus(),
                 permissionsOf(userId));
-        writeCache(userId, authority);
+        if (cacheable) writeCache(userId, revision, authority);
         return authority;
     }
 
     @Override
+    public void beginMutation() {
+        requireTransaction();
+        revisionMapper.lock();
+    }
+
+    @Override
     public void evict(Long userId) {
-        if (userId == null) {
-            return;
-        }
-        try {
-            redis.delete(KEY_PREFIX + userId);
-        } catch (RuntimeException e) {
-            // TTL 仍然限制着陈旧的程度。因为清不掉缓存就让调用方的事务失败，等于把五分钟的
-            // 延迟变成一次故障。
-            log.warn("Could not evict authority for user {}: {}", userId, e.getMessage());
-        }
+        if (userId != null) evictAll();
     }
 
     @Override
     public void evictAll() {
-        try {
-            Set<String> keys = redis.keys(KEY_PREFIX + "*");
-            if (keys != null && !keys.isEmpty()) {
-                redis.delete(keys);
-            }
-        } catch (RuntimeException e) {
-            log.warn("Could not clear the authority cache: {}", e.getMessage());
+        requireTransaction();
+        if (revisionMapper.advance() != 1) throw new IllegalStateException("授权版本记录缺失");
+    }
+
+    private void requireTransaction() {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("授权变更必须在业务事务内执行");
         }
     }
 
@@ -174,6 +154,9 @@ public class UserAuthorityServiceImpl implements UserAuthorityProvider {
         if (roles.isEmpty()) {
             return Set.of();
         }
+        // 被逻辑删除的角色不再参与权限关联查询。
+        roleIds.clear();
+        roles.forEach(role -> roleIds.add(role.getId()));
 
         Set<Long> permissionIds = new LinkedHashSet<>();
         rolePermissionMapper.findByRoleIds(roleIds)
@@ -188,9 +171,9 @@ public class UserAuthorityServiceImpl implements UserAuthorityProvider {
         return codes;
     }
 
-    private UserAuthority readCache(Long userId) {
+    private UserAuthority readCache(Long userId, long revision) {
         try {
-            String json = redis.opsForValue().get(KEY_PREFIX + userId);
+            String json = redis.opsForValue().get(cacheKey(userId, revision));
             return json == null ? null : objectMapper.readValue(json, UserAuthority.class);
         } catch (Exception e) {
             // 既包含「Redis 挂了」，也包含「缓存的值是旧结构」。两者对调用方含义相同：
@@ -200,13 +183,17 @@ public class UserAuthorityServiceImpl implements UserAuthorityProvider {
         }
     }
 
-    private void writeCache(Long userId, UserAuthority authority) {
+    private void writeCache(Long userId, long revision, UserAuthority authority) {
         try {
-            redis.opsForValue().set(KEY_PREFIX + userId,
+            redis.opsForValue().set(cacheKey(userId, revision),
                     objectMapper.writeValueAsString(authority), TTL);
         } catch (Exception e) {
             // 写不进去的缓存，就是下一次会未命中的缓存。这不足以成为让一次认证失败的理由。
             log.debug("Could not cache authority for user {}: {}", userId, e.getMessage());
         }
+    }
+
+    private String cacheKey(Long userId, long revision) {
+        return KEY_PREFIX + revision + ":" + userId;
     }
 }

@@ -17,6 +17,10 @@ $script:CheckRegistry = [ordered]@{
     C14 = @{ Required = @('static', 'unit', 'integration', 'ai-offline', 'dataset'); Checks = @{ static = 'static'; unit = 'backend-package'; integration = 'early-advisor'; 'ai-offline' = 'early-advisor'; dataset = 'data-unit' } }
     C15 = @{ Required = @('static', 'ai-offline', 'e2e', 'visual'); Checks = @{ static = 'static'; 'ai-offline' = 'early-advisor'; e2e = 'early-advisor'; visual = 'early-advisor' } }
     C16 = @{ Required = @('static', 'ai-offline'); Checks = @{ static = 'static'; 'ai-offline' = 'early-advisor' } }
+    C17 = @{ Required = @('static', 'unit', 'visual'); Checks = @{ static = 'static'; unit = 'frontend-build'; visual = 'admin-browser' } }
     C18 = @{ Required = @('static', 'unit', 'visual'); Checks = @{ static = 'static'; unit = 'frontend-build'; visual = 'image-browser' } }
+    C19 = @{ Required = @('static', 'unit', 'e2e', 'visual'); Checks = @{ static = 'static'; unit = 'frontend-build'; e2e = 'image-browser'; visual = 'advisor-browser' } }
+    C20 = @{ Required = @('static', 'unit', 'integration', 'e2e', 'dataset'); Checks = @{ static = 'static'; unit = 'backend-package'; integration = 'admin-authority'; e2e = 'admin-browser'; dataset = 'data-unit' } }
+    C21 = @{ Required = @('static', 'unit', 'integration', 'e2e'); Checks = @{ static = 'static'; unit = 'backend-package'; integration = 'inventory-maintenance'; e2e = 'inventory-browser' } }
 }
 $script:ValidCheckModes = @('task', 'full', 'static', 'unit', 'integration', 'dataset', 'ai-offline', 'rag', 'e2e', 'visual', 'ops', 'ai-live')

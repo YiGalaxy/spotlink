@@ -12,6 +12,7 @@ import {
   Statistic,
   Tag,
   Typography,
+  Result,
   message,
 } from 'antd'
 import { SearchOutlined, ThunderboltOutlined } from '@ant-design/icons'
@@ -19,6 +20,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { embedPending, fetchKnowledgeStats, searchKnowledge } from '@/api/knowledge'
 import type { KnowledgeHit } from '@/api/knowledge'
 import { identityKey, useAuthStore } from '@/store/auth'
+import { can } from '@/utils/permissions'
 
 const SAMPLES = ['磅差怎么算', '保证金比例是多少', '交易时间是什么时候', '电子库存单是什么']
 
@@ -29,11 +31,13 @@ export default function KnowledgePage() {
   const [embedding, setEmbedding] = useState(false)
   const queryClient = useQueryClient()
   // 知识库检索测试和嵌入维护都属于运营后台，服务端还会按权限码拦截。
-  const signedIn = Boolean(useAuthStore((state) => state.accessToken))
+  const user = useAuthStore(state => state.user)
+  const signedIn = can(user, 'admin:knowledge:embed')
 
   const { data: stats } = useQuery({
     queryKey: identityKey('knowledge-stats'),
     queryFn: fetchKnowledgeStats,
+    enabled: can(user, 'admin:knowledge'),
   })
 
   const runSearch = async (q: string) => {
@@ -62,8 +66,10 @@ export default function KnowledgePage() {
   const pending = stats?.pending ?? 0
   const noVector = (stats?.chunks ?? 0) > 0 && (stats?.embedded ?? 0) === 0
 
+  if (!can(user, 'admin:knowledge')) return <Result status="403" title="无权访问知识库管理" />
+
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
+    <div className="business-page">
       <div style={{ marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>
           知识库

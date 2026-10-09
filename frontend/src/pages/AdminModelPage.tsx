@@ -4,12 +4,14 @@ import { ApiOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { identityKey, useAuthStore } from '@/store/auth'
 import { fetchModelSettings, resetModelSettings, saveModelSettings, testModelConnection, type ConnectionResult, type ModelUpdate } from '@/api/adminAdvisor'
+import { can } from '@/utils/permissions'
+import { Link } from 'react-router-dom'
 
 const presets = {
   docker: { baseUrl: 'http://ollama:11434/v1', model: 'qwen3:4b', apiKey: 'ollama' },
   local: { baseUrl: 'http://host.docker.internal:11434/v1', model: 'qwen3:4b', apiKey: 'ollama' },
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiKey: '' },
-  deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', apiKey: '' },
+  deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-flash', apiKey: '' },
 }
 
 export default function AdminModelPage() {
@@ -19,7 +21,7 @@ export default function AdminModelPage() {
   const [busy, setBusy] = useState<'save' | 'reset' | 'test' | null>(null)
   const [connection, setConnection] = useState<ConnectionResult | null>(null)
   const [dirty, setDirty] = useState(false)
-  const query = useQuery({ queryKey: identityKey('admin-model'), queryFn: fetchModelSettings, enabled: user?.platformOperator })
+  const query = useQuery({ queryKey: identityKey('admin-model'), queryFn: fetchModelSettings, enabled: can(user, 'admin:advisor') })
   const config = query.data
   useEffect(() => {
     if (!config) return
@@ -27,7 +29,7 @@ export default function AdminModelPage() {
     setDirty(false)
     setConnection(null)
   }, [config, form])
-  if (!user?.platformOperator) return <Result status="403" title="无权访问" subTitle="模型服务由平台管理员配置。" />
+  if (!can(user, 'admin:advisor')) return <Result status="403" title="无权访问" subTitle="模型服务由具备模型配置权限的管理员管理。" />
   if (query.isLoading) return <Spin style={{ display: 'block', margin: 80 }} />
   if (query.isError || !config) return <Result status="warning" title="无法读取模型配置" subTitle="请确认账号具备模型配置权限，或稍后重试。" extra={<Button onClick={() => void query.refetch()}>重新加载</Button>} />
 
@@ -59,6 +61,7 @@ export default function AdminModelPage() {
   }
 
   return <div style={{ maxWidth: 1180, margin: '0 auto', padding: '32px 20px 64px' }}>
+    <Link to="/admin/overview">← 返回运营后台</Link>
     <Typography.Text type="secondary">管理后台 / AI 服务</Typography.Text>
     <Typography.Title level={2} style={{ marginTop: 8 }}>平台模型配置</Typography.Title>
     <Typography.Paragraph type="secondary">为所有用户提供统一的 AI 顾问。支持本地推理服务和 OpenAI 兼容云端 API，由 SpotLink 服务端完成调用。</Typography.Paragraph>
