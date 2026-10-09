@@ -54,6 +54,14 @@ class AdvisorSafetyTest {
         assertThat(AnswerCleaner.clean("<think>尚未结束的中文思考过程。")).isNull();
     }
 
+    @Test void explicitListingLookupRequiresUniqueFullNumber() {
+        assertThat(AdvisorAgent.explicitListingNumber("挂牌LS202610090315277405买10吨"))
+                .isEqualTo("LS202610090315277405");
+        assertThat(AdvisorAgent.explicitListingNumber("LS202610090315277405和LS202610090315277406比较"))
+                .isNull();
+        assertThat(AdvisorAgent.explicitListingNumber("LS123456" )).isNull();
+    }
+
     @Test void toolsHaveHardBudgetAndReferencesDoNotLeakBetweenTurns() {
         ToolCallRecorder.begin();
         for (int i = 0; i < 10; i++) ToolCallRecorder.beforeCall();

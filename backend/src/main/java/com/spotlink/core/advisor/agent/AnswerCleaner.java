@@ -64,6 +64,13 @@ public final class AnswerCleaner {
         if (unclosedThink >= 0) raw = raw.substring(0, unclosedThink).strip();
         if (raw.isBlank()) return null;
 
+        // 中文思考不能靠中文比例分辨。无标签且仍在讨论“用户/调用工具”的草稿整段丢弃，触发一次补答。
+        if (java.util.regex.Pattern.compile("(?s)^\\s*(?:好的[，,]\\s*)?(?:我现在(?:需要|要)|我需要|首先[，,]\\s*我(?:需要|得)).{0,100}(?:用户|调用|工具|计算)").matcher(raw).find()
+                || java.util.regex.Pattern.compile("(?m)^(?:用户(?:说|提到|要求|的问题)|因此[，,]?\\s*(?:需要|返回的)工具调用|返回的工具调用是)").matcher(raw).find()) {
+            log.warn("Advisor returned unmarked working notes; suppressed");
+            return null;
+        }
+
         String[] lines = raw.split("\n", -1);
         int start = -1;
         for (int i = 0; i < lines.length; i++) {
@@ -114,6 +121,9 @@ public final class AnswerCleaner {
         if (line.isBlank()) {
             return false;
         }
+        // 成本要点里的数字会稀释中文比例，短“货款：1234.5元”仍是完整结果。
+        if (java.util.regex.Pattern.compile("^(?:[-*]\\s*)?(?:\\*\\*)?(?:货款(?:估算)?|运费(?:估算)?|(?:两项|已知费用)(?:小计|合计))"
+                + "(?:\\*\\*)?\\s*[:：]\\s*.+元.*$").matcher(line.strip()).matches()) return true;
 
         int cjk = 0;
         int counted = 0;

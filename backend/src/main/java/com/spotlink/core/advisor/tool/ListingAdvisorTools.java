@@ -137,7 +137,8 @@ public class ListingAdvisorTools {
             description = """
                     估算一条公开挂牌到目的地的运输费用。平台当前没有维护真实运费价目表时，
                     只能说明起运仓和配送方式；只有用户明确提供每吨运价与吨数，才可按公式
-                    做透明估算。不得把估算说成平台报价，也不得猜测距离或运价。
+                    做透明估算。返回货款与运费的服务端计算，以及两项已知费用小计；未知税费等不按0计算。
+                    不得把估算说成平台报价，也不得猜测距离或运价。新运价覆盖旧运价，整批费用不能当每吨运价。
                     """)
     public String estimateDeliveryCost(
             @ToolParam(description = "挂牌编号或商品名称关键字，至少提供一个。") String listingNoOrKeyword,
@@ -173,8 +174,15 @@ public class ListingAdvisorTools {
         if (tonnes.compareTo(new BigDecimal("1000000000")) > 0 || ratePerTonne.compareTo(new BigDecimal("1000000000")) > 0
                 || tonnes.scale() > 6 || ratePerTonne.scale() > 6) return "估算参数超出范围。";
         if (listing.getRemainingQuantity() != null && tonnes.compareTo(listing.getRemainingQuantity()) > 0) return "需求吨数大于该挂牌剩余量，请减少数量或另选挂牌。";
-        BigDecimal total = tonnes.multiply(ratePerTonne);
-        if (!ToolCallRecorder.userProvidedFreightRate(ratePerTonne)) return sb.append("你尚未明确提供每吨运价，不能使用模型自行填写的费率。请补充例如“运价80元/吨”后再估算。").toString();
+        BigDecimal total = tonnes.multiply(ratePerTonne).setScale(4, java.math.RoundingMode.HALF_UP);
+        if (!ToolCallRecorder.userProvidedFreightRate(ratePerTonne)) return sb.append("你尚未明确确认可沿用的每吨运价，不能把整批费用、旧报价或模型填写的费率用于计算。请补充例如“运价80元/吨”后再估算。").toString();
+        BigDecimal goodsCost = listing.getPrice() == null ? null : tonnes.multiply(listing.getPrice()).setScale(4, java.math.RoundingMode.HALF_UP);
+        if (goodsCost == null) sb.append("货款：面议，无法计算货款及两项合计。\n");
+        else sb.append("货款估算：").append(plain(listing.getPrice())).append(" 元/吨 × ")
+                .append(plain(tonnes)).append(" 吨 = ").append(plain(goodsCost)).append(" 元。\n");
+        if (goodsCost != null) sb.append("按运费另计的假设，货款与运费两项已知费用小计：")
+                .append(plain(goodsCost.add(total))).append(" 元。该小计不是完整到货成本。\n");
+        sb.append("装卸、仓储、检验、税费等尚未核实，不按0计算；单价是否含税、是否已含运费需向卖方确认，避免重复计费。\n");
         return sb.append("目的地：").append(destination.trim())
                 .append("；按你提供的 ").append(ratePerTonne.stripTrailingZeros().toPlainString())
                 .append(" 元/吨 × ").append(tonnes.stripTrailingZeros().toPlainString())

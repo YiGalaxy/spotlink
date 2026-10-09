@@ -70,11 +70,24 @@ class AdvisorProcurementTest {
     @Test void freightRequiresSpecificListingAndTransparentUserParameters() {
         Listing item = insert("100", "20", false);
         String estimate = freight.estimateDeliveryCost(item.getListingNo(), "杭州", new BigDecimal("10"), new BigDecimal("80"));
-        assertThat(estimate).contains("估算运费：800 元", "不是平台运费报价", "自提");
+        assertThat(estimate).contains("估算运费：800 元", "不是平台运费报价", "自提",
+                "货款估算：100 元/吨 × 10 吨 = 1000 元", "两项已知费用小计：1800 元", "不是完整到货成本");
         assertThat(freight.estimateDeliveryCost(item.getListingNo(), "杭州", null, null)).contains("不能给出实际运费");
         insert("120", "50", false);
         assertThat(freight.estimateDeliveryCost(commodity, "杭州", BigDecimal.ONE, BigDecimal.TEN)).contains("指定挂牌编号");
         assertThat(freight.estimateDeliveryCost(item.getListingNo(), "杭州", new BigDecimal("30"), BigDecimal.TEN)).contains("大于该挂牌剩余量");
+    }
+
+    @Test void freightDoesNotInventGoodsCostOrReuseWithdrawnRates() {
+        Listing negotiated = insert(null, "20", false);
+        ToolCallRecorder.requestData("运价80元/吨\n运价改为90元/吨");
+        assertThat(freight.estimateDeliveryCost(negotiated.getListingNo(), "杭州", BigDecimal.TEN, new BigDecimal("80")))
+                .contains("尚未明确确认").doesNotContain("估算运费：");
+        assertThat(freight.estimateDeliveryCost(negotiated.getListingNo(), "杭州", BigDecimal.TEN, new BigDecimal("90")))
+                .contains("货款：面议", "估算运费：900 元").doesNotContain("两项已知费用小计：");
+        ToolCallRecorder.requestData("整批运费800元");
+        assertThat(freight.estimateDeliveryCost(negotiated.getListingNo(), "杭州", BigDecimal.TEN, new BigDecimal("800")))
+                .contains("不能把整批费用").doesNotContain("估算运费：");
     }
 
     @Test void contextIsOwnerAndEnterpriseBoundAndCanBeCleared() {

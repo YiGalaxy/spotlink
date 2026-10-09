@@ -145,4 +145,18 @@ class AnswerCleanerTest {
         assertThat(AnswerCleaner.clean("好的，我现在要处理用户的查询。\n先分析字段。\n</think>\n\n估算运费为800元。"))
                 .isEqualTo("估算运费为800元。");
     }
+
+    @Test void unmarkedChinesePlanningCannotBecomeAnswer() {
+        assertThat(AnswerCleaner.clean("好的，我现在需要帮用户计算货款、运费和小计。\n用户提到的挂牌是LS123。\n因此，返回的工具调用是："))
+                .isNull();
+        assertThat(AnswerCleaner.clean("运费需要由你和承运方确认。\n已有挂牌的货款为1234.5元。"))
+                .startsWith("运费需要由你");
+    }
+
+    @Test void conciseCostBulletsKeepNumbersRatherThanOnlyUnknownFees() {
+        String answer = "货款：1234.5元\n运费：800元\n两项小计：2034.5元\n未知费用：装卸税费未核实。";
+        assertThat(AnswerCleaner.clean(answer)).isEqualTo(answer);
+        assertThat(AnswerCleaner.clean("- **货款**：1234.5元\n- 运费：800元\n未知费用需确认。"))
+                .startsWith("- **货款**：1234.5元");
+    }
 }

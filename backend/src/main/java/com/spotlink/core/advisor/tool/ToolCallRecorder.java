@@ -46,6 +46,7 @@ public final class ToolCallRecorder {
         KNOWLEDGE.set(new LinkedHashMap<>());
         CALLS.set(0);
         COMPACT.set(compact);
+        REQUEST.remove();
     }
 
     public static int rowLimit() { return Boolean.TRUE.equals(COMPACT.get()) ? 4 : 12; }
@@ -54,11 +55,7 @@ public final class ToolCallRecorder {
     public static boolean userProvidedFreightRate(java.math.BigDecimal rate) {
         String data = REQUEST.get();
         if (data == null) return true; // 脱离模型的直接调用由调用方提供参数。
-        var matcher = java.util.regex.Pattern.compile("(?:运费|运价|运输费)[^\\n。]{0,24}?(\\d+(?:\\.\\d+)?)\\s*元(?:\\s*[/／]\\s*吨)?").matcher(data);
-        while (matcher.find()) {
-            if (new java.math.BigDecimal(matcher.group(1)).compareTo(rate) == 0) return true;
-        }
-        return false;
+        return com.spotlink.advisor.agent.FreightRateEvidence.matches(data, rate);
     }
 
     public static void beforeCall() {
