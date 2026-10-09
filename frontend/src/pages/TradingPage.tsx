@@ -344,6 +344,7 @@ export default function TradingPage() {
         <Tag color={r.side === 'SELL' ? 'green' : 'blue'}>{v}</Tag>) },
     {
       title: '商品',
+      width: 220,
       sorter: (a: ListingView, b: ListingView) => a.commodityName.localeCompare(b.commodityName, 'zh'),
       render: (_: unknown, r: ListingView) => (
         <div>
@@ -453,6 +454,7 @@ export default function TradingPage() {
       render: (v: string) => <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text> },
     {
       title: '商品',
+      width: 220,
       sorter: (a: OrderView, b: OrderView) => a.commodityName.localeCompare(b.commodityName, 'zh'),
       render: (_: unknown, r: OrderView) => (
         <div>
@@ -603,7 +605,7 @@ export default function TradingPage() {
                   </Card>
                 })()}
                 {requestedTab && requestedTab !== 'market' && !isMember && <Alert type="info" style={{ marginBottom: 12 }} message="登录企业账号后可管理挂牌与订单" action={!signedIn ? <Button onClick={() => navigate('/login', { state: { from: `/trading?tab=${requestedTab}` } })}>前往登录</Button> : undefined}/>}
-                <Table rowKey="id" size="middle" loading={marketLoading} dataSource={focusedListing ? market.filter(row => row.id === focusedListing) : market} scroll={{ x: 1100 }}
+                <Table rowKey="id" size="middle" loading={marketLoading} dataSource={focusedListing ? market.filter(row => row.id === focusedListing) : market} scroll={{ x: 1400 }}
                   columns={marketColumns} pagination={LIST_PAGINATION}
                   locale={{
                     emptyText: (
@@ -730,7 +732,7 @@ export default function TradingPage() {
                           )}
                         </Space>
                       </Card>
-                      <Table rowKey="id" size="middle" dataSource={visibleOrders} columns={orderColumns} scroll={{ x: 1200 }}
+                      <Table rowKey="id" size="middle" dataSource={visibleOrders} columns={orderColumns} scroll={{ x: 1400 }}
                         pagination={LIST_PAGINATION}
                         locale={{
                           emptyText: (

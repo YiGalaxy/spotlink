@@ -57,6 +57,7 @@ const STATUS_COLOURS: Record<number, string> = {
   4: 'warning',
   5: 'default',
   6: 'default',
+  7: 'processing',
 }
 
 /** 去掉 BigDecimal 保留的尾随零，例如 100.000 -> 100。 */
@@ -272,7 +273,7 @@ export default function InventoryPage() {
     {
       title: '状态',
       dataIndex: 'statusText',
-      width: 96,
+      width: 140,
       render: (value: string, row: InventoryNoteView) => (
         <Tag color={STATUS_COLOURS[row.status] ?? 'default'}>{value}</Tag>
       ),
@@ -391,6 +392,7 @@ export default function InventoryPage() {
               { label: '全部冻结', value: 3 },
               { label: '已交收', value: 5 },
               { label: '已注销', value: 6 },
+              { label: '待交收（受限）', value: 7 },
             ]}
           />
         </Space>

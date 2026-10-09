@@ -77,6 +77,9 @@ class PartialFillTest {
     @Autowired
     private FreezeRecordMapper freezeMapper;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
     private Long noteId;
     private final List<Long> orderIds = new ArrayList<>();
     private final List<Long> listingIds = new ArrayList<>();
@@ -103,6 +106,14 @@ class PartialFillTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+        for (Long orderId : orderIds) {
+            var targets = jdbc.queryForList("SELECT target_note_id FROM t_goods_transfer WHERE order_id=?", Long.class, orderId);
+            jdbc.update("DELETE FROM t_goods_transfer WHERE order_id=?", orderId);
+            for (Long target : targets) {
+                jdbc.update("DELETE FROM t_freeze_record WHERE entity_id=? AND enterprise_id=?", target, BUYER);
+                jdbc.update("DELETE FROM t_inventory_note WHERE id=? AND enterprise_id=?", target, BUYER);
+            }
+        }
         orderIds.forEach(orderMapper::deleteById);
         orderIds.clear();
         // Listings before the note: the freeze rows reference the note.

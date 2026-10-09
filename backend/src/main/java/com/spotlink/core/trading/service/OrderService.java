@@ -17,6 +17,8 @@ import com.spotlink.trading.event.TaskChangedEvent;
 import com.spotlink.trading.mapper.ListingMapper;
 import com.spotlink.trading.mapper.OrderMapper;
 import com.spotlink.trading.mapper.OrderStatusLogMapper;
+import com.spotlink.trading.mapper.GoodsTransferMapper;
+import com.spotlink.trading.entity.GoodsTransfer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -60,6 +62,7 @@ public class OrderService {
     private final ApplicationEventPublisher eventPublisher;
     private final TradingProperties properties;
     private final InventoryMatchService inventoryMatchService;
+    private final GoodsTransferMapper transferMapper;
 
     // ------------------------------------------------------------------
     // 摘牌
@@ -68,12 +71,8 @@ public class OrderService {
     /**
      * 摘牌，产生一笔订单。
      *
-     * <p><b>一处值得点明的简化：</b>在 AUTO 下，所有权在摘牌时就在这里转移，
-     * 而不是在合同签署时。买方立即获得一张属于自己的、数量为其所摘数量的库存
-     * 单，卖方的库存单则相应减少。在真实平台上，所有权应当在合同生效时转移，
-     * 摘牌只是预留。在这里这么做，是为了让货物在每一个时刻都恰好待在一个地方
-     * ——正是这一性质让流程的其余部分可被检验——代价是在“已摘牌”与“已签约”
-     * 之间留出一段真实部署会补上的间隙。
+     * <p>AUTO 在摘牌时原子转移货权，买方等量库存在收货前受限。真实源/目标
+     * 库存及冻结写入过户台账，既保持数量守恒，也为交收与双方取消提供依据。
      */
     @Transactional
     public Order accept(Long listingId, OrderAcceptRequest request, LoginUser user) {
@@ -109,6 +108,7 @@ public class OrderService {
             throw BusinessException.of(ResultCode.BAD_REQUEST,
                     "该挂牌为面议价格，请先与挂牌方协商后再走协议交易");
         }
+        BigDecimal amount = TradingNumbers.amount(quantity, price);
 
         Long buyerId = Listing.Side.SELL.equals(listing.getSide())
                 ? enterpriseId : listing.getEnterpriseId();
@@ -120,7 +120,7 @@ public class OrderService {
         boolean awaitsLister = listing.awaitsListerConfirm();
         InventoryNote selected = Listing.Side.BUY.equals(listing.getSide())
                 ? inventoryMatchService.requireSource(listing, request.inventoryNoteId(), quantity, sellerId) : null;
-        Long goodsFreezeId = awaitsLister
+        TransferResult transfer = awaitsLister
                 ? null
                 : transferGoods(listing, quantity, buyerId, sellerId, selected);
 
@@ -136,18 +136,21 @@ public class OrderService {
         order.setUnit(listing.getUnit());
         order.setPrice(price);
         // 存储而非推导：这是双方约定下来的那个数额。
-        order.setAmount(price.multiply(quantity));
+        order.setAmount(amount);
         order.setWarehouseId(selected == null ? listing.getWarehouseId() : selected.getWarehouseId());
         order.setDeliveryMethod(listing.getDeliveryMethod());
         order.setPaymentTerms(listing.getPaymentTerms());
-        order.setGoodsFreezeId(goodsFreezeId);
+        order.setGoodsFreezeId(transfer == null ? null : transfer.sourceFreezeId());
         order.setStatus(awaitsLister ? OrderStatus.PENDING_CONFIRM : OrderStatus.CONFIRMED);
         order.setConfirmedAt(awaitsLister ? null : OffsetDateTime.now());
         order.setConfirmDeadline(awaitsLister ? answerDeadlineFor(listing) : null);
         order.setVersion(0);
         order.setRemark(request.remark());
         orderMapper.insert(order);
-        if (selected != null) freezeService.attributeTo(goodsFreezeId, order.getId());
+        if (transfer != null) {
+            persistTransfer(order, transfer);
+            if (selected != null) freezeService.attributeTo(transfer.sourceFreezeId(), order.getId());
+        }
 
         statusLogMapper.insert(OrderStatusLog.of(
                 order.getId(), null, order.getStatus(),
@@ -194,14 +197,15 @@ public class OrderService {
         transition(order, OrderStatus.CONFIRMED, user, "挂牌方确认成交");
 
         // 摘牌预留了货物；答复它才是移动货物的动作。
-        order.setGoodsFreezeId(transferGoods(
-                listing, order.getQuantity(), order.getBuyerId(), order.getSellerId(), null));
+        TransferResult transfer = transferGoods(listing, order.getQuantity(), order.getBuyerId(), order.getSellerId(), null);
+        order.setGoodsFreezeId(transfer.sourceFreezeId());
+        persistTransfer(order, transfer);
         // 在这里写入，而不是留给调用方：挂牌所指向的那笔预留可能刚刚转移到
         // 了新的一行，而与摘牌路径不同，这里没有后续步骤会把它持久化。
         persistListingReservation(listing);
         order.setConfirmedAt(OffsetDateTime.now());
         order.setConfirmDeadline(null);
-        orderMapper.updateById(order);
+        persistOrder(order);
 
         publishTraded(order);
         publishTaskChange("摘牌已确认", order);
@@ -234,7 +238,7 @@ public class OrderService {
         order.setCancelledAt(OffsetDateTime.now());
         order.setCancelReason(reason);
         order.setConfirmDeadline(null);
-        orderMapper.updateById(order);
+        persistOrder(order);
 
         publishTaskChange("摘牌被拒绝", order);
         log.info("Order {} rejected by lister {}", order.getOrderNo(), user.getEnterpriseId());
@@ -251,6 +255,10 @@ public class OrderService {
     public Order cancel(Long orderId, String reason, LoginUser user) {
         Order order = loadParticipant(orderId, user.getEnterpriseId());
 
+        if (!OrderStatus.PENDING_CONFIRM.equals(order.getStatus())) {
+            throw BusinessException.of(ResultCode.ORDER_STATUS_INVALID, "已成交订单须经双方协商取消");
+        }
+
         if (!OrderStatus.canTransition(order.getStatus(), OrderStatus.CANCELLED)) {
             throw BusinessException.of(ResultCode.ORDER_STATUS_INVALID,
                     "订单当前状态「%s」不能取消".formatted(OrderStatus.text(order.getStatus())));
@@ -263,7 +271,7 @@ public class OrderService {
         order.setCancelledAt(OffsetDateTime.now());
         order.setCancelReason(reason);
         order.setConfirmDeadline(null);
-        orderMapper.updateById(order);
+        persistOrder(order);
 
         publishTaskChange("订单已取消", order);
         log.info("Order {} cancelled by enterprise {}", order.getOrderNo(), user.getEnterpriseId());
@@ -290,7 +298,7 @@ public class OrderService {
             order.setCancelledAt(OffsetDateTime.now());
             order.setCancelReason("挂牌方未在期限内确认");
             order.setConfirmDeadline(null);
-            orderMapper.updateById(order);
+            persistOrder(order);
             publishTaskChange("摘牌已逾期失效", order);
         }
         if (!lapsed.isEmpty()) {
@@ -316,7 +324,7 @@ public class OrderService {
         requireSeller(order, user, "只有卖方可以发起交收");
         transition(order, OrderStatus.DELIVERING, user,
                 "DELIVERED".equals(order.getDeliveryMethod()) ? "卖方发货" : "卖方放货");
-        orderMapper.updateById(order);
+        persistOrder(order);
         publishTaskChange("卖方可发起交收", order);
         return order;
     }
@@ -334,7 +342,18 @@ public class OrderService {
         requireBuyer(order, user, "只有买方可以确认收货");
         transition(order, OrderStatus.COMPLETED, user,
                 "DELIVERED".equals(order.getDeliveryMethod()) ? "买方收货" : "买方提货");
-        orderMapper.updateById(order);
+        GoodsTransfer transfer = transferMapper.findByOrder(order.getId());
+        if (transfer != null) {
+            if (!GoodsTransfer.TRANSFERRED.equals(transfer.getStatus())) {
+                throw BusinessException.of(ResultCode.CONFLICT, "成交货物状态已变化，请刷新后重试");
+            }
+            freezeService.releaseInventory(order.getBuyerId(), transfer.getTargetFreezeId());
+            transfer.setStatus(GoodsTransfer.DELIVERED);
+            if (transferMapper.updateById(transfer) == 0) {
+                throw BusinessException.of(ResultCode.CONFLICT, "交收记录已变化，请刷新后重试");
+            }
+        }
+        persistOrder(order);
         publishTaskChange("交收已完成", order);
         return order;
     }
@@ -384,7 +403,7 @@ public class OrderService {
      *
      * @return 被消耗掉的卖方冻结记录，供审计轨迹使用
      */
-    private Long transferGoods(Listing listing, BigDecimal quantity, Long buyerId, Long sellerId, InventoryNote selected) {
+    private TransferResult transferGoods(Listing listing, BigDecimal quantity, Long buyerId, Long sellerId, InventoryNote selected) {
         Long goodsFreezeId = listing.getFreezeId();
         Long sellerNoteId = null;
 
@@ -413,12 +432,17 @@ public class OrderService {
             freezeService.consumeInventory(sellerId, goodsFreezeId);
         }
 
-        createBuyerNote(listing, sellerNoteId, buyerId, quantity);
-        return goodsFreezeId;
+        InventoryNote target = createBuyerNote(listing, sellerNoteId, buyerId, quantity);
+        Long targetFreezeId = freezeService.freezeInventory(buyerId, target.getId(), quantity,
+                com.spotlink.settlement.entity.FreezeRecord.BizType.ORDER, null, "成交货物待交收").getId();
+        target = inventoryNoteAccess.selectById(target.getId());
+        target.setStatus(InventoryNote.Status.PENDING_DELIVERY);
+        if (inventoryNoteAccess.updateById(target) == 0) throw BusinessException.of(ResultCode.CONFLICT, "买方成交库存正在被修改，请重试");
+        return new TransferResult(sellerNoteId, target.getId(), goodsFreezeId, targetFreezeId);
     }
 
     /** 给买方一张属于自己的、对应其刚买下货物的库存单。 */
-    private void createBuyerNote(Listing listing, Long sourceNoteId, Long buyerId, BigDecimal quantity) {
+    private InventoryNote createBuyerNote(Listing listing, Long sourceNoteId, Long buyerId, BigDecimal quantity) {
         InventoryNote source = sourceNoteId == null ? null : inventoryNoteAccess.selectById(sourceNoteId);
 
         InventoryNote note = new InventoryNote();
@@ -441,6 +465,26 @@ public class OrderService {
                 ? "摘牌成交自动生成"
                 : "摘牌成交自动生成，来源库存单 " + source.getNoteNo());
         inventoryNoteAccess.insert(note);
+        return note;
+    }
+
+    private record TransferResult(Long sourceNoteId, Long targetNoteId, Long sourceFreezeId, Long targetFreezeId) { }
+
+    private void persistTransfer(Order order, TransferResult result) {
+        GoodsTransfer transfer = new GoodsTransfer();
+        transfer.setOrderId(order.getId());
+        transfer.setSellerId(order.getSellerId());
+        transfer.setBuyerId(order.getBuyerId());
+        transfer.setSourceNoteId(result.sourceNoteId());
+        transfer.setTargetNoteId(result.targetNoteId());
+        transfer.setSourceFreezeId(result.sourceFreezeId());
+        transfer.setTargetFreezeId(result.targetFreezeId());
+        transfer.setQuantity(order.getQuantity());
+        transfer.setUnit(order.getUnit());
+        transfer.setStatus(GoodsTransfer.TRANSFERRED);
+        transfer.setVersion(0);
+        transferMapper.insert(transfer);
+        freezeService.attributeTo(result.targetFreezeId(), order.getId());
     }
 
     private void reduceListing(Listing listing, BigDecimal quantity) {
@@ -653,6 +697,12 @@ public class OrderService {
             throw BusinessException.of(ResultCode.ORDER_NOT_FOUND);
         }
         return order;
+    }
+
+    private void persistOrder(Order order) {
+        if (orderMapper.updateById(order) == 0) {
+            throw BusinessException.of(ResultCode.CONFLICT, "订单正在被其他操作修改，请刷新后重试");
+        }
     }
 
     private Long requireEnterprise(LoginUser user) {

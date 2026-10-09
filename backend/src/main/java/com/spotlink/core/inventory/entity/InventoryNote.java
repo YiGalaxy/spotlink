@@ -106,6 +106,8 @@ public class InventoryNote {
         public static final int PARTIALLY_FROZEN = 4;
         public static final int DELIVERED = 5;
         public static final int CANCELLED = 6;
+        /** 成交归买方所有，完成交收前不能再次交易。 */
+        public static final int PENDING_DELIVERY = 7;
 
         private Status() {
         }

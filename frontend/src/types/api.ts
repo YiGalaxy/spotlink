@@ -218,10 +218,10 @@ export interface OrderView {
   categoryName: string
   commodityName: string
   spec: Record<string, unknown>
-  quantity: number
+  quantity: string
   unit: string
-  price: number
-  amount: number
+  price: string
+  amount: string
   amountText: string
   warehouseId: EntityId | null
   warehouseName: string

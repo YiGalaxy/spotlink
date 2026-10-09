@@ -111,6 +111,7 @@ public class InventoryViewAssembler {
             case InventoryNote.Status.PARTIALLY_FROZEN -> "部分冻结";
             case InventoryNote.Status.DELIVERED -> "已交收";
             case InventoryNote.Status.CANCELLED -> "已注销";
+            case InventoryNote.Status.PENDING_DELIVERY -> "待交收（受限）";
             default -> "未知";
         };
     }

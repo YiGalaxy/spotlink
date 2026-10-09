@@ -100,6 +100,14 @@ try {
                     & "$PSScriptRoot/tests/auth-runtime.tests.ps1" -BuyTrading
                     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
                 }
+                'goods-transfer' {
+                    try {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=GoodsTransferIntegrationTest,BuyListingBoundaryTest,PartialFillTest,FreezeServiceTest' test
+                        if ($LASTEXITCODE -ne 0) { throw '过户关联、受限库存、并发摘牌及事务回滚检查失败。' }
+                    } finally {
+                        & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" stop mysql-test redis-test
+                    }
+                }
                 'admin-authority' {
                     try {
                         & docker compose -p spotlink-next-test --project-directory $script:ProjectRoot -f "$script:ProjectRoot/ops/compose.test.yml" run --rm backend-tests mvn -B -ntp -Pintegration-tests '-Dtest=AdminAuthorityIntegrationTest,AuthenticationBoundaryTest,AdminEndpointCoverageTest,EnterpriseIdParameterIsolationTest' test

@@ -51,10 +51,10 @@ public record OrderView(
         String commodityName,
         java.util.Map<String, Object> spec,
 
-        BigDecimal quantity,
+        @JsonSerialize(using = ToStringSerializer.class) BigDecimal quantity,
         String unit,
-        BigDecimal price,
-        BigDecimal amount,
+        @JsonSerialize(using = ToStringSerializer.class) BigDecimal price,
+        @JsonSerialize(using = ToStringSerializer.class) BigDecimal amount,
         String amountText,
 
         @JsonSerialize(using = ToStringSerializer.class) Long warehouseId,
@@ -126,8 +126,9 @@ public record OrderView(
                 progress.text(),
                 progress.mine(),
                 progress.nextAction(),
-                List.copyOf(OrderStatus.allowedFrom(
-                        order.getStatus(), callerIsLister, callerIsSeller)),
+                OrderStatus.allowedFrom(order.getStatus(), callerIsLister, callerIsSeller).stream()
+                        .filter(action -> !OrderStatus.CANCELLED.equals(action)
+                                || OrderStatus.PENDING_CONFIRM.equals(order.getStatus())).toList(),
                 order.getConfirmDeadline(),
                 order.getConfirmedAt(),
                 order.getCancelledAt(),
