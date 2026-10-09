@@ -103,7 +103,7 @@ public class ProcurementAdvisorTools {
         }
         try {
             return json.writeValueAsString(Map.of("范围", scope, "查询时间", OffsetDateTime.now(ZoneId.of("Asia/Shanghai")).toString(), "符合条件总数", total,
-                    "显示数", rows.size(), "挂牌", rows, "说明", "挂牌报价不是成交价；未包含已确认运费。交收仓位置不是卖家公司注册地址。价格、余量和有效期以打开挂牌时为准。不同单位不可直接比较。"));
+                    "显示数", rows.size(), "挂牌", rows, "说明", "挂牌报价不是成交价；运费是否计入单价尚未核实。交收仓位置不是卖家公司注册地址。价格、余量和有效期以打开挂牌时为准。不同单位不可直接比较。"));
         } catch (Exception e) { throw new IllegalStateException("挂牌结果编码失败"); }
     }
 

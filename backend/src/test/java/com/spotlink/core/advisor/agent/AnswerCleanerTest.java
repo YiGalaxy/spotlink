@@ -130,9 +130,9 @@ class AnswerCleanerTest {
     @DisplayName("空输入安全")
     void blanksAreSafe() {
         assertThat(AnswerCleaner.clean(null)).isNull();
-        assertThat(AnswerCleaner.clean("")).isEmpty();
-        // Blank in, blank out: not emptied, and not mistaken for an answer.
-        assertThat(AnswerCleaner.clean("   \n  ")).isEqualTo("   \n  ");
+        assertThat(AnswerCleaner.clean("")).isNull();
+        // 空白没有正式答案，应触发与无内容相同的补答处理。
+        assertThat(AnswerCleaner.clean("   \n  ")).isNull();
     }
 
     @Test

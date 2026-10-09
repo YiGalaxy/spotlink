@@ -165,6 +165,8 @@ public class ListingAdvisorTools {
         if (Listing.DeliveryMethod.SELF_PICKUP.equals(listing.getDeliveryMethod())) sb.append("自提需买方安排运输，费用不等于零。\n");
         if (ratePerTonne == null || tonnes == null || ratePerTonne.signum() <= 0 || tonnes.signum() <= 0) {
             return sb.append("平台当前没有可用于该路线的真实运费价目表，因此不能给出实际运费。"
+                    + "整批运费是批次总价，不能直接当成每吨费率；旧运价已作废或目的地变更时须重新确认。"
+                    + "本轮缺少完整明确的计算参数，不沿用历史金额、不生成运费或两项小计。"
                     + "如你提供目的地、吨数和每吨运价，可按“吨数 × 每吨运价”做标注为估算的计算。").toString();
         }
         if (destination == null || destination.isBlank()) {

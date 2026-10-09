@@ -53,7 +53,7 @@ public final class AnswerCleaner {
      */
     public static String clean(String raw) {
         if (raw == null || raw.isBlank()) {
-            return raw;
+            return null;
         }
         // 部分本地兼容网关省略开头的 think 标签，但保留闭合标签。
         int thinkingEnd = raw.toLowerCase(java.util.Locale.ROOT).lastIndexOf("</think>");
@@ -66,6 +66,7 @@ public final class AnswerCleaner {
 
         // 中文思考不能靠中文比例分辨。无标签且仍在讨论“用户/调用工具”的草稿整段丢弃，触发一次补答。
         if (java.util.regex.Pattern.compile("(?s)^\\s*(?:好的[，,]\\s*)?(?:我现在(?:需要|要)|我需要|首先[，,]\\s*我(?:需要|得)).{0,100}(?:用户|调用|工具|计算)").matcher(raw).find()
+                || java.util.regex.Pattern.compile("(?s)^\\s*(?:(?:好的|嗯|首先)[，,]?\\s*)?用户(?:询问|问的是|的问题是|问题是|说|提到|要求|需要|想要)").matcher(raw).find()
                 || java.util.regex.Pattern.compile("(?m)^(?:用户(?:说|提到|要求|的问题)|因此[，,]?\\s*(?:需要|返回的)工具调用|返回的工具调用是)").matcher(raw).find()) {
             log.warn("Advisor returned unmarked working notes; suppressed");
             return null;

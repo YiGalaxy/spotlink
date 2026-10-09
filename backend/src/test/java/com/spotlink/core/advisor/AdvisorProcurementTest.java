@@ -50,6 +50,7 @@ class AdvisorProcurementTest {
         assertThat(result.get("挂牌").get(0).get("挂牌号").asText()).isEqualTo(low.getListingNo());
         assertThat(result.toString()).doesNotContain(expired.getListingNo());
         assertThat(result.get("挂牌").get(2).get("单价").asText()).isEqualTo("面议");
+        assertThat(result.get("说明").asText()).contains("运费是否计入单价尚未核实").doesNotContain("未包含已确认运费");
         assertThat(ToolCallRecorder.products().get(0).id()).isEqualTo(low.getId());
         assertThat(ToolCallRecorder.products().get(0).url()).isEqualTo("/trading?listing=" + low.getId());
         assertThat(result.toString()).contains(high.getListingNo());
@@ -72,7 +73,8 @@ class AdvisorProcurementTest {
         String estimate = freight.estimateDeliveryCost(item.getListingNo(), "杭州", new BigDecimal("10"), new BigDecimal("80"));
         assertThat(estimate).contains("估算运费：800 元", "不是平台运费报价", "自提",
                 "货款估算：100 元/吨 × 10 吨 = 1000 元", "两项已知费用小计：1800 元", "不是完整到货成本");
-        assertThat(freight.estimateDeliveryCost(item.getListingNo(), "杭州", null, null)).contains("不能给出实际运费");
+        assertThat(freight.estimateDeliveryCost(item.getListingNo(), "杭州", null, null))
+                .contains("不能给出实际运费", "不能直接当成每吨费率", "不生成运费或两项小计");
         insert("120", "50", false);
         assertThat(freight.estimateDeliveryCost(commodity, "杭州", BigDecimal.ONE, BigDecimal.TEN)).contains("指定挂牌编号");
         assertThat(freight.estimateDeliveryCost(item.getListingNo(), "杭州", new BigDecimal("30"), BigDecimal.TEN)).contains("大于该挂牌剩余量");
