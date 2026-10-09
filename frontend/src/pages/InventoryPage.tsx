@@ -156,6 +156,7 @@ export default function InventoryPage() {
   const { mutateAsync: doUpdate, isPending: updating } = useMutation({
     mutationFn: (vars: { id: EntityId; values: Record<string, unknown> }) =>
       updateInventoryNote(vars.id, {
+        version: editing?.version,
         categoryId: vars.values.categoryId as EntityId,
         commodityName: vars.values.commodityName as string,
         brand: vars.values.brand as string | undefined,
@@ -313,7 +314,7 @@ export default function InventoryPage() {
   ]
 
   return (
-    <div className="inventory-page" style={{ padding: 24, maxWidth: 1500, margin: '0 auto' }}>
+    <div className="business-page inventory-page">
       <div
         style={{
           display: 'flex',
@@ -528,7 +529,7 @@ export default function InventoryPage() {
             label="商品名称"
             rules={[{ required: true, message: '请填写商品名称' }]}
           >
-            <Input disabled={Number(editing?.frozenQuantity) > 0} />
+            <Input disabled={Number(editing?.frozenQuantity) > 0} maxLength={128} />
           </Form.Item>
 
           <Row gutter={12}>

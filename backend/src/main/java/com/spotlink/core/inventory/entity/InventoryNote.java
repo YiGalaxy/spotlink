@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.Version;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -48,7 +49,9 @@ public class InventoryNote {
     private Long warehouseId;
 
     private String commodityName;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String brand;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String origin;
 
     /** 规格取值，以 JSON 存储，按品类的规格 schema 组织。 */
@@ -72,6 +75,7 @@ public class InventoryNote {
     @Version
     private Integer version;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField(fill = FieldFill.INSERT)

@@ -32,6 +32,7 @@ export function registerInventory(payload: InventoryRegisterPayload) {
  * 改动它们只会让平台与仓库的记录互相矛盾，而不会改变实际存放的东西。
  */
 export interface InventoryUpdatePayload {
+  version?: number
   categoryId: EntityId
   commodityName: string
   brand?: string

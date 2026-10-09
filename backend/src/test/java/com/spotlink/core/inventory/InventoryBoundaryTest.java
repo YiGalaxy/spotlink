@@ -107,6 +107,41 @@ class InventoryBoundaryTest {
         assertThat(stored.getFrozenQuantity()).isZero();
     }
 
+    @Test void sameCategoryEditPreservesExtensionKeysAndCanClearOptionalText() {
+        var note = register();
+        inventory.update(note.getId(), new InventoryUpdateRequest(1003L, note.getCommodityName(), null, null,
+                Map.of("al_content", new BigDecimal("99.7")), null), owner());
+        var stored = notes.selectById(note.getId());
+        assertThat(stored.getBrand()).isNull();
+        assertThat(stored.getOrigin()).isNull();
+        assertThat(stored.getRemark()).isNull();
+        assertThat(stored.getSpec()).contains("质检批号", "中文扩展");
+        assertThat(stored.getTotalQuantity()).isEqualByComparingTo(note.getTotalQuantity());
+        assertThatThrownBy(() -> inventory.update(note.getId(), new InventoryUpdateRequest(1003L,
+                note.getCommodityName(), null, null, Map.of(), "缺少必填规格"), owner())).isInstanceOf(BusinessException.class);
+    }
+
+    @Test void staleFormCannotOverwriteLaterEditOrChangedFreezeVersion() {
+        var note = register();
+        int readVersion = note.getVersion();
+        inventory.update(note.getId(), new InventoryUpdateRequest(1003L, note.getCommodityName(), note.getBrand(), note.getOrigin(),
+                Map.of("al_content", new BigDecimal("99.7")), "同事的新备注", readVersion), owner());
+        assertThatThrownBy(() -> inventory.update(note.getId(), new InventoryUpdateRequest(1003L, note.getCommodityName(),
+                note.getBrand(), note.getOrigin(), Map.of("al_content", new BigDecimal("99.7")), "旧表单", readVersion), owner()))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("刷新");
+        assertThat(notes.selectById(note.getId()).getRemark()).isEqualTo("同事的新备注");
+    }
+
+    @Test void remarkOnlyEditWorksForFrozenInventoryOfDisabledCategory() {
+        var note = register();
+        freezes.freezeInventory(owner(), note.getId(), new BigDecimal("1"), "LISTING", null, "备注测试");
+        jdbc.update("UPDATE t_commodity_category SET status=0 WHERE id=1003");
+        inventory.update(note.getId(), new InventoryUpdateRequest(1003L, note.getCommodityName(), note.getBrand(), note.getOrigin(),
+                Map.of("al_content", new BigDecimal("99.7")), "停用品类仍可修改备注"), owner());
+        assertThat(notes.selectById(note.getId()).getRemark()).isEqualTo("停用品类仍可修改备注");
+        assertThat(notes.selectById(note.getId()).getSpec()).contains("质检批号");
+    }
+
     @Test void databaseRejectsUnbalancedNegativeAndMissingCategoryRows() {
         var note = register();
         assertThatThrownBy(() -> jdbc.update("UPDATE t_inventory_note SET available_quantity=available_quantity+1 WHERE id=?", note.getId()))

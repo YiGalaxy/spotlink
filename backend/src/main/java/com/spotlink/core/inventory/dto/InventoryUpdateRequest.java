@@ -34,6 +34,14 @@ public record InventoryUpdateRequest(
         Map<String, Object> spec,
 
         @Size(max = 256, message = "备注过长")
-        String remark
+        String remark,
+
+        @jakarta.validation.constraints.PositiveOrZero
+        Integer version
 ) {
+    /** 兼容原调用方；新页面回传读到的版本，防止旧表单覆盖同事的新编辑。 */
+    public InventoryUpdateRequest(Long categoryId, String commodityName, String brand, String origin,
+                                  Map<String, Object> spec, String remark) {
+        this(categoryId, commodityName, brand, origin, spec, remark, null);
+    }
 }

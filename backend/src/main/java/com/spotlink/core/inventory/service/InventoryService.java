@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
@@ -108,6 +109,9 @@ public class InventoryService {
     @Transactional
     public InventoryNote update(Long id, InventoryUpdateRequest request, Long enterpriseId) {
         InventoryNote note = loadOwned(id, enterpriseId);
+        if (request.version() != null && !request.version().equals(note.getVersion())) {
+            throw BusinessException.of(ResultCode.CONFLICT, "库存已被其他操作修改，请刷新后重新编辑");
+        }
 
         if (note.getStatus() != null
                 && (note.getStatus() == InventoryNote.Status.DELIVERED
@@ -118,25 +122,29 @@ public class InventoryService {
                             : "已注销的库存单不能再修改");
         }
 
-        CommodityCategory category = loadActiveLeaf(request.categoryId());
-        rules.spec(category, request.spec());
-        if (!note.getUnit().equals(category.getUnit())) {
-            throw BusinessException.of(ResultCode.BAD_REQUEST, "新旧品类单位不一致，请重新登记库存");
-        }
-        if (note.getFrozenQuantity().signum() > 0
-                && (!note.getCategoryId().equals(request.categoryId())
+        Map<String, Object> updatedSpec = mergeSpec(note, request);
+        boolean descriptiveChange = !note.getCategoryId().equals(request.categoryId())
                 || !note.getCommodityName().equals(request.commodityName())
                 || !java.util.Objects.equals(note.getBrand(), request.brand())
                 || !java.util.Objects.equals(note.getOrigin(), request.origin())
-                || !sameSpec(note.getSpec(), request.spec()))) {
+                || !sameSpec(note.getSpec(), updatedSpec);
+        if (note.getFrozenQuantity().signum() > 0 && descriptiveChange) {
             throw BusinessException.of(ResultCode.CONFLICT, "存在冻结数量时仅可修改备注，请先解除挂牌或订单");
+        }
+        // 纯备注变更不依赖品类仍在架，允许维护已停用品类的历史库存记录。
+        if (descriptiveChange) {
+            CommodityCategory category = loadActiveLeaf(request.categoryId());
+            rules.spec(category, updatedSpec);
+            if (!note.getUnit().equals(category.getUnit())) {
+                throw BusinessException.of(ResultCode.BAD_REQUEST, "新旧品类单位不一致，请重新登记库存");
+            }
         }
 
         note.setCategoryId(request.categoryId());
         note.setCommodityName(request.commodityName());
         note.setBrand(request.brand());
         note.setOrigin(request.origin());
-        note.setSpec(writeSpec(request.spec()));
+        note.setSpec(writeSpec(updatedSpec));
         note.setRemark(request.remark());
 
         // 数量没有被触碰，所以那个平衡约束不可能受影响；乐观锁依然在防着并发编辑。
@@ -197,6 +205,25 @@ public class InventoryService {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /** 同品类保留 API 未回传的扩展键；已定义字段仍须由请求提供并通过校验。 */
+    private Map<String, Object> mergeSpec(InventoryNote note, InventoryUpdateRequest request) {
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (note.getCategoryId().equals(request.categoryId())) {
+            try {
+                Map<String, Object> stored = objectMapper.readValue(note.getSpec(),
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                CommodityCategory category = categoryAccess.selectById(note.getCategoryId());
+                java.util.Set<String> schemaKeys = new java.util.HashSet<>();
+                if (category != null) objectMapper.readTree(category.getSpecSchema()).forEach(field -> schemaKeys.add(field.path("key").asText()));
+                stored.forEach((key, value) -> { if (!schemaKeys.contains(key)) merged.put(key, value); });
+            } catch (Exception e) {
+                throw BusinessException.of(ResultCode.BAD_REQUEST, "既有规格数据无法读取，请联系平台维护");
+            }
+        }
+        if (request.spec() != null) merged.putAll(request.spec());
+        return merged;
     }
 
     private String writeSpec(Map<String, Object> spec) {
