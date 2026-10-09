@@ -39,6 +39,53 @@ class AdvisorModelSettingsIntegrationTest {
                 "model",model,"apiKey",key,"clearApiKey",clear,"maxTokens",256,"timeoutSeconds",10,"tokenParameter","max_tokens"));
     }
 
+    private String withEngine(String body, String engine) throws Exception {
+        var node = (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(body);
+        node.put("defaultEngine", engine);
+        return json.writeValueAsString(node);
+    }
+
+    @Test void platformDefaultOnlyAffectsNewConversationsAndLegacyUpdatesKeepIt() throws Exception {
+        String admin = token("admin"), buyer = token("buyer01");
+        mvc.perform(get(API).header("Authorization", admin)).andExpect(jsonPath("$.data.defaultEngine").value("spring-ai"));
+        var original = mvc.perform(post("/api/advisor/conversations").header("Authorization", buyer)
+                .contentType("application/json").content("{}"))
+                .andExpect(jsonPath("$.data.engine").value("spring-ai")).andReturn();
+        String originalId = json.readTree(original.getResponse().getContentAsString()).path("data").path("id").asText();
+        mvc.perform(put(API).header("Authorization", admin).contentType("application/json")
+                .content(withEngine(update("model", "offline-key", false, true), "langchain")))
+                .andExpect(jsonPath("$.data.defaultEngine").value("langchain"));
+        assertThat(settings.defaultEngine()).isEqualTo("langchain");
+        mvc.perform(get("/api/advisor/status").header("Authorization", buyer))
+                .andExpect(jsonPath("$.data.defaultEngine").value("langchain"))
+                .andExpect(jsonPath("$.data.framework").value("LangChain"));
+        mvc.perform(post("/api/advisor/conversations").header("Authorization", buyer)
+                .contentType("application/json").content("{}"))
+                .andExpect(jsonPath("$.data.engine").value("langchain"));
+        mvc.perform(post("/api/advisor/conversations").header("Authorization", buyer)
+                .contentType("application/json").content("{\"engine\":\"spring-ai\"}"))
+                .andExpect(jsonPath("$.data.engine").value("spring-ai"));
+        mvc.perform(get("/api/advisor/conversations/" + originalId).header("Authorization", buyer))
+                .andExpect(jsonPath("$.data.engine").value("spring-ai"));
+        mvc.perform(put(API).header("Authorization", admin).contentType("application/json")
+                .content(update("model", "", false, true)))
+                .andExpect(jsonPath("$.data.defaultEngine").value("langchain"));
+        assertThat(settings.current().apiKey()).isEqualTo("offline-key");
+        mvc.perform(delete(API).header("Authorization", admin))
+                .andExpect(jsonPath("$.data.defaultEngine").value("spring-ai"));
+        assertThat(settings.defaultEngine()).isEqualTo("spring-ai");
+    }
+
+    @Test void invalidEngineCannotOverwriteConfiguration() throws Exception {
+        String admin = token("admin");
+        for (String engine : java.util.List.of("unknown", "", "LANGCHAIN")) {
+            mvc.perform(put(API).header("Authorization", admin).contentType("application/json")
+                    .content(withEngine(update("model", "offline-key", false, true), engine)))
+                    .andExpect(jsonPath("$.code").value(10000));
+        }
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM t_advisor_model_settings", Integer.class)).isZero();
+    }
+
     @Test void membersCannotReadWriteResetOrTestAndAuditorsOnlyRead() throws Exception {
         for (String user:java.util.List.of("seller01","auditor01")) {
             String auth=token(user);

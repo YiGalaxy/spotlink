@@ -97,6 +97,7 @@ export default function AdvisorPage() {
   /** 镜像 activeId，供那些活得比发起它们的那次渲染更久的回调使用。 */
   const activeIdRef = useRef<EntityId | null>(null)
   const engineRef = useRef<AdvisorEngine>('spring-ai')
+  const draftEngineChosenRef = useRef(false)
   const pendingIdRef = useRef<EntityId | null>(null)
 
   const { data: conversations = [] } = useQuery({
@@ -109,6 +110,12 @@ export default function AdvisorPage() {
     queryFn: fetchAdvisorStatus,
     refetchInterval: 30_000,
   })
+
+  useEffect(() => {
+    if (!status?.defaultEngine || activeIdRef.current !== null || sendingRef.current || draftEngineChosenRef.current) return
+    engineRef.current = status.defaultEngine
+    setEngine(status.defaultEngine)
+  }, [status?.defaultEngine])
 
   useEffect(() => {
     const node = scrollRef.current
@@ -144,6 +151,10 @@ export default function AdvisorPage() {
    * 改主意，列表里什么都不会留下。
    */
   const handleNewConversation = () => {
+    const next = status?.defaultEngine ?? 'spring-ai'
+    draftEngineChosenRef.current = false
+    engineRef.current = next
+    setEngine(next)
     setHistoryOpen(false)
     setActiveId(null)
     activeIdRef.current = null
@@ -157,16 +168,15 @@ export default function AdvisorPage() {
     await deleteConversation(id)
     await refreshList()
     if (activeIdRef.current === id) {
-      setActiveId(null)
-      activeIdRef.current = null
-      setMessages([])
+      handleNewConversation()
     }
   }
 
   const changeEngine = (next: AdvisorEngine) => {
+    handleNewConversation()
+    draftEngineChosenRef.current = true
     engineRef.current = next
     setEngine(next)
-    handleNewConversation()
   }
   const engineStatus = status?.engines?.find(item => item.engine === engine)
   const engineAvailable = engineStatus?.available ?? (engine === 'spring-ai' && status?.available)

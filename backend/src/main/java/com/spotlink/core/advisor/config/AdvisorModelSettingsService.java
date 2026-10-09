@@ -35,11 +35,16 @@ public class AdvisorModelSettingsService {
         if (stored == null) {
             AdvisorModelSettings config = fromEnvironment();
             return new View(config.enabled(), config.baseUrl(), config.model(), config.configured(),
-                    config.maxTokens(), config.timeoutSeconds(), config.tokenParameter(), "environment", cipher.ready(), canEdit(), null);
+                    config.maxTokens(), config.timeoutSeconds(), config.tokenParameter(), "spring-ai", "environment", cipher.ready(), canEdit(), null);
         }
         return new View(stored.enabled(), stored.baseUrl(), stored.model(),
                 stored.encryptedKey() != null && !stored.encryptedKey().isBlank(), stored.maxTokens(),
-                stored.timeoutSeconds(), stored.tokenParameter(), "admin", cipher.ready(), canEdit(), stored.updatedAt());
+                stored.timeoutSeconds(), stored.tokenParameter(), stored.defaultEngine(), "admin", cipher.ready(), canEdit(), stored.updatedAt());
+    }
+
+    public String defaultEngine() {
+        AdvisorModelSettingsRow stored = stored();
+        return stored == null ? "spring-ai" : stored.defaultEngine();
     }
 
     @Transactional
@@ -51,6 +56,10 @@ public class AdvisorModelSettingsService {
         }
         View before = view();
         AdvisorModelSettingsRow previous = stored();
+        String engine = request.defaultEngine() == null ? before.defaultEngine() : request.defaultEngine();
+        if (!java.util.Set.of("spring-ai", "langchain").contains(engine)) {
+            throw BusinessException.of(ResultCode.BAD_REQUEST, "未知顾问引擎");
+        }
         String key;
         if (request.clearApiKey()) key = "";
         else if (request.apiKey() != null && !request.apiKey().isBlank()) key = request.apiKey().trim();
@@ -58,7 +67,7 @@ public class AdvisorModelSettingsService {
         if (key == null || "not-configured".equals(key)) key = "";
         String encrypted = cipher.encrypt(key);
         settingsMapper.savePlatformSettings(new AdvisorModelSettingsRow(request.enabled(), url,
-                request.model().trim(), encrypted, request.maxTokens(), request.timeoutSeconds(), parameter, null));
+                request.model().trim(), encrypted, request.maxTokens(), request.timeoutSeconds(), parameter, engine, null));
         View after = view();
         audit.record("advisor", "save-model", "platform-model", 1L, before, after);
         return after;
@@ -101,7 +110,7 @@ public class AdvisorModelSettingsService {
     }
 
     public record View(boolean enabled, String baseUrl, String model, boolean hasKey, int maxTokens,
-                       int timeoutSeconds, String tokenParameter, String source, boolean encryptionReady,
+                       int timeoutSeconds, String tokenParameter, String defaultEngine, String source, boolean encryptionReady,
                        boolean canEdit, LocalDateTime updatedAt) {
         public boolean available() { return enabled && hasKey && ("environment".equals(source) || encryptionReady); }
     }
@@ -110,7 +119,8 @@ public class AdvisorModelSettingsService {
                          @NotBlank @Size(max=128) String model, @Size(max=4096) String apiKey,
                          boolean clearApiKey, @NotNull @Min(64) @Max(32768) Integer maxTokens,
                          @NotNull @Min(5) @Max(300) Integer timeoutSeconds,
-                         @NotBlank String tokenParameter) {
+                         @NotBlank String tokenParameter,
+                         @Pattern(regexp="spring-ai|langchain", message="未知顾问引擎") String defaultEngine) {
         @Override public String toString() { return "Update[credentials=REDACTED]"; }
     }
 }

@@ -51,6 +51,7 @@ public class ConversationService {
     private final AdvisorRequestGuard guard;
     private final PlatformTransactionManager transactionManager;
     private final com.spotlink.advisor.langchain.LangChainGateway langChain;
+    private final com.spotlink.advisor.config.AdvisorModelSettingsService modelSettings;
 
     // ------------------------------------------------------------------
     // 会话管理
@@ -68,11 +69,11 @@ public class ConversationService {
     }
 
     public ConversationDetail create(Long userId, Long enterpriseId, String title) {
-        return create(userId, enterpriseId, title, "spring-ai");
+        return create(userId, enterpriseId, title, null);
     }
 
     public ConversationDetail create(Long userId, Long enterpriseId, String title, String engine) {
-        if (engine == null) engine = "spring-ai";
+        if (engine == null) engine = modelSettings.defaultEngine();
         if (!java.util.Set.of("spring-ai", "langchain").contains(engine)) throw BusinessException.of(ResultCode.BAD_REQUEST, "未知顾问引擎");
         Conversation conversation = new Conversation();
         conversation.setEngine(engine);

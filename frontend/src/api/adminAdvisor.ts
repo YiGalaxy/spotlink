@@ -1,4 +1,5 @@
 import { api } from './client'
+import type { AdvisorEngine } from '@/types/api'
 
 export interface ModelSettings {
   enabled: boolean
@@ -8,12 +9,13 @@ export interface ModelSettings {
   maxTokens: number
   timeoutSeconds: number
   tokenParameter: 'max_tokens' | 'max_completion_tokens'
+  defaultEngine: AdvisorEngine
   source: 'environment' | 'admin'
   encryptionReady: boolean
   canEdit: boolean
   updatedAt: string | null
 }
-export interface ModelUpdate extends Pick<ModelSettings, 'enabled' | 'baseUrl' | 'model' | 'maxTokens' | 'timeoutSeconds' | 'tokenParameter'> {
+export interface ModelUpdate extends Pick<ModelSettings, 'enabled' | 'baseUrl' | 'model' | 'maxTokens' | 'timeoutSeconds' | 'tokenParameter' | 'defaultEngine'> {
   apiKey?: string
   clearApiKey: boolean
 }

@@ -16,7 +16,7 @@ export function listConversations() {
   return api.get<ConversationSummary[]>('/advisor/conversations')
 }
 
-export function createConversation(title?: string, engine: AdvisorEngine = 'spring-ai') {
+export function createConversation(title?: string, engine?: AdvisorEngine) {
   return api.post<ConversationDetail>('/advisor/conversations', { title, engine })
 }
 

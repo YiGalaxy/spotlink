@@ -115,7 +115,8 @@ public class AdvisorController {
                 "configured", config.hasKey(),
                 "model", config.model(),
                 "provider", "OpenAI-compatible",
-                "framework", "Spring AI",
+                "framework", "langchain".equals(config.defaultEngine()) ? "LangChain" : "Spring AI",
+                "defaultEngine", config.defaultEngine(),
                 "registeredTools", registeredToolNames(),
                 "engines", List.of(Map.of("engine", "spring-ai", "ready", true, "available", config.available()),
                         Map.of("engine", "langchain", "ready", ready, "available", ready && config.available()))));

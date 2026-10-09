@@ -371,6 +371,7 @@ export interface SeriesData {
 export type AdvisorEngine = 'spring-ai' | 'langchain'
 
 export interface AdvisorStatus {
+  defaultEngine?: AdvisorEngine
   engines?: { engine: AdvisorEngine; ready: boolean; available: boolean }[]
   available: boolean
   enabled: boolean

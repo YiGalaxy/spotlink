@@ -6,6 +6,7 @@ import { identityKey, useAuthStore } from '@/store/auth'
 import { fetchModelSettings, resetModelSettings, saveModelSettings, testModelConnection, type ConnectionResult, type ModelUpdate } from '@/api/adminAdvisor'
 import { can } from '@/utils/permissions'
 import { Link } from 'react-router-dom'
+import { fetchAdvisorStatus } from '@/api/advisor'
 
 const presets = {
   docker: { baseUrl: 'http://ollama:11434/v1', model: 'qwen3:4b', apiKey: 'ollama' },
@@ -22,6 +23,7 @@ export default function AdminModelPage() {
   const [connection, setConnection] = useState<ConnectionResult | null>(null)
   const [dirty, setDirty] = useState(false)
   const query = useQuery({ queryKey: identityKey('admin-model'), queryFn: fetchModelSettings, enabled: can(user, 'admin:advisor') })
+  const engineQuery = useQuery({ queryKey: identityKey('advisor-status'), queryFn: fetchAdvisorStatus, enabled: can(user, 'admin:advisor'), refetchInterval: 30_000 })
   const config = query.data
   useEffect(() => {
     if (!config) return
@@ -41,7 +43,7 @@ export default function AdminModelPage() {
     setBusy('save')
     try {
       await saveModelSettings(value)
-      void message.success('已保存，下一轮顾问调用立即生效')
+      void message.success('已保存：默认引擎用于新会话，模型配置用于下一轮调用')
       await invalidate()
     } catch { /* API 客户端统一显示错误 */ }
     finally { form.setFieldValue('apiKey', ''); setBusy(null) }
@@ -77,6 +79,9 @@ export default function AdminModelPage() {
                 setDirty(true); setConnection(null)
               }} options={[{ value: 'docker', label: 'Ollama · 本项目 Docker 服务' }, { value: 'local', label: 'Ollama · 宿主机服务' }, { value: 'openai', label: 'OpenAI · 云端 API' }, { value: 'deepseek', label: 'DeepSeek · 云端 API' }]} />
             </Form.Item>
+            <Form.Item name="defaultEngine" label="新会话默认引擎" rules={[{ required: true, message: '请选择默认引擎' }]} extra="保存后，新建顾问会话默认使用此引擎。已有会话保持原引擎，顾问页仍可为新会话选择另一引擎。">
+              <Select aria-label="新会话默认引擎" options={[{ value: 'spring-ai', label: 'Spring AI' }, { value: 'langchain', label: 'LangChain' }]} />
+            </Form.Item>
             <Form.Item name="enabled" label="启用 AI 顾问" valuePropName="checked"><Switch /></Form.Item>
             <Form.Item name="baseUrl" label="API 地址" rules={[{ required: true, message: '请填写 API 地址' }]} extra="填写 /v1 API 地址或服务根地址。Docker 中访问宿主机需使用 host.docker.internal。">
               <Input placeholder="https://api.openai.com/v1" autoComplete="off" />
@@ -102,14 +107,21 @@ export default function AdminModelPage() {
         <Card title="当前服务" style={{ marginBottom: 20 }}>
           <Space wrap style={{ marginBottom: 16 }}><Tag color={config.enabled ? 'green' : 'default'}>{config.enabled ? '已启用' : '已停用'}</Tag><Tag color={config.hasKey ? 'blue' : 'orange'}>{config.hasKey ? '密钥已设置' : '待设置密钥'}</Tag></Space>
           <Typography.Title level={4} style={{ marginTop: 0, overflowWrap: 'anywhere' }}>{config.model}</Typography.Title>
+          <Typography.Paragraph>平台默认引擎：<strong>{config.defaultEngine === 'langchain' ? 'LangChain' : 'Spring AI'}</strong></Typography.Paragraph>
           <Typography.Paragraph type="secondary" style={{ overflowWrap: 'anywhere' }}>{config.baseUrl}</Typography.Paragraph>
           <Typography.Paragraph>配置保存不发起请求。连接测试只发送固定测试语句和专用探针工具，不携带企业数据或聊天记录；云端测试可能消耗 API 额度。</Typography.Paragraph>
           {dirty && <Alert type="info" showIcon message="表单有未保存修改，保存后再测试" style={{ marginBottom: 16 }} />}
           {config.canEdit && <Button icon={<ApiOutlined />} loading={busy === 'test'} disabled={dirty || !config.enabled || !config.hasKey || busy !== null} onClick={() => void test()}>测试已保存配置</Button>}
           {connection && <Alert style={{ marginTop: 16 }} showIcon type={connection.connected && connection.toolCalling ? 'success' : 'warning'} message={connection.message} description={`耗时 ${(connection.durationMs / 1000).toFixed(1)} 秒`} />}
         </Card>
+        <Card title="顾问引擎状态" style={{ marginBottom: 20 }}>
+          {engineQuery.isError ? <Alert type="warning" message="暂时无法读取引擎状态" action={<Button onClick={() => void engineQuery.refetch()}>重试</Button>} /> : engineQuery.isLoading ? <Spin /> : engineQuery.data?.engines?.map(item => <Typography.Paragraph key={item.engine}>
+            <Space wrap><strong>{item.engine === 'langchain' ? 'LangChain' : 'Spring AI'}</strong><Tag color={item.ready ? 'green' : 'orange'}>{item.ready ? '服务就绪' : '服务不可用'}</Tag><Tag color={item.available ? 'blue' : 'default'}>{item.available ? '可接收咨询' : '暂不可接收咨询'}</Tag></Space>
+          </Typography.Paragraph>)}
+          <Typography.Text type="secondary">两个引擎共用上方模型连接。LangChain 需要独立引擎服务运行；状态检查不会调用大模型。故障时不会自动切换引擎。</Typography.Text>
+        </Card>
         <Card title="配置如何生效">
-          <Typography.Paragraph>后台配置优先于 .env，保存后下一轮调用生效。已在运行的一轮保持原有模型与密钥。</Typography.Paragraph>
+          <Typography.Paragraph>默认引擎在创建会话时固定。模型连接配置优先于 .env，保存后下一轮调用生效。已在运行的一轮保持原有模型与密钥。</Typography.Paragraph>
           <Typography.Paragraph>若修改 .env，需重启后端；存在后台覆盖时，先点击“恢复环境配置”。</Typography.Paragraph>
           <Typography.Paragraph type="secondary">API Key 加密保存在服务端。模型会收到当前问题、必要历史和有权限的工具摘要；切换提供商会影响后续问题的数据发送目的地。</Typography.Paragraph>
         </Card>
